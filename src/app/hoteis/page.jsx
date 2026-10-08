@@ -150,6 +150,7 @@ export default function GestaoHoteis() {
     }
   };
 
+  // Upload robusto para o Cloudinary capturando mensagens de erro do servidor
   const uploadParaCloudinary = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -160,8 +161,10 @@ export default function GestaoHoteis() {
       body: formData,
     });
 
-    if (!res.ok) throw new Error("Falha no upload da imagem");
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error?.message || "Falha no upload da imagem");
+    }
     return data.secure_url;
   };
 
@@ -171,12 +174,18 @@ export default function GestaoHoteis() {
 
     setEnviandoFotoGeral(true);
     try {
-      const urls = await Promise.all(files.map((file) => uploadParaCloudinary(file)));
+      const urls = [];
+      for (const file of files) {
+        const url = await uploadParaCloudinary(file);
+        urls.push(url);
+      }
       setFotosGerais((prev) => [...prev, ...urls]);
     } catch (err) {
-      alert("Erro ao enviar imagens gerais.");
+      console.error("Erro no upload geral:", err);
+      alert(`Falha ao enviar imagem: ${err.message || "Tente novamente"}`);
     } finally {
       setEnviandoFotoGeral(false);
+      e.target.value = "";
     }
   };
 
@@ -191,7 +200,7 @@ export default function GestaoHoteis() {
   const atualizarNomeApto = (index, novoNome) => {
     setTiposApto((prev) => {
       const lista = [...prev];
-      lista[index].nome = novoNome;
+      lista[index] = { ...lista[index], nome: novoNome };
       return lista;
     });
   };
@@ -200,29 +209,43 @@ export default function GestaoHoteis() {
     setTiposApto((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Upload sequencial para evitar timeout e tratar erros por apartamento
   const handleUploadFotosApto = async (index, e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
     setEnviandoFotoAptoIndex(index);
     try {
-      const urls = await Promise.all(files.map((file) => uploadParaCloudinary(file)));
+      const urls = [];
+      for (const file of files) {
+        const url = await uploadParaCloudinary(file);
+        urls.push(url);
+      }
+
       setTiposApto((prev) => {
         const lista = [...prev];
-        lista[index].fotos = [...(lista[index].fotos || []), ...urls];
+        lista[index] = {
+          ...lista[index],
+          fotos: [...(lista[index].fotos || []), ...urls],
+        };
         return lista;
       });
     } catch (err) {
-      alert("Erro ao enviar imagens do apartamento.");
+      console.error("Erro no upload do apto:", err);
+      alert(`Falha ao enviar imagem: ${err.message || "Verifique o formato ou tamanho da foto"}`);
     } finally {
       setEnviandoFotoAptoIndex(null);
+      e.target.value = "";
     }
   };
 
   const removerFotoApto = (aptoIndex, fotoIndex) => {
     setTiposApto((prev) => {
       const lista = [...prev];
-      lista[aptoIndex].fotos = lista[aptoIndex].fotos.filter((_, i) => i !== fotoIndex);
+      lista[aptoIndex] = {
+        ...lista[aptoIndex],
+        fotos: (lista[aptoIndex].fotos || []).filter((_, i) => i !== fotoIndex),
+      };
       return lista;
     });
   };
@@ -297,7 +320,7 @@ export default function GestaoHoteis() {
         observacoes: observacoesHtml,
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
-        tiposApto: tiposApto.filter((a) => a.nome.trim().length > 0),
+        tiposApto: tiposApto.filter((a) => a.nome && a.nome.trim().length > 0),
       };
 
       if (hotelEditandoId) {
