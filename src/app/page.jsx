@@ -149,9 +149,6 @@ export default function FastOrcamento() {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
     let texto = `🏨 *${hotelSelecionado.nome}*\n`;
-    if (hotelSelecionado.localizacao) {
-      texto += `📍 *Local:* ${hotelSelecionado.localizacao}\n`;
-    }
     texto += `📅 *Período:* ${formatarDatas()}\n`;
     texto += `👥 *Hóspedes:* ${adultos} adulto(s)${criancas > 0 ? ` e ${criancas} criança(s)` : ""}\n`;
 
