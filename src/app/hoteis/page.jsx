@@ -15,12 +15,16 @@ const CLOUD_NAME = "s1yeyx4g";
 const UPLOAD_PRESET = "guia_temporada";
 
 // Função para comprimir fotos pesadas no próprio navegador antes do upload
+// Mantém transparência para PNG (logos) e converte fotos para JPEG otimizado
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) {
       resolve(file);
       return;
     }
+
+    const isPng = file.type === "image/png";
+    const formatoSaida = isPng ? "image/png" : "image/jpeg";
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -53,13 +57,14 @@ const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 
               resolve(file);
               return;
             }
-            const novoArquivo = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
-              type: "image/jpeg",
+            const extensao = isPng ? ".png" : ".jpg";
+            const novoArquivo = new File([blob], file.name.replace(/\.[^/.]+$/, extensao), {
+              type: formatoSaida,
               lastModified: Date.now(),
             });
             resolve(novoArquivo);
           },
-          "image/jpeg",
+          formatoSaida,
           qualidade
         );
       };
@@ -899,7 +904,7 @@ export default function GestaoHoteis() {
                                   onClick={() => removerFotoApto(index, fIdx)}
                                   className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ))}
