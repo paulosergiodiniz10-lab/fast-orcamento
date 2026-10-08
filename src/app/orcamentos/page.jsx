@@ -95,6 +95,7 @@ export default function GestaoOrcamentos() {
     if (orc.criancas) params.set("criancas", orc.criancas);
     if (orc.idadesCriancas) params.set("idadesCriancas", orc.idadesCriancas);
     if (orc.hotel?.nome) params.set("hotelNome", orc.hotel.nome);
+    if (orc.tipoOrcamento) params.set("tipoOrcamento", orc.tipoOrcamento);
     router.push(`/?${params.toString()}`);
   };
 
@@ -335,6 +336,7 @@ export default function GestaoOrcamentos() {
               {orcamentosPaginados.map((orc) => {
                 const idCurto = orc.id.slice(0, 6).toUpperCase();
                 const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
+                const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
                 
                 // Mensagem de Remarketing
                 const saudacao = orc.clienteNome ? `Olá, ${orc.clienteNome}!` : "Olá!";
@@ -359,10 +361,16 @@ export default function GestaoOrcamentos() {
                         <span className="bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-md font-mono">
                           ID: #{idCurto}
                         </span>
+
                         <h3 className="font-extrabold text-sm md:text-base text-slate-900">
                           {orc.hotel?.nome}
                         </h3>
-                        {orc.acomodacaoEscolhida && (
+
+                        {isGrupo ? (
+                          <span className="bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            Grupo ({orc.apartamentosGrupo?.length || 0} aptos)
+                          </span>
+                        ) : orc.acomodacaoEscolhida && (
                           <span className="bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-semibold px-2 py-0.5 rounded-md">
                             {orc.acomodacaoEscolhida}
                           </span>
@@ -390,7 +398,9 @@ export default function GestaoOrcamentos() {
                         </div>
 
                         <div>
-                          <strong className="text-slate-800 block text-[11px]">Hóspedes:</strong>
+                          <strong className="text-slate-800 block text-[11px]">
+                            {isGrupo ? "Estrutura:" : "Hóspedes:"}
+                          </strong>
                           <span className="flex items-center gap-1">
                             <Users className="w-3.5 h-3.5 text-brand-700" />
                             {orc.hospedes}
@@ -399,7 +409,7 @@ export default function GestaoOrcamentos() {
                       </div>
 
                       {/* Valores Cotados */}
-                      {orc.regimes && orc.regimes.length > 0 && (
+                      {!isGrupo && orc.regimes && orc.regimes.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100 mt-2">
                           {orc.regimes.map((r, rIdx) => (
                             <span
