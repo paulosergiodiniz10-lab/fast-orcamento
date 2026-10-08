@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText 
@@ -36,7 +37,8 @@ const somarDias = (dataStr, dias) => {
   return `${a}-${m}-${d}`;
 };
 
-export default function FastOrcamento() {
+function GeradorOrcamentoConteudo() {
+  const searchParams = useSearchParams();
   const hojeStr = obterDataHojeLocal();
 
   const [agencia, setAgencia] = useState(null);
@@ -44,15 +46,15 @@ export default function FastOrcamento() {
   const [hotelSelecionado, setHotelSelecionado] = useState(null);
   const [aptoSelecionado, setAptoSelecionado] = useState("");
 
-  // Dados do Cliente (Opcional)
-  const [clienteNome, setClienteNome] = useState("");
-  const [clienteWhatsapp, setClienteWhatsapp] = useState("");
+  // Dados do Cliente (Pré-carrega se vier pelo botão "Novo")
+  const [clienteNome, setClienteNome] = useState(searchParams.get("clienteNome") || "");
+  const [clienteWhatsapp, setClienteWhatsapp] = useState(searchParams.get("clienteWhatsapp") || "");
 
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
-  const [adultos, setAdultos] = useState("2");
-  const [criancas, setCriancas] = useState("0");
-  const [idadesCriancas, setIdadesCriancas] = useState("");
+  const [adultos, setAdultos] = useState(searchParams.get("adultos") || "2");
+  const [criancas, setCriancas] = useState(searchParams.get("criancas") || "0");
+  const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [parquesMarcados, setParquesMarcados] = useState([]);
 
   const [regimesValores, setRegimesValores] = useState({});
@@ -83,7 +85,9 @@ export default function FastOrcamento() {
 
       if (lista.length > 0) {
         setHoteis(lista);
-        selecionarHotel(lista[0]);
+        const hotelNomeUrl = searchParams.get("hotelNome");
+        const hotelEncontrado = hotelNomeUrl ? lista.find((h) => h.nome === hotelNomeUrl) : null;
+        selecionarHotel(hotelEncontrado || lista[0]);
       }
     } catch (err) {
       console.error("Erro ao carregar hotéis:", err);
@@ -161,7 +165,7 @@ export default function FastOrcamento() {
 
     let texto = "";
 
-    // Se informou o nome, inclui a saudação
+    // Saudação com o nome do cliente se preenchido
     if (clienteNome.trim()) {
       texto += `Olá, ${clienteNome.trim()}! Segue seu orçamento:\n\n`;
     }
@@ -309,7 +313,7 @@ export default function FastOrcamento() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botão para ver o Histórico de Cotações */}
+          {/* Botão de Histórico de Cotações */}
           <Link
             href="/orcamentos"
             className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
@@ -650,5 +654,17 @@ export default function FastOrcamento() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function FastOrcamento() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-900" />
+      </div>
+    }>
+      <GeradorOrcamentoConteudo />
+    </Suspense>
   );
 }
