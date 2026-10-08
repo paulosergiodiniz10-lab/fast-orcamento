@@ -14,7 +14,7 @@ import {
 const CLOUD_NAME = "s1yeyx4g";
 const UPLOAD_PRESET = "guia_temporada";
 
-// Mini Barra de Ferramentas (Negrito B e Seletor de Cores A com quadrado)
+// Barra de Ferramentas Completa (Tipo de Fonte, Tamanho, Negrito e Cor)
 function EditorToolbar({ editorRef }) {
   const [corAtual, setCorAtual] = useState("#e11d48");
 
@@ -29,8 +29,52 @@ function EditorToolbar({ editorRef }) {
     if (editorRef.current) editorRef.current.focus();
   };
 
+  const aplicarFonte = (fonte) => {
+    if (!fonte) return;
+    document.execCommand("fontName", false, fonte);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  const aplicarTamanho = (tamanho) => {
+    if (!tamanho) return;
+    document.execCommand("fontSize", false, tamanho);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
   return (
-    <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-2 py-1 rounded-lg w-fit mb-1.5 shadow-sm">
+    <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 border border-slate-300 px-2 py-1 rounded-lg w-fit mb-1.5 shadow-sm">
+      {/* Tipo de Fonte */}
+      <select
+        onChange={(e) => aplicarFonte(e.target.value)}
+        defaultValue=""
+        className="text-[11px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-brand-900"
+        title="Tipo de Fonte"
+      >
+        <option value="" disabled>Fonte</option>
+        <option value="Arial, sans-serif">Padrão (Sans)</option>
+        <option value="Georgia, serif">Serif (Clássica)</option>
+        <option value="'Courier New', monospace">Mono (Moderna)</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+      </select>
+
+      {/* Tamanho da Fonte */}
+      <select
+        onChange={(e) => aplicarTamanho(e.target.value)}
+        defaultValue=""
+        className="text-[11px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-brand-900"
+        title="Tamanho do Texto"
+      >
+        <option value="" disabled>Tam.</option>
+        <option value="2">Pequeno</option>
+        <option value="3">Normal</option>
+        <option value="4">Médio</option>
+        <option value="5">Grande</option>
+        <option value="6">Extra Grande</option>
+      </select>
+
+      <div className="h-4 w-px bg-slate-300 mx-0.5" />
+
+      {/* Negrito */}
       <button
         type="button"
         onClick={aplicarNegrito}
@@ -40,8 +84,7 @@ function EditorToolbar({ editorRef }) {
         <Bold className="w-3.5 h-3.5" />
       </button>
 
-      <div className="h-4 w-px bg-slate-300 mx-0.5" />
-
+      {/* Cor da Fonte */}
       <label className="flex items-center gap-1 cursor-pointer hover:bg-slate-200 px-1.5 py-0.5 rounded transition" title="Mudar Cor da Fonte">
         <span className="font-extrabold text-xs" style={{ color: corAtual }}>A</span>
         <span className="w-3.5 h-3.5 rounded-sm border border-slate-400 inline-block" style={{ backgroundColor: corAtual }} />
