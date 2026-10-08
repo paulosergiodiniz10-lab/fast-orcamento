@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, FileText } from "lucide-react";
+import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, FileText, Pencil, X } from "lucide-react";
 import { db } from "../../lib/firebase";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
@@ -18,7 +18,10 @@ export default function AdminMaster() {
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
-  // Formulário de nova agência
+  // ID da agência em modo de edição (se null, está em modo de criação)
+  const [agenciaEditandoId, setAgenciaEditandoId] = useState(null);
+
+  // Formulário de agência
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [usuario, setUsuario] = useState("");
@@ -52,7 +55,26 @@ export default function AdminMaster() {
     }
   };
 
-  const criarAgencia = async (e) => {
+  const iniciarEdicao = (ag) => {
+    setAgenciaEditandoId(ag.id);
+    setNome(ag.nome || "");
+    setWhatsapp(ag.whatsapp || "");
+    setUsuario(ag.usuario || "");
+    setSenhaAgencia(ag.senha || "");
+    setCadastur(ag.cadastur || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelarEdicao = () => {
+    setAgenciaEditandoId(null);
+    setNome("");
+    setWhatsapp("");
+    setUsuario("");
+    setSenhaAgencia("");
+    setCadastur("");
+  };
+
+  const salvarAgencia = async (e) => {
     e.preventDefault();
     if (!nome || !usuario || !senhaAgencia || !whatsapp) {
       alert("Preencha todos os campos obrigatórios.");
@@ -61,26 +83,36 @@ export default function AdminMaster() {
 
     setSalvando(true);
     try {
-      await addDoc(collection(db, "agencias"), {
+      const dados = {
         nome: nome.trim(),
         usuario: usuario.trim().toLowerCase(),
         senha: senhaAgencia.trim(),
         whatsapp: whatsapp.replace(/\D/g, ""),
         cadastur: cadastur.trim() || "Regular / Ativo",
-        status: "ativo",
-        criadoEm: serverTimestamp(),
-      });
+      };
 
-      setNome("");
-      setWhatsapp("");
-      setUsuario("");
-      setSenhaAgencia("");
-      setCadastur("");
+      if (agenciaEditandoId) {
+        // Atualizar agência existente
+        await updateDoc(doc(db, "agencias", agenciaEditandoId), {
+          ...dados,
+          atualizadoEm: serverTimestamp(),
+        });
+        alert("Agência atualizada com sucesso!");
+      } else {
+        // Criar nova agência
+        await addDoc(collection(db, "agencias"), {
+          ...dados,
+          status: "ativo",
+          criadoEm: serverTimestamp(),
+        });
+        alert("Agência cadastrada com sucesso!");
+      }
+
+      cancelarEdicao();
       carregarAgencias();
-      alert("Agência cadastrada com sucesso!");
     } catch (err) {
       console.error(err);
-      alert("Erro ao cadastrar agência.");
+      alert("Erro ao salvar agência.");
     } finally {
       setSalvando(false);
     }
@@ -102,6 +134,7 @@ export default function AdminMaster() {
     if (!confirm(`Tem certeza que deseja excluir o acesso da agência ${nomeAgencia}?`)) return;
     try {
       await deleteDoc(doc(db, "agencias", id));
+      if (agenciaEditandoId === id) cancelarEdicao();
       setAgencias((prev) => prev.filter((a) => a.id !== id));
     } catch (err) {
       console.error(err);
@@ -177,13 +210,35 @@ export default function AdminMaster() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Formulário (Criação / Edição) */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-fit">
-          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-4">
-            <Plus className="w-4 h-4 text-emerald-700" />
-            Cadastrar Nova Agência
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              {agenciaEditandoId ? (
+                <>
+                  <Pencil className="w-4 h-4 text-amber-600" />
+                  Editar Agência
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 text-emerald-700" />
+                  Cadastrar Nova Agência
+                </>
+              )}
+            </h2>
+            {agenciaEditandoId && (
+              <button
+                type="button"
+                onClick={cancelarEdicao}
+                className="text-slate-400 hover:text-slate-600 p-1"
+                title="Cancelar edição"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
-          <form onSubmit={criarAgencia} className="space-y-3">
+          <form onSubmit={salvarAgencia} className="space-y-3">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nome da Agência</label>
               <input
@@ -247,17 +302,45 @@ export default function AdminMaster() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={salvando}
-              className="w-full bg-emerald-900 hover:bg-emerald-950 text-white font-bold py-2.5 rounded-xl text-xs transition shadow flex items-center justify-center gap-1.5 mt-2"
-            >
-              {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              <span>{salvando ? "Cadastrando..." : "Cadastrar Agência"}</span>
-            </button>
+            <div className="flex gap-2 pt-1">
+              {agenciaEditandoId && (
+                <button
+                  type="button"
+                  onClick={cancelarEdicao}
+                  className="w-1/3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2.5 rounded-xl text-xs transition"
+                >
+                  Cancelar
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={salvando}
+                className={`flex-1 font-bold py-2.5 rounded-xl text-xs transition shadow flex items-center justify-center gap-1.5 ${
+                  agenciaEditandoId
+                    ? "bg-amber-600 hover:bg-amber-700 text-white"
+                    : "bg-emerald-900 hover:bg-emerald-950 text-white"
+                }`}
+              >
+                {salvando ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : agenciaEditandoId ? (
+                  <Pencil className="w-4 h-4" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                <span>
+                  {salvando
+                    ? "Salvando..."
+                    : agenciaEditandoId
+                    ? "Salvar Alterações"
+                    : "Cadastrar Agência"}
+                </span>
+              </button>
+            </div>
           </form>
         </div>
 
+        {/* Lista de Agências */}
         <div className="md:col-span-2 space-y-3">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-sm font-bold text-slate-800">
@@ -288,7 +371,11 @@ export default function AdminMaster() {
               {agencias.map((ag) => (
                 <div
                   key={ag.id}
-                  className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                    agenciaEditandoId === ag.id
+                      ? "border-amber-400 ring-2 ring-amber-100"
+                      : "border-slate-200"
+                  }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -329,7 +416,14 @@ export default function AdminMaster() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-center">
+                  <div className="flex items-center gap-1.5 self-end sm:self-center">
+                    <button
+                      onClick={() => iniciarEdicao(ag)}
+                      className="p-1.5 text-slate-500 hover:text-amber-700 rounded-lg hover:bg-amber-50 border border-slate-200 transition"
+                      title="Editar agência"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => alternarStatus(ag)}
                       className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${
