@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
-  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2 
+  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold 
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -13,6 +13,48 @@ import {
 
 const CLOUD_NAME = "s1yeyx4g";
 const UPLOAD_PRESET = "guia_temporada";
+
+// Mini Barra de Ferramentas (Negrito B e Seletor de Cores A com quadrado)
+function EditorToolbar({ editorRef }) {
+  const [corAtual, setCorAtual] = useState("#e11d48");
+
+  const aplicarNegrito = () => {
+    document.execCommand("bold", false, null);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  const aplicarCor = (cor) => {
+    setCorAtual(cor);
+    document.execCommand("foreColor", false, cor);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-2 py-1 rounded-lg w-fit mb-1.5 shadow-sm">
+      <button
+        type="button"
+        onClick={aplicarNegrito}
+        className="p-1 hover:bg-slate-200 rounded font-bold text-slate-800 text-xs flex items-center justify-center w-6 h-6 transition"
+        title="Negrito (Ctrl+B)"
+      >
+        <Bold className="w-3.5 h-3.5" />
+      </button>
+
+      <div className="h-4 w-px bg-slate-300 mx-0.5" />
+
+      <label className="flex items-center gap-1 cursor-pointer hover:bg-slate-200 px-1.5 py-0.5 rounded transition" title="Mudar Cor da Fonte">
+        <span className="font-extrabold text-xs" style={{ color: corAtual }}>A</span>
+        <span className="w-3.5 h-3.5 rounded-sm border border-slate-400 inline-block" style={{ backgroundColor: corAtual }} />
+        <input
+          type="color"
+          value={corAtual}
+          onChange={(e) => aplicarCor(e.target.value)}
+          className="hidden"
+        />
+      </label>
+    </div>
+  );
+}
 
 export default function GestaoHoteis() {
   const [agencia, setAgencia] = useState(null);
@@ -30,12 +72,14 @@ export default function GestaoHoteis() {
   const [localizacao, setLocalizacao] = useState("");
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
-  const [descricao, setDescricao] = useState("");
   const [inclusoPacote, setInclusoPacote] = useState("");
-  const [observacoes, setObservacoes] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
+
+  // Referências para os editores de texto rico
+  const descRef = useRef(null);
+  const obsRef = useRef(null);
 
   useEffect(() => {
     const dadosSalvos = localStorage.getItem("fast_agencia");
@@ -146,12 +190,16 @@ export default function GestaoHoteis() {
     setLocalizacao("");
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
-    setDescricao("");
     setInclusoPacote("");
-    setObservacoes("");
     setVideoUrl("");
     setFotosGerais([]);
     setTiposApto([]);
+
+    setTimeout(() => {
+      if (descRef.current) descRef.current.innerHTML = "";
+      if (obsRef.current) obsRef.current.innerHTML = "";
+    }, 50);
+
     setModoVisualizacao("formulario");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -162,12 +210,16 @@ export default function GestaoHoteis() {
     setLocalizacao(hotel.localizacao || "");
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
-    setDescricao(hotel.descricao || "");
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
-    setObservacoes(hotel.observacoes || "");
     setVideoUrl(hotel.videoUrl || "");
     setFotosGerais(hotel.fotos || []);
     setTiposApto(hotel.tiposApto || []);
+
+    setTimeout(() => {
+      if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
+      if (obsRef.current) obsRef.current.innerHTML = hotel.observacoes || "";
+    }, 50);
+
     setModoVisualizacao("formulario");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -188,15 +240,18 @@ export default function GestaoHoteis() {
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
+      const descricaoHtml = descRef.current ? descRef.current.innerHTML : "";
+      const observacoesHtml = obsRef.current ? obsRef.current.innerHTML : "";
+
       const dados = {
         agenciaId: agencia.id,
         nome: nome.trim(),
         localizacao: localizacao.trim(),
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
-        descricao: descricao.trim(),
+        descricao: descricaoHtml,
         parquesDisponiveis: listaIncluso,
-        observacoes: observacoes.trim(),
+        observacoes: observacoesHtml,
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
         tiposApto: tiposApto.filter((a) => a.nome.trim().length > 0),
@@ -265,6 +320,7 @@ export default function GestaoHoteis() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 mt-2">
+        {/* ================= TELA: LISTA ================= */}
         {modoVisualizacao === "lista" && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -371,6 +427,7 @@ export default function GestaoHoteis() {
           </div>
         )}
 
+        {/* ================= TELA: FORMULÁRIO COMPLETO ================= */}
         {modoVisualizacao === "formulario" && (
           <form onSubmit={salvarHotel} className="space-y-6">
             <div className="flex items-center justify-between">
@@ -388,9 +445,9 @@ export default function GestaoHoteis() {
               </button>
             </div>
 
-            {/* 1. BÁSICO */}
+            {/* 1. INFORMAÇÕES BÁSICAS */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">1. Informações Básicas</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Informações Básicas</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
@@ -409,7 +466,7 @@ export default function GestaoHoteis() {
 
                 <div className="md:col-span-2">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Localização / Endereço (Exibido somente no site)
+                    Localização / Endereço <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
                   </label>
                   <input
                     type="text"
@@ -446,24 +503,28 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
+                {/* SOBRE O HOTEL COM TOOLBAR E ALTURA DOBRADA */}
                 <div className="md:col-span-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Sobre o Hotel (Descrição para o Site / Vitrine)
-                  </label>
-                  <textarea
-                    rows={3}
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase block">
+                      Sobre o Hotel <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
+                    </label>
+                    <EditorToolbar editorRef={descRef} />
+                  </div>
+                  <div
+                    ref={descRef}
+                    contentEditable
+                    className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
                     placeholder="Descreva a estrutura, piscinas termais, localização e atrativos..."
-                    value={descricao}
-                    onChange={(e) => setDescricao(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
                   />
+                  <p className="text-[11px] text-slate-500 mt-1">Pressione Enter para quebrar linhas. Selecione palavras e clique em B ou no seletor de cores.</p>
                 </div>
               </div>
             </div>
 
             {/* 2. INCLUSÕES & MÍDIA */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">2. Inclusões, Mídia & Observações</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Inclusões, Mídia & Observações</h3>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
@@ -476,14 +537,11 @@ export default function GestaoHoteis() {
                   onChange={(e) => setInclusoPacote(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
                 />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Esses itens poderão ser selecionados ao gerar o orçamento.
-                </p>
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Link de Vídeo (YouTube normal ou Shorts vertical)
+                  Link de Vídeo (YouTube normal ou Shorts vertical) <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
                 </label>
                 <div className="relative">
                   <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
@@ -497,26 +555,32 @@ export default function GestaoHoteis() {
                 </div>
               </div>
 
+              {/* OBSERVAÇÕES GERAIS COM TOOLBAR E ALTURA DOBRADA */}
               <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Observações Gerais (Políticas de toalhas, pulseiras, cancelamento)
-                </label>
-                <textarea
-                  rows={2}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase block">
+                    Observações Gerais (Políticas de toalhas, pulseiras, cancelamento) <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
+                  </label>
+                  <EditorToolbar editorRef={obsRef} />
+                </div>
+                <div
+                  ref={obsRef}
+                  contentEditable
+                  className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
                   placeholder="Ex: Taxa de turismo inclusa. Proibido entrada com alimentos na área de piscinas."
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
                 />
+                <p className="text-[11px] text-slate-500 mt-1">Pressione Enter para quebrar linhas. Selecione palavras e clique em B ou no seletor de cores.</p>
               </div>
             </div>
 
-            {/* 3. FOTOS GERAIS */}
+            {/* 3. FOTOS GERAIS - TÍTULO ESCURO E VISÍVEL */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">3. Fotos Gerais do Hotel / Lazer</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Faça upload de fotos das piscinas, fachada, restaurante e área externa.</p>
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Fotos Gerais do Hotel / Lazer <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">Faça upload de fotos das piscinas, fachada, restaurante e área externa.</p>
                 </div>
                 
                 <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral ? "opacity-50 pointer-events-none" : ""}`}>
@@ -533,10 +597,10 @@ export default function GestaoHoteis() {
               </div>
 
               {fotosGerais.length === 0 ? (
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50">
-                  <UploadCloud className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs text-slate-500">Nenhuma foto geral adicionada.</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Selecione fotos direto do seu celular ou computador.</p>
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
+                  <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-700">Nenhuma foto geral adicionada.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Selecione fotos direto do seu celular ou computador.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
@@ -557,12 +621,14 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 4. TIPOS DE APTO */}
+            {/* 4. TIPOS DE APARTAMENTOS - TÍTULO ESCURO E VISÍVEL */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">4. Tipos de Apartamentos (Acomodações)</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Tipos de Apartamentos (Acomodações) <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
                     Cadastre os quartos disponíveis e adicione fotos de cada categoria.
                   </p>
                 </div>
@@ -578,10 +644,10 @@ export default function GestaoHoteis() {
               </div>
 
               {tiposApto.length === 0 ? (
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50">
-                  <BedDouble className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs text-slate-500">Nenhum tipo de apartamento cadastrado.</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Ex: Suíte Luxo Casal, Flat 1 Quarto, Apartamento Standard.</p>
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
+                  <BedDouble className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-700">Nenhum tipo de apartamento cadastrado.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Ex: Suíte Luxo Casal, Flat 1 Quarto, Apartamento Standard.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -589,7 +655,7 @@ export default function GestaoHoteis() {
                     <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex-1">
-                          <label className="text-xs font-bold text-slate-600 uppercase block mb-1">
+                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                             Nome da Categoria #{index + 1}
                           </label>
                           <input
@@ -614,7 +680,7 @@ export default function GestaoHoteis() {
 
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-slate-600">
+                          <span className="text-xs font-semibold text-slate-700">
                             Fotos deste apartamento ({apto.fotos?.length || 0})
                           </span>
 
@@ -654,6 +720,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
+            {/* Ações Finais */}
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
