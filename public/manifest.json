@@ -1,0 +1,9 @@
+{
+  "name": "Fast Orçamento",
+  "short_name": "FastOrcamento",
+  "description": "Gerador ágil de orçamentos para turismo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#064e3b",
+  "theme_color": "#064e3b"
+}
