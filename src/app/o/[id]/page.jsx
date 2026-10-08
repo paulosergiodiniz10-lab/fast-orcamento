@@ -43,7 +43,10 @@ export default function VitrineOrcamento() {
   const [orcamento, setOrcamento] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
+
+  // Índices independentes para os dois sliders (Hotel e Acomodação)
   const [fotoGeralIndex, setFotoGeralIndex] = useState(0);
+  const [fotoAptoIndex, setFotoAptoIndex] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -105,7 +108,6 @@ export default function VitrineOrcamento() {
     acomodacaoEscolhida 
   } = orcamento;
 
-  // WhatsApp dinâmico da agência cadastrada
   const whatsNumeros = (agencia?.whatsapp || "").replace(/\D/g, "");
   const whatsappFormatado = whatsNumeros.startsWith("55") ? whatsNumeros : `55${whatsNumeros}`;
 
@@ -120,21 +122,25 @@ export default function VitrineOrcamento() {
   const fotosApto = aptoCotadoDados?.fotos || [];
   const videoInfo = obterDadosVideoYouTube(hotel?.videoUrl);
 
-  const proximaFoto = () => {
-    if (fotosGerais.length > 0) {
-      setFotoGeralIndex((prev) => (prev + 1) % fotosGerais.length);
-    }
+  // Navegação no slider geral do hotel
+  const proximaFotoGeral = () => {
+    if (fotosGerais.length > 0) setFotoGeralIndex((prev) => (prev + 1) % fotosGerais.length);
+  };
+  const fotoAnteriorGeral = () => {
+    if (fotosGerais.length > 0) setFotoGeralIndex((prev) => (prev - 1 + fotosGerais.length) % fotosGerais.length);
   };
 
-  const fotoAnterior = () => {
-    if (fotosGerais.length > 0) {
-      setFotoGeralIndex((prev) => (prev - 1 + fotosGerais.length) % fotosGerais.length);
-    }
+  // Navegação no slider da acomodação/quarto
+  const proximaFotoApto = () => {
+    if (fotosApto.length > 0) setFotoAptoIndex((prev) => (prev + 1) % fotosApto.length);
+  };
+  const fotoAnteriorApto = () => {
+    if (fotosApto.length > 0) setFotoAptoIndex((prev) => (prev - 1 + fotosApto.length) % fotosApto.length);
   };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 pb-28">
-      {/* CABEÇALHO AZUL ESCURO NOBRE COM BOTÃO VERDE WHATSAPP */}
+      {/* CABEÇALHO AZUL ESCURO COM BOTÃO VERDE WHATSAPP */}
       <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
@@ -329,7 +335,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 3. FOTOS DA ACOMODAÇÃO SELECIONADA ================= */}
+        {/* ================= 3. FOTOS DA ACOMODAÇÃO COTADA (SLIDE RESPONSIVO) ================= */}
         {fotosApto.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <div className="flex items-center gap-2">
@@ -340,17 +346,57 @@ export default function VitrineOrcamento() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-              {fotosApto.map((url, idx) => (
-                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shadow-sm">
-                  <img src={url} alt={`Foto Apto ${idx + 1}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
-                </div>
-              ))}
+            {/* Slide do Apartamento */}
+            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
+              <img
+                src={fotosApto[fotoAptoIndex]}
+                alt="Foto da Acomodação"
+                className="w-full h-full object-cover transition duration-300"
+              />
+
+              {fotosApto.length > 1 && (
+                <>
+                  <button
+                    onClick={fotoAnteriorApto}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                    title="Foto anterior"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={proximaFotoApto}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                    title="Próxima foto"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                    {fotoAptoIndex + 1} / {fotosApto.length} fotos
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Miniaturas do Apartamento */}
+            {fotosApto.length > 1 && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                {fotosApto.map((url, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setFotoAptoIndex(idx)}
+                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
+                      fotoAptoIndex === idx ? "border-amber-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* ================= 4. GALERIA GERAL DE FOTOS ================= */}
+        {/* ================= 4. GALERIA GERAL DE FOTOS DO HOTEL (SLIDE RESPONSIVO) ================= */}
         {fotosGerais.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
@@ -365,14 +411,14 @@ export default function VitrineOrcamento() {
               {fotosGerais.length > 1 && (
                 <>
                   <button
-                    onClick={fotoAnterior}
+                    onClick={fotoAnteriorGeral}
                     className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
                     title="Foto anterior"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={proximaFoto}
+                    onClick={proximaFotoGeral}
                     className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
                     title="Próxima foto"
                   >
@@ -385,19 +431,21 @@ export default function VitrineOrcamento() {
               )}
             </div>
 
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-              {fotosGerais.map((url, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setFotoGeralIndex(idx)}
-                  className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                    fotoGeralIndex === idx ? "border-blue-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
+            {fotosGerais.length > 1 && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                {fotosGerais.map((url, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setFotoGeralIndex(idx)}
+                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
+                      fotoGeralIndex === idx ? "border-blue-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -410,7 +458,7 @@ export default function VitrineOrcamento() {
             </h3>
 
             {videoInfo.isVertical ? (
-              // Formato Vertical (Shorts/Reels) sem faixas pretas laterais
+              // Formato Vertical (Shorts/Reels 9:16)
               <div className="flex justify-center py-2">
                 <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
                   <iframe
@@ -423,7 +471,7 @@ export default function VitrineOrcamento() {
                 </div>
               </div>
             ) : (
-              // Formato Horizontal padrão (16:9)
+              // Formato Horizontal (16:9)
               <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
                 <iframe
                   src={videoInfo.embedUrl}
