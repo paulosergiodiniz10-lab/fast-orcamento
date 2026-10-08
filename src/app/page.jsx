@@ -7,11 +7,11 @@ import { db } from "../lib/firebase";
 import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 
 const REGIMES_OPCOES = [
-  { id: "sem_refeicao", label: "Sem refeições", emoji: "🏠" },
-  { id: "cafe", label: "Café da Manhã", emoji: "☕" },
-  { id: "cafe_almoco", label: "Café + Almoço", emoji: "🥗" },
-  { id: "cafe_jantar", label: "Café + Jantar", emoji: "🍽️" },
-  { id: "pensao_completa", label: "Pensão Completa", emoji: "🍲" },
+  { id: "sem_refeicao", label: "Sem refeições" },
+  { id: "cafe", label: "Café da Manhã" },
+  { id: "cafe_almoco", label: "Café + Almoço" },
+  { id: "cafe_jantar", label: "Café + Jantar" },
+  { id: "pensao_completa", label: "Pensão Completa" },
 ];
 
 const obterDataHojeLocal = () => {
@@ -148,11 +148,12 @@ export default function FastOrcamento() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
+  // Formato limpo e padronizado do WhatsApp
   const gerarTextoZap = (urlVitrine) => {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
-    let texto = `🏨 *${hotelSelecionado.nome}*\n`;
-    texto += `📅 *Período:* ${formatarDatas()}\n`;
+    let texto = `*${hotelSelecionado.nome.toUpperCase()}*\n`;
+    texto += `*Período:* ${formatarDatas()}\n`;
 
     let textoHospedes = `${adultos} adulto(s)`;
     if (numCriancas > 0) {
@@ -161,16 +162,16 @@ export default function FastOrcamento() {
         textoHospedes += ` (${idadesCriancas.trim()})`;
       }
     }
-    texto += `👥 *Hóspedes:* ${textoHospedes}\n`;
+    texto += `*Hóspedes:* ${textoHospedes}\n`;
 
     if (aptoSelecionado) {
-      texto += `🛏️ *Acomodação:* ${aptoSelecionado}\n`;
+      texto += `*Acomodação:* ${aptoSelecionado}\n`;
     }
 
     texto += `\n`;
 
     if (parquesMarcados.length > 0) {
-      texto += `🎟️ *Incluso no pacote:*\n`;
+      texto += `*Incluso no pacote:*\n`;
       parquesMarcados.forEach((p) => {
         texto += `👉 ${p}\n`;
       });
@@ -182,25 +183,25 @@ export default function FastOrcamento() {
     );
 
     if (regimesComValor.length > 0) {
-      texto += `💰 *Valor total do pacote:*\n`;
+      texto += `💰 *Valor total do pacote:*\n\n`;
       regimesComValor.forEach((reg) => {
-        texto += `${reg.emoji} *${reg.label}:* R$ ${regimesValores[reg.id]}\n`;
+        texto += `*${reg.label}:*\nR$ ${regimesValores[reg.id]}\n\n`;
       });
     }
 
     if (formaPagamento) {
-      texto += `\n💳 *Formas de Pagamento:*\n${formaPagamento}\n`;
+      texto += `💳 *Formas de Pagamento:*\n${formaPagamento}\n\n`;
     }
 
     if (aptosRestantes) {
-      texto += `\n⚠️ *Restam apenas ${aptosRestantes} apartamentos disponíveis!*\n`;
+      texto += `⚠️ Restam apenas ${aptosRestantes} apartamentos disponíveis!\n\n`;
     }
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
     if (finalUrl) {
-      texto += `\n🔗 *Fotos e detalhes completos:* ${finalUrl}\n`;
+      texto += `🔗 *Fotos e detalhes completos:*\n${finalUrl}\n\n`;
     }
-    texto += `\n_Oferta sujeita a alteração e disponibilidade sem prévio aviso._`;
+    texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._`;
 
     return texto;
   };
@@ -226,7 +227,7 @@ export default function FastOrcamento() {
         agenciaId: agencia?.id || "avulso",
         hotel: {
           nome: hotelSelecionado.nome,
-          logoUrl: hotelSelecionado.logoUrl || "", // Repassa o logotipo para a vitrine
+          logoUrl: hotelSelecionado.logoUrl || "",
           localizacao: hotelSelecionado.localizacao || "",
           descricao: hotelSelecionado.descricao || "",
           observacoes: hotelSelecionado.observacoes || "",
@@ -253,7 +254,6 @@ export default function FastOrcamento() {
         regimes: REGIMES_OPCOES.filter((r) => regimesValores[r.id] && regimesValores[r.id].trim() !== "").map((r) => ({
           id: r.id,
           nome: r.label,
-          emoji: r.emoji,
           valor: regimesValores[r.id],
         })),
         formaPagamento,
@@ -280,7 +280,7 @@ export default function FastOrcamento() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-12">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-12 font-sans">
       <header className="bg-brand-900 text-white px-4 py-3 shadow-md sticky top-0 z-30 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-brand-700 p-2 rounded-lg text-white">
@@ -387,11 +387,11 @@ export default function FastOrcamento() {
                         aptoSelecionado === ap.nome
                           ? "bg-brand-900 text-white border-brand-900 font-bold"
                           : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      {ap.nome}
-                    </button>
-                  ))}
+                    }`}
+                  >
+                    {ap.nome}
+                  </button>
+                ))}
                 </div>
               </div>
             )}
@@ -444,21 +444,18 @@ export default function FastOrcamento() {
 
             {/* CAMPO CONDICIONAL: APARECE SOMENTE QUANDO CRIANÇAS > 0 */}
             {numCriancas > 0 && (
-              <div className="pt-2 border-t border-slate-100 animate-fadeIn">
+              <div className="pt-2 border-t border-slate-100">
                 <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5 mb-1">
                   <Baby className="w-3.5 h-3.5 text-brand-700" />
                   Idades / Detalhes das Crianças
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: 5, 8 e 11 anos (ou '1 bebê de 8 meses e 1 de 6 anos')"
+                  placeholder="Ex: até 12 anos (ou '5 e 9 anos')"
                   value={idadesCriancas}
                   onChange={(e) => setIdadesCriancas(e.target.value)}
                   className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Esta informação será adicionada ao texto do WhatsApp e ao card de hóspedes da vitrine.
-                </p>
               </div>
             )}
           </div>
@@ -496,15 +493,14 @@ export default function FastOrcamento() {
             )}
           </div>
 
-          {/* REGIMES E VALORES ZERADOS */}
+          {/* REGIMES E VALORES */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
               Regimes de Pensão e Valores (R$)
             </label>
             {REGIMES_OPCOES.map((reg) => (
               <div key={reg.id} className="flex items-center gap-2">
-                <span className="w-8 text-center text-lg">{reg.emoji}</span>
-                <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
+                <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
                 <input
                   type="text"
                   inputMode="numeric"
