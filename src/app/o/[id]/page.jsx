@@ -44,9 +44,9 @@ export default function VitrineOrcamento() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
 
-  // Índices independentes para os dois sliders (Hotel e Acomodação)
+  // Sliders
   const [fotoGeralIndex, setFotoGeralIndex] = useState(0);
-  const [fotoAptoIndex, setFotoAptoIndex] = useState(0);
+  const [indicesApto, setIndicesApto] = useState({});
 
   useEffect(() => {
     if (!id) return;
@@ -122,9 +122,28 @@ export default function VitrineOrcamento() {
   const linkWhatsApp = `https://wa.me/${whatsappFormatado}?text=${mensagemReserva}`;
 
   const fotosGerais = hotel?.fotos || [];
-  const aptoCotadoDados = (hotel?.tiposApto || []).find((a) => a.nome === acomodacaoEscolhida);
-  const fotosApto = aptoCotadoDados?.fotos || [];
   const videoInfo = obterDadosVideoYouTube(hotel?.videoUrl);
+
+  // Mapeia todos os tipos de apartamentos ÚNICOS que foram cotados
+  const tiposAptoCadastrados = hotel?.tiposApto || [];
+  let nomesAptosCotados = [];
+
+  if (isGrupo) {
+    nomesAptosCotados = Array.from(
+      new Set(
+        apartamentosGrupo
+          .map((a) => a.acomodacao)
+          .filter((nome) => Boolean(nome && nome.trim().length > 0))
+      )
+    );
+  } else if (acomodacaoEscolhida) {
+    nomesAptosCotados = [acomodacaoEscolhida];
+  }
+
+  // Lista com dados e fotos de cada categoria cotada (sem duplicidades)
+  const categoriasAptoExibir = nomesAptosCotados
+    .map((nomeApto) => tiposAptoCadastrados.find((t) => t.nome === nomeApto))
+    .filter((obj) => Boolean(obj && obj.fotos && obj.fotos.length > 0));
 
   // Navegação no slider geral do hotel
   const proximaFotoGeral = () => {
@@ -134,12 +153,19 @@ export default function VitrineOrcamento() {
     if (fotosGerais.length > 0) setFotoGeralIndex((prev) => (prev - 1 + fotosGerais.length) % fotosGerais.length);
   };
 
-  // Navegação no slider da acomodação/quarto
-  const proximaFotoApto = () => {
-    if (fotosApto.length > 0) setFotoAptoIndex((prev) => (prev + 1) % fotosApto.length);
+  // Navegação para sliders de acomodações
+  const mudarFotoApto = (nomeApto, novoIndex) => {
+    setIndicesApto((prev) => ({ ...prev, [nomeApto]: novoIndex }));
   };
-  const fotoAnteriorApto = () => {
-    if (fotosApto.length > 0) setFotoAptoIndex((prev) => (prev - 1 + fotosApto.length) % fotosApto.length);
+
+  const proximaFotoApto = (nomeApto, total) => {
+    const atual = indicesApto[nomeApto] || 0;
+    mudarFotoApto(nomeApto, (atual + 1) % total);
+  };
+
+  const anteriorFotoApto = (nomeApto, total) => {
+    const atual = indicesApto[nomeApto] || 0;
+    mudarFotoApto(nomeApto, (atual - 1 + total) % total);
   };
 
   return (
@@ -272,7 +298,7 @@ export default function VitrineOrcamento() {
               </div>
             )}
 
-            {/* ================= SE FOR GRUPO: EXIBE CADA APARTAMENTO EM UM CARD SEPARADO ================= */}
+            {/* ================= TABELAS DE VALORES: GRUPOS VS INDIVIDUAL ================= */}
             {isGrupo ? (
               <div className="space-y-3 pt-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -325,7 +351,6 @@ export default function VitrineOrcamento() {
                 </div>
               </div>
             ) : (
-              /* TABELA DE VALORES INDIVIDUAL CLÁSSICA */
               regimes && regimes.length > 0 && (
                 <div className="space-y-2 pt-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -394,62 +419,74 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 3. FOTOS DA ACOMODAÇÃO COTADA (SLIDE RESPONSIVO) ================= */}
-        {fotosApto.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <BedDouble className="w-5 h-5 text-amber-600" />
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Fotos de: {acomodacaoEscolhida}</h3>
-                <p className="text-[11px] text-slate-500">Imagens da acomodação incluída na sua proposta</p>
-              </div>
-            </div>
+        {/* ================= 3. FOTOS DE CADA ACOMODAÇÃO COTADA (SLIDERS INDEPENDENTES) ================= */}
+        {categoriasAptoExibir.length > 0 && (
+          <div className="space-y-4">
+            {categoriasAptoExibir.map((aptoCat) => {
+              const fotos = aptoCat.fotos || [];
+              const indexFotoAtual = indicesApto[aptoCat.nome] || 0;
 
-            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
-              <img
-                src={fotosApto[fotoAptoIndex]}
-                alt="Foto da Acomodação"
-                className="w-full h-full object-cover transition duration-300"
-              />
-
-              {fotosApto.length > 1 && (
-                <>
-                  <button
-                    onClick={fotoAnteriorApto}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Foto anterior"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={proximaFotoApto}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Próxima foto"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                    {fotoAptoIndex + 1} / {fotosApto.length} fotos
+              return (
+                <div key={aptoCat.nome} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <BedDouble className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Fotos de: {aptoCat.nome}</h3>
+                      <p className="text-[11px] text-slate-500">Imagens da acomodação incluída na sua proposta</p>
+                    </div>
                   </div>
-                </>
-              )}
-            </div>
 
-            {fotosApto.length > 1 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-                {fotosApto.map((url, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setFotoAptoIndex(idx)}
-                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                      fotoAptoIndex === idx ? "border-amber-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
-                    }`}
-                  >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
+                  <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
+                    <img
+                      src={fotos[indexFotoAtual]}
+                      alt={`Foto de ${aptoCat.nome}`}
+                      className="w-full h-full object-cover transition duration-300"
+                    />
+
+                    {fotos.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => anteriorFotoApto(aptoCat.nome, fotos.length)}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                          title="Foto anterior"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => proximaFotoApto(aptoCat.nome, fotos.length)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                          title="Próxima foto"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                        <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                          {indexFotoAtual + 1} / {fotos.length} fotos
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {fotos.length > 1 && (
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                      {fotos.map((url, fIdx) => (
+                        <button
+                          key={fIdx}
+                          type="button"
+                          onClick={() => mudarFotoApto(aptoCat.nome, fIdx)}
+                          className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
+                            indexFotoAtual === fIdx ? "border-amber-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
