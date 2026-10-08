@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Lock, Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone } from "lucide-react";
+import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, FileText } from "lucide-react";
 import { db } from "../../lib/firebase";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
@@ -23,7 +23,7 @@ export default function AdminMaster() {
   const [whatsapp, setWhatsapp] = useState("");
   const [usuario, setUsuario] = useState("");
   const [senhaAgencia, setSenhaAgencia] = useState("");
-  const [cadastur, setCadastur] = useState("Regular / Ativo");
+  const [cadastur, setCadastur] = useState("");
 
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
 
@@ -66,7 +66,7 @@ export default function AdminMaster() {
         usuario: usuario.trim().toLowerCase(),
         senha: senhaAgencia.trim(),
         whatsapp: whatsapp.replace(/\D/g, ""),
-        cadastur: cadastur.trim(),
+        cadastur: cadastur.trim() || "Regular / Ativo",
         status: "ativo",
         criadoEm: serverTimestamp(),
       });
@@ -75,6 +75,7 @@ export default function AdminMaster() {
       setWhatsapp("");
       setUsuario("");
       setSenhaAgencia("");
+      setCadastur("");
       carregarAgencias();
       alert("Agência cadastrada com sucesso!");
     } catch (err) {
@@ -107,7 +108,6 @@ export default function AdminMaster() {
     }
   };
 
-  // Tela de bloqueio mestre
   if (!autenticado) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -158,7 +158,6 @@ export default function AdminMaster() {
     );
   }
 
-  // Painel Master Logado
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-12">
       <header className="bg-emerald-950 text-white px-6 py-4 shadow sticky top-0 z-30 flex items-center justify-between">
@@ -236,9 +235,12 @@ export default function AdminMaster() {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">CADASTUR</label>
+              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                Cadastur ou CNPJ
+              </label>
               <input
                 type="text"
+                placeholder="Ex: digite números ou texto"
                 value={cadastur}
                 onChange={(e) => setCadastur(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-emerald-900"
@@ -302,9 +304,16 @@ export default function AdminMaster() {
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-500 flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" /> {ag.whatsapp}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-slate-400" /> {ag.whatsapp}
+                      </span>
+                      {ag.cadastur && (
+                        <span className="flex items-center gap-1 text-slate-400">
+                          <FileText className="w-3.5 h-3.5" /> {ag.cadastur}
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-3 pt-1 text-xs">
                       <span className="text-slate-600">
