@@ -139,8 +139,8 @@ export default function VitrineOrcamento() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 pb-28">
-      {/* CABEÇALHO AZUL ESCURO COM BOTÃO VERDE WHATSAPP */}
+    <div className="min-h-screen bg-slate-100 text-slate-800 pb-28 font-sans">
+      {/* CABEÇALHO AZUL ESCURO NOBRE COM BOTÃO VERDE WHATSAPP */}
       <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
@@ -322,14 +322,14 @@ export default function VitrineOrcamento() {
           </div>
         </div>
 
-        {/* ================= 2. SOBRE O HOTEL (TEXTO RICO) ================= */}
+        {/* ================= 2. SOBRE O HOTEL (TEXTO PADRONIZADO E HIGIENIZADO) ================= */}
         {hotel?.descricao && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6 space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Sobre a Estrutura do Hotel
             </h3>
             <div
-              className="text-xs md:text-sm text-slate-700 leading-relaxed"
+              className="text-xs md:text-sm text-slate-700 leading-relaxed space-y-2.5 font-normal break-words [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-slate-900 [&_h2]:pt-2 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:text-slate-900 [&_strong]:font-semibold [&_strong]:text-slate-900"
               dangerouslySetInnerHTML={{ __html: hotel.descricao }}
             />
           </div>
@@ -346,7 +346,6 @@ export default function VitrineOrcamento() {
               </div>
             </div>
 
-            {/* Slide do Apartamento */}
             <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
               <img
                 src={fotosApto[fotoAptoIndex]}
@@ -377,7 +376,6 @@ export default function VitrineOrcamento() {
               )}
             </div>
 
-            {/* Miniaturas do Apartamento */}
             {fotosApto.length > 1 && (
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
                 {fotosApto.map((url, idx) => (
@@ -396,7 +394,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 4. GALERIA GERAL DE FOTOS DO HOTEL (SLIDE RESPONSIVO) ================= */}
+        {/* ================= 4. GALERIA GERAL DE FOTOS EM SLIDE ================= */}
         {fotosGerais.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
@@ -449,7 +447,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. VÍDEO DO HOTEL (ADAPTATIVO: HORIZONTAL OU SHORTS VERTICAL) ================= */}
+        {/* ================= 5. VÍDEO DO HOTEL (ADAPTATIVO) ================= */}
         {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -458,7 +456,6 @@ export default function VitrineOrcamento() {
             </h3>
 
             {videoInfo.isVertical ? (
-              // Formato Vertical (Shorts/Reels 9:16)
               <div className="flex justify-center py-2">
                 <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
                   <iframe
@@ -471,7 +468,6 @@ export default function VitrineOrcamento() {
                 </div>
               </div>
             ) : (
-              // Formato Horizontal (16:9)
               <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
                 <iframe
                   src={videoInfo.embedUrl}
@@ -492,7 +488,7 @@ export default function VitrineOrcamento() {
               Observações & Políticas
             </h3>
             <div
-              className="text-xs md:text-sm text-slate-700 leading-relaxed"
+              className="text-xs md:text-sm text-slate-700 leading-relaxed space-y-2 [&_strong]:font-semibold [&_strong]:text-slate-900"
               dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
             />
           </div>
@@ -506,7 +502,7 @@ export default function VitrineOrcamento() {
         </footer>
       </main>
 
-      {/* BOTÃO FIXO INFERIOR COM LINK DO WHATSAPP DA AGÊNCIA */}
+      {/* BOTÃO FIXO INFERIOR */}
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg z-30">
         <div className="max-w-3xl mx-auto">
           <a
