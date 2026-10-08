@@ -14,6 +14,62 @@ import {
 const CLOUD_NAME = "s1yeyx4g";
 const UPLOAD_PRESET = "guia_temporada";
 
+// Função para comprimir fotos pesadas no próprio navegador antes do upload
+const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
+  return new Promise((resolve) => {
+    // Se não for imagem comum, envia original
+    if (!file.type.startsWith("image/")) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let largura = img.width;
+        let altura = img.height;
+
+        if (largura > maxLargura || altura > maxAltura) {
+          if (largura / altura > maxLargura / maxAltura) {
+            altura = Math.round((altura * maxLargura) / largura);
+            largura = maxLargura;
+          } else {
+            largura = Math.round((largura * maxAltura) / altura);
+            altura = maxAltura;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = largura;
+        canvas.height = altura;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, largura, altura);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const novoArquivo = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(novoArquivo);
+          },
+          "image/jpeg",
+          qualidade
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 // Barra de Ferramentas Completa (Tipo de Fonte, Tamanho, Negrito e Cor)
 function EditorToolbar({ editorRef }) {
   const [corAtual, setCorAtual] = useState("#e11d48");
@@ -43,7 +99,6 @@ function EditorToolbar({ editorRef }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 border border-slate-300 px-2 py-1 rounded-lg w-fit mb-1.5 shadow-sm">
-      {/* Tipo de Fonte */}
       <select
         onChange={(e) => aplicarFonte(e.target.value)}
         defaultValue=""
@@ -57,7 +112,6 @@ function EditorToolbar({ editorRef }) {
         <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
       </select>
 
-      {/* Tamanho da Fonte */}
       <select
         onChange={(e) => aplicarTamanho(e.target.value)}
         defaultValue=""
@@ -74,7 +128,6 @@ function EditorToolbar({ editorRef }) {
 
       <div className="h-4 w-px bg-slate-300 mx-0.5" />
 
-      {/* Negrito */}
       <button
         type="button"
         onClick={aplicarNegrito}
@@ -84,7 +137,6 @@ function EditorToolbar({ editorRef }) {
         <Bold className="w-3.5 h-3.5" />
       </button>
 
-      {/* Cor da Fonte */}
       <label className="flex items-center gap-1 cursor-pointer hover:bg-slate-200 px-1.5 py-0.5 rounded transition" title="Mudar Cor da Fonte">
         <span className="font-extrabold text-xs" style={{ color: corAtual }}>A</span>
         <span className="w-3.5 h-3.5 rounded-sm border border-slate-400 inline-block" style={{ backgroundColor: corAtual }} />
@@ -110,17 +162,17 @@ export default function GestaoHoteis() {
   const [modoVisualizacao, setModoVisualizacao] = useState("lista");
   const [hotelEditandoId, setHotelEditandoId] = useState(null);
 
-  // Campos do Formulário Expandido
+  // Campos do Formulário
   const [nome, setNome] = useState("");
   const [localizacao, setLocalizacao] = useState("");
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
+  const [formaPagamentoPadrao, setFormaPagamentoPadrao] = useState("Cartão em até 10x sem juros ou PIX com desconto especial");
   const [inclusoPacote, setInclusoPacote] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
 
-  // Referências para os editores de texto rico
   const descRef = useRef(null);
   const obsRef = useRef(null);
 
@@ -150,10 +202,12 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Upload robusto para o Cloudinary capturando mensagens de erro do servidor
-  const uploadParaCloudinary = async (file) => {
+  // Upload para Cloudinary com compressão prévia automática
+  const uploadParaCloudinary = async (fileOriginal) => {
+    const arquivoComprimido = await comprimirImagem(fileOriginal);
+
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", arquivoComprimido);
     formData.append("upload_preset", UPLOAD_PRESET);
 
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
@@ -209,7 +263,6 @@ export default function GestaoHoteis() {
     setTiposApto((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Upload sequencial para evitar timeout e tratar erros por apartamento
   const handleUploadFotosApto = async (index, e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -232,7 +285,7 @@ export default function GestaoHoteis() {
       });
     } catch (err) {
       console.error("Erro no upload do apto:", err);
-      alert(`Falha ao enviar imagem: ${err.message || "Verifique o formato ou tamanho da foto"}`);
+      alert(`Falha ao enviar imagem: ${err.message || "Tente novamente"}`);
     } finally {
       setEnviandoFotoAptoIndex(null);
       e.target.value = "";
@@ -256,6 +309,7 @@ export default function GestaoHoteis() {
     setLocalizacao("");
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
+    setFormaPagamentoPadrao("Cartão em até 10x sem juros ou PIX com desconto especial");
     setInclusoPacote("");
     setVideoUrl("");
     setFotosGerais([]);
@@ -276,6 +330,7 @@ export default function GestaoHoteis() {
     setLocalizacao(hotel.localizacao || "");
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
+    setFormaPagamentoPadrao(hotel.formaPagamento || "Cartão em até 10x sem juros ou PIX com desconto especial");
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
     setVideoUrl(hotel.videoUrl || "");
     setFotosGerais(hotel.fotos || []);
@@ -315,6 +370,7 @@ export default function GestaoHoteis() {
         localizacao: localizacao.trim(),
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
+        formaPagamento: formaPagamentoPadrao.trim(),
         descricao: descricaoHtml,
         parquesDisponiveis: listaIncluso,
         observacoes: observacoesHtml,
@@ -386,7 +442,6 @@ export default function GestaoHoteis() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 mt-2">
-        {/* ================= TELA: LISTA ================= */}
         {modoVisualizacao === "lista" && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -569,7 +624,19 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                {/* SOBRE O HOTEL COM TOOLBAR E ALTURA DOBRADA */}
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                    Forma de Pagamento Padrão
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Cartão em até 10x sem juros ou PIX com desconto especial"
+                    value={formaPagamentoPadrao}
+                    onChange={(e) => setFormaPagamentoPadrao(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                  />
+                </div>
+
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -621,7 +688,6 @@ export default function GestaoHoteis() {
                 </div>
               </div>
 
-              {/* OBSERVAÇÕES GERAIS COM TOOLBAR E ALTURA DOBRADA */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -639,7 +705,7 @@ export default function GestaoHoteis() {
               </div>
             </div>
 
-            {/* 3. FOTOS GERAIS - TÍTULO ESCURO E VISÍVEL */}
+            {/* 3. FOTOS GERAIS */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
@@ -687,7 +753,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 4. TIPOS DE APARTAMENTOS - TÍTULO ESCURO E VISÍVEL */}
+            {/* 4. TIPOS DE APARTAMENTOS */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
