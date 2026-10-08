@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2, Hotel, LogOut } from "lucide-react";
+import Link from "next/link";
 import { db } from "../lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 
-const HOTEIS_EXEMPLO = [
+const HOTEIS_PADRAO = [
   {
     id: "1",
     nome: "HOTEL PRIVE RIVIERA PARK",
@@ -38,13 +39,16 @@ const REGIMES_OPCOES = [
 ];
 
 export default function FastOrcamento() {
-  const [hotelSelecionado, setHotelSelecionado] = useState(HOTEIS_EXEMPLO[0]);
+  const [agencia, setAgencia] = useState(null);
+  const [hoteis, setHoteis] = useState(HOTEIS_PADRAO);
+  const [hotelSelecionado, setHotelSelecionado] = useState(HOTEIS_PADRAO[0]);
+
   const [checkin, setCheckin] = useState("2026-11-05");
   const [checkout, setCheckout] = useState("2026-11-09");
   const [adultos, setAdultos] = useState("2");
   const [criancas, setCriancas] = useState("0");
-  const [parquesMarcados, setParquesMarcados] = useState(hotelSelecionado.parquesDisponiveis);
-  
+  const [parquesMarcados, setParquesMarcados] = useState(HOTEIS_PADRAO[0].parquesDisponiveis || []);
+
   const [regimesValores, setRegimesValores] = useState({
     cafe: "1.571,61",
     cafe_jantar: "1.951,67",
@@ -57,11 +61,44 @@ export default function FastOrcamento() {
   const [salvando, setSalvando] = useState(false);
   const [linkGerado, setLinkGerado] = useState("");
 
+  useEffect(() => {
+    const dadosSalvos = localStorage.getItem("fast_agencia");
+    if (!dadosSalvos) {
+      window.location.href = "/login";
+      return;
+    }
+    const ag = JSON.parse(dadosSalvos);
+    setAgencia(ag);
+    carregarHoteisDaAgencia(ag.id);
+  }, []);
+
+  const carregarHoteisDaAgencia = async (agenciaId) => {
+    try {
+      const q = query(collection(db, "hoteis"), where("agenciaId", "==", agenciaId));
+      const snap = await getDocs(q);
+      const lista = [];
+      snap.forEach((d) => lista.push({ id: d.id, ...d.data() }));
+
+      if (lista.length > 0) {
+        setHoteis(lista);
+        setHotelSelecionado(lista[0]);
+        setParquesMarcados(lista[0].parquesDisponiveis || []);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar hotéis:", err);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("fast_agencia");
+    window.location.href = "/login";
+  };
+
   const handleHotelChange = (e) => {
-    const hotel = HOTEIS_EXEMPLO.find((h) => h.id === e.target.value);
+    const hotel = hoteis.find((h) => h.id === e.target.value);
     if (hotel) {
       setHotelSelecionado(hotel);
-      setParquesMarcados(hotel.parquesDisponiveis);
+      setParquesMarcados(hotel.parquesDisponiveis || []);
     }
   };
 
@@ -71,7 +108,7 @@ export default function FastOrcamento() {
     );
   };
 
-  // Aplica máscara automática de moeda (ex: digita 100000 -> vira 1.000,00)
+  // Máscara automática de moeda brasileira
   const formatarMoeda = (valorDigitado) => {
     const apenasNumeros = valorDigitado.replace(/\D/g, "");
     if (!apenasNumeros) return "";
@@ -97,7 +134,9 @@ export default function FastOrcamento() {
 
   const gerarTextoZap = (urlVitrine) => {
     let texto = `🏨 *${hotelSelecionado.nome}*\n`;
-    texto += `📍 *Local:* ${hotelSelecionado.localizacao}\n`;
+    if (hotelSelecionado.localizacao) {
+      texto += `📍 *Local:* ${hotelSelecionado.localizacao}\n`;
+    }
     texto += `📅 *Período:* ${formatarDatas()}\n`;
     texto += `👥 *Hóspedes:* ${adultos} adulto(s)${criancas > 0 ? ` e ${criancas} criança(s)` : ""}\n\n`;
 
@@ -125,8 +164,10 @@ export default function FastOrcamento() {
       texto += `\n⚠️ *Restam apenas ${aptosRestantes} apartamentos disponíveis!*\n`;
     }
 
-    const finalUrl = urlVitrine || linkGerado || "https://fast-orcamento.vercel.app";
-    texto += `\n🔗 *Fotos e detalhes completos:* ${finalUrl}\n`;
+    const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
+    if (finalUrl) {
+      texto += `\n🔗 *Fotos e detalhes completos:* ${finalUrl}\n`;
+    }
     texto += `\n_Oferta sujeita a alteração e disponibilidade sem prévio aviso._`;
 
     return texto;
@@ -137,16 +178,17 @@ export default function FastOrcamento() {
       setSalvando(true);
 
       const dadosOrcamento = {
+        agenciaId: agencia?.id || "avulso",
         hotel: {
           nome: hotelSelecionado.nome,
-          localizacao: hotelSelecionado.localizacao,
+          localizacao: hotelSelecionado.localizacao || "",
           fotos: hotelSelecionado.fotos || [],
         },
         agencia: {
-          nome: "Caldas Novas Viagens",
-          whatsapp: "5564999999999",
+          nome: agencia?.nome || "Caldas Novas Viagens",
+          whatsapp: agencia?.whatsapp || "5564999999999",
           cidade: "Caldas Novas - GO",
-          cadastur: "Regular / Ativo",
+          cadastur: agencia?.cadastur || "Regular / Ativo",
         },
         checkin,
         checkout,
@@ -186,44 +228,68 @@ export default function FastOrcamento() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-12">
-      <header className="bg-brand-900 text-white px-4 py-4 shadow-md sticky top-0 z-30 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <header className="bg-brand-900 text-white px-4 py-3 shadow-md sticky top-0 z-30 flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <div className="bg-brand-700 p-2 rounded-lg text-white">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight tracking-wide">Fast Orçamento</h1>
-            <p className="text-xs text-brand-100">Gerador Ágil para WhatsApp</p>
+            <h1 className="font-bold text-base leading-tight tracking-wide">Fast Orçamento</h1>
+            <p className="text-[11px] text-brand-100">{agencia?.nome || "Painel da Agência"}</p>
           </div>
         </div>
-        <button
-          onClick={salvarEGerarLink}
-          disabled={salvando}
-          className="flex items-center gap-1.5 bg-brand-700 hover:bg-brand-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
-        >
-          {salvando ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : copiado ? (
-            <Check className="w-4 h-4 text-emerald-300" />
-          ) : (
-            <Copy className="w-4 h-4" />
-          )}
-          <span>{salvando ? "Gerando..." : copiado ? "Copiado c/ Link!" : "Gerar e Copiar"}</span>
-        </button>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href="/hoteis"
+            className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+          >
+            <Hotel className="w-4 h-4" />
+            <span className="hidden sm:inline">Meus Hotéis</span>
+          </Link>
+
+          <button
+            onClick={salvarEGerarLink}
+            disabled={salvando}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
+          >
+            {salvando ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : copiado ? (
+              <Check className="w-4 h-4 text-emerald-200" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+            <span>{salvando ? "Gerando..." : copiado ? "Copiado!" : "Gerar e Copiar"}</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            title="Sair da conta"
+            className="p-2 text-brand-200 hover:text-white hover:bg-brand-800 rounded-lg transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
         <div className="space-y-4">
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
-              Hotel Cadastrado
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Hotel Cadastrado
+              </label>
+              <Link href="/hoteis" className="text-xs text-brand-700 hover:underline font-semibold">
+                + Gerenciar
+              </Link>
+            </div>
             <select
               value={hotelSelecionado.id}
               onChange={handleHotelChange}
               className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-brand-900 outline-none"
             >
-              {HOTEIS_EXEMPLO.map((h) => (
+              {hoteis.map((h) => (
                 <option key={h.id} value={h.id}>
                   {h.nome}
                 </option>
@@ -276,28 +342,32 @@ export default function FastOrcamento() {
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
               Parques e Benefícios
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {hotelSelecionado.parquesDisponiveis.map((parque) => {
-                const ativo = parquesMarcados.includes(parque);
-                return (
-                  <button
-                    key={parque}
-                    type="button"
-                    onClick={() => toggleParque(parque)}
-                    className={`text-xs text-left p-2.5 rounded-lg border flex items-center gap-2 font-medium transition ${
-                      ativo
-                        ? "bg-brand-50 border-brand-700 text-brand-900"
-                        : "bg-slate-50 border-slate-200 text-slate-400"
-                    }`}
-                  >
-                    <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${ativo ? "bg-brand-900 border-brand-900 text-white" : "border-slate-300"}`}>
-                      {ativo && <Check className="w-2.5 h-2.5" />}
-                    </div>
-                    <span className="truncate">{parque}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {hotelSelecionado.parquesDisponiveis?.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {hotelSelecionado.parquesDisponiveis.map((parque) => {
+                  const ativo = parquesMarcados.includes(parque);
+                  return (
+                    <button
+                      key={parque}
+                      type="button"
+                      onClick={() => toggleParque(parque)}
+                      className={`text-xs text-left p-2.5 rounded-lg border flex items-center gap-2 font-medium transition ${
+                        ativo
+                          ? "bg-brand-50 border-brand-700 text-brand-900"
+                          : "bg-slate-50 border-slate-200 text-slate-400"
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${ativo ? "bg-brand-900 border-brand-900 text-white" : "border-slate-300"}`}>
+                        {ativo && <Check className="w-2.5 h-2.5" />}
+                      </div>
+                      <span className="truncate">{parque}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">Nenhum parque cadastrado para este hotel.</p>
+            )}
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
