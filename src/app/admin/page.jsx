@@ -11,6 +11,7 @@ const SENHA_MASTER = "admin123";
 export default function AdminMaster() {
   const [autenticado, setAutenticado] = useState(false);
   const [senhaInput, setSenhaInput] = useState("");
+  const [verSenhaMaster, setVerSenhaMaster] = useState(false);
   const [erroLogin, setErroLogin] = useState("");
 
   const [agencias, setAgencias] = useState([]);
@@ -70,7 +71,6 @@ export default function AdminMaster() {
         criadoEm: serverTimestamp(),
       });
 
-      // Limpa os campos
       setNome("");
       setWhatsapp("");
       setUsuario("");
@@ -128,14 +128,23 @@ export default function AdminMaster() {
 
           <div className="mb-4">
             <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Senha Mestre</label>
-            <input
-              type="password"
-              required
-              placeholder="Digite sua senha..."
-              value={senhaInput}
-              onChange={(e) => setSenhaInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-900"
-            />
+            <div className="relative flex items-center">
+              <input
+                type={verSenhaMaster ? "text" : "password"}
+                required
+                placeholder="Digite sua senha..."
+                value={senhaInput}
+                onChange={(e) => setSenhaInput(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-emerald-900"
+              />
+              <button
+                type="button"
+                onClick={() => setVerSenhaMaster(!verSenhaMaster)}
+                className="absolute right-3 text-slate-400 hover:text-slate-600 transition"
+              >
+                {verSenhaMaster ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button
@@ -169,7 +178,6 @@ export default function AdminMaster() {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Formulário de Criação de Agência */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-fit">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-4">
             <Plus className="w-4 h-4 text-emerald-700" />
@@ -248,7 +256,6 @@ export default function AdminMaster() {
           </form>
         </div>
 
-        {/* Lista de Agências Cadastradas */}
         <div className="md:col-span-2 space-y-3">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-sm font-bold text-slate-800">
