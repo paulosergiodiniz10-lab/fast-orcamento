@@ -368,9 +368,9 @@ export default function GestaoOrcamentos() {
                           </span>
                         )}
 
-                        {/* Data e Hora de Criação */}
-                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md flex items-center gap-1 font-medium ml-auto sm:ml-0">
-                          <Clock className="w-3 h-3 text-slate-400" />
+                        {/* Data e Hora de Criação Nítida e Sem Negrito */}
+                        <span className="text-[11px] text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-md flex items-center gap-1 font-normal ml-auto sm:ml-0">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
                           {formatarDataHoraCriacao(orc.criadoEm)}
                         </span>
                       </div>
