@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
-  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser 
+  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
+  HelpCircle, AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -14,8 +15,6 @@ import {
 const CLOUD_NAME = "s1yeyx4g";
 const UPLOAD_PRESET = "guia_temporada";
 
-// Função para comprimir fotos pesadas no próprio navegador antes do upload
-// Mantém transparência para PNG (logos) e converte fotos para JPEG otimizado
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) {
@@ -74,7 +73,6 @@ const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 
   });
 };
 
-// Barra de Ferramentas Padronizada e Higienizada
 function EditorToolbar({ editorRef }) {
   const [corAtual, setCorAtual] = useState("#1d4ed8");
 
@@ -107,7 +105,6 @@ function EditorToolbar({ editorRef }) {
 
       <div className="h-4 w-px bg-slate-300 mx-0.5" />
 
-      {/* Cores comerciais pré-definidas */}
       <button
         type="button"
         onClick={() => aplicarCor("#0f172a")}
@@ -175,10 +172,32 @@ export default function GestaoHoteis() {
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
 
+  // Modal Customizado
+  const [modalConfig, setModalConfig] = useState({
+    aberto: false,
+    tipo: "success", // 'success', 'confirm', 'error'
+    titulo: "",
+    mensagem: "",
+    onConfirm: null,
+  });
+
+  const abrirModal = (tipo, titulo, mensagem, onConfirm = null) => {
+    setModalConfig({
+      aberto: true,
+      tipo,
+      titulo,
+      mensagem,
+      onConfirm,
+    });
+  };
+
+  const fecharModal = () => {
+    setModalConfig((prev) => ({ ...prev, aberto: false }));
+  };
+
   const descRef = useRef(null);
   const obsRef = useRef(null);
 
-  // Higieniza texto colado (remove HTML e fontes estranhas de sites externos)
   const handlePasteLimpo = (e) => {
     e.preventDefault();
     const textoLimpo = (e.clipboardData || window.clipboardData).getData("text/plain");
@@ -239,7 +258,7 @@ export default function GestaoHoteis() {
       const url = await uploadParaCloudinary(file);
       setLogoUrl(url);
     } catch {
-      alert("Erro ao enviar logo.");
+      abrirModal("error", "Erro no Upload", "Não foi possível enviar o logo. Tente novamente.");
     } finally {
       setEnviandoLogo(false);
       e.target.value = "";
@@ -260,7 +279,7 @@ export default function GestaoHoteis() {
       setFotosGerais((prev) => [...prev, ...urls]);
     } catch (err) {
       console.error("Erro no upload geral:", err);
-      alert(`Falha ao enviar imagem: ${err.message || "Tente novamente"}`);
+      abrirModal("error", "Falha no Upload", err.message || "Tente novamente.");
     } finally {
       setEnviandoFotoGeral(false);
       e.target.value = "";
@@ -309,7 +328,7 @@ export default function GestaoHoteis() {
       });
     } catch (err) {
       console.error("Erro no upload do apto:", err);
-      alert(`Falha ao enviar imagem: ${err.message || "Tente novamente"}`);
+      abrirModal("error", "Falha no Upload", err.message || "Tente novamente.");
     } finally {
       setEnviandoFotoAptoIndex(null);
       e.target.value = "";
@@ -408,36 +427,45 @@ export default function GestaoHoteis() {
           ...dados,
           atualizadoEm: serverTimestamp(),
         });
-        alert("Hotel atualizado com sucesso!");
+        abrirModal("success", "Sucesso!", "Hotel atualizado com sucesso!");
       } else {
         await addDoc(collection(db, "hoteis"), {
           ...dados,
           criadoEm: serverTimestamp(),
         });
-        alert("Hotel cadastrado com sucesso!");
+        abrirModal("success", "Sucesso!", "Hotel cadastrado com sucesso!");
       }
 
       setModoVisualizacao("lista");
       carregarHoteis(agencia.id);
     } catch {
-      alert("Erro ao gravar os dados do hotel.");
+      abrirModal("error", "Erro ao Salvar", "Não foi possível gravar os dados do hotel.");
     } finally {
       setSalvando(false);
     }
   };
 
-  const excluirHotel = async (id, nomeHotel) => {
-    if (!confirm(`Deseja realmente remover o hotel ${nomeHotel}?`)) return;
+  const executarExclusaoHotel = async (id) => {
     try {
       await deleteDoc(doc(db, "hoteis", id));
       setHoteis((prev) => prev.filter((h) => h.id !== id));
     } catch (err) {
       console.error(err);
+      abrirModal("error", "Erro ao Excluir", "Não foi possível excluir o hotel.");
     }
   };
 
+  const excluirHotel = (id, nomeHotel) => {
+    abrirModal(
+      "confirm",
+      "Excluir Hotel",
+      `Deseja realmente remover o hotel ${nomeHotel}? Esta ação não poderá ser desfeita.`,
+      () => executarExclusaoHotel(id)
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans relative">
       <header className="bg-brand-900 text-white px-4 md:px-8 py-4 shadow sticky top-0 z-30 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
@@ -612,7 +640,6 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                {/* LOGO DO HOTEL */}
                 <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -701,7 +728,6 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                {/* SOBRE O HOTEL COM TEXTO LIMPO E PADRONIZADO */}
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -939,6 +965,69 @@ export default function GestaoHoteis() {
           </form>
         )}
       </main>
+
+      {/* ================= MODAL ESTILIZADO DE SUCESSO / CONFIRMAÇÃO / ERRO ================= */}
+      {modalConfig.aberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${
+                modalConfig.tipo === "success" 
+                  ? "bg-emerald-100 text-emerald-700" 
+                  : modalConfig.tipo === "confirm"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-red-100 text-red-700"
+              }`}>
+                {modalConfig.tipo === "success" && <CheckCircle2 className="w-6 h-6" />}
+                {modalConfig.tipo === "confirm" && <HelpCircle className="w-6 h-6" />}
+                {modalConfig.tipo === "error" && <AlertCircle className="w-6 h-6" />}
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 leading-tight">
+                  {modalConfig.titulo}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Fast Orçamento</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              {modalConfig.mensagem}
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              {modalConfig.tipo === "confirm" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={fecharModal}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (modalConfig.onConfirm) modalConfig.onConfirm();
+                      fecharModal();
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow"
+                  >
+                    Confirmar
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={fecharModal}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-900 hover:bg-brand-950 transition shadow"
+                >
+                  OK
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
