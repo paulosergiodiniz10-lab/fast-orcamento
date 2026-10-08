@@ -64,6 +64,7 @@ function GeradorOrcamentoConteudo() {
   const [copiado, setCopiado] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [linkGerado, setLinkGerado] = useState("");
+  const [idOrcamentoAtual, setIdOrcamentoAtual] = useState("");
 
   useEffect(() => {
     const dadosSalvos = localStorage.getItem("fast_agencia");
@@ -159,8 +160,8 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Formato limpo e padronizado do WhatsApp
-  const gerarTextoZap = (urlVitrine) => {
+  // Formato limpo e padronizado do WhatsApp com ID no final
+  const gerarTextoZap = (urlVitrine, idDoc) => {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
     let texto = "";
@@ -219,7 +220,14 @@ function GeradorOrcamentoConteudo() {
     if (finalUrl) {
       texto += `🔗 *Fotos e detalhes completos:*\n${finalUrl}\n\n`;
     }
-    texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._`;
+    texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._\n`;
+
+    // Anexa o ID no final do orçamento
+    const idFinal = idDoc || idOrcamentoAtual;
+    if (idFinal) {
+      const idCurto = idFinal.slice(0, 6).toUpperCase();
+      texto += `🆔 *ID:* #${idCurto}`;
+    }
 
     return texto;
   };
@@ -284,8 +292,9 @@ function GeradorOrcamentoConteudo() {
       const docRef = await addDoc(collection(db, "orcamentos"), dadosOrcamento);
       const urlCompleta = `${window.location.origin}/o/${docRef.id}`;
       setLinkGerado(urlCompleta);
+      setIdOrcamentoAtual(docRef.id);
 
-      const textoFinal = gerarTextoZap(urlCompleta);
+      const textoFinal = gerarTextoZap(urlCompleta, docRef.id);
       navigator.clipboard.writeText(textoFinal);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
