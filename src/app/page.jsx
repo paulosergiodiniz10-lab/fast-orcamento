@@ -71,8 +71,21 @@ export default function FastOrcamento() {
     );
   };
 
+  // Aplica máscara automática de moeda (ex: digita 100000 -> vira 1.000,00)
+  const formatarMoeda = (valorDigitado) => {
+    const apenasNumeros = valorDigitado.replace(/\D/g, "");
+    if (!apenasNumeros) return "";
+
+    const valorFloat = parseFloat(apenasNumeros) / 100;
+    return valorFloat.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
   const handleValorChange = (regimeId, valor) => {
-    setRegimesValores((prev) => ({ ...prev, [regimeId]: valor }));
+    const formatado = formatarMoeda(valor);
+    setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
   };
 
   const formatarDatas = () => {
@@ -297,7 +310,8 @@ export default function FastOrcamento() {
                 <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
                 <input
                   type="text"
-                  placeholder="Ex: 1.571,61"
+                  inputMode="numeric"
+                  placeholder="0,00"
                   value={regimesValores[reg.id] || ""}
                   onChange={(e) => handleValorChange(reg.id, e.target.value)}
                   className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
