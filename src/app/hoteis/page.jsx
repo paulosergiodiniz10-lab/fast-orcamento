@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
-  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Image as ImageIcon 
+  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser 
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -74,9 +74,9 @@ const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 
   });
 };
 
-// Barra de Ferramentas Completa (Tipo de Fonte, Tamanho, Negrito e Cor)
+// Barra de Ferramentas Padronizada e Higienizada
 function EditorToolbar({ editorRef }) {
-  const [corAtual, setCorAtual] = useState("#e11d48");
+  const [corAtual, setCorAtual] = useState("#1d4ed8");
 
   const aplicarNegrito = () => {
     document.execCommand("bold", false, null);
@@ -89,49 +89,13 @@ function EditorToolbar({ editorRef }) {
     if (editorRef.current) editorRef.current.focus();
   };
 
-  const aplicarFonte = (fonte) => {
-    if (!fonte) return;
-    document.execCommand("fontName", false, fonte);
-    if (editorRef.current) editorRef.current.focus();
-  };
-
-  const aplicarTamanho = (tamanho) => {
-    if (!tamanho) return;
-    document.execCommand("fontSize", false, tamanho);
+  const limparFormatacao = () => {
+    document.execCommand("removeFormat", false, null);
     if (editorRef.current) editorRef.current.focus();
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 border border-slate-300 px-2 py-1 rounded-lg w-fit mb-1.5 shadow-sm">
-      <select
-        onChange={(e) => aplicarFonte(e.target.value)}
-        defaultValue=""
-        className="text-[11px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-brand-900"
-        title="Tipo de Fonte"
-      >
-        <option value="" disabled>Fonte</option>
-        <option value="Arial, sans-serif">Padrão (Sans)</option>
-        <option value="Georgia, serif">Serif (Clássica)</option>
-        <option value="'Courier New', monospace">Mono (Moderna)</option>
-        <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
-      </select>
-
-      <select
-        onChange={(e) => aplicarTamanho(e.target.value)}
-        defaultValue=""
-        className="text-[11px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-brand-900"
-        title="Tamanho do Texto"
-      >
-        <option value="" disabled>Tam.</option>
-        <option value="2">Pequeno</option>
-        <option value="3">Normal</option>
-        <option value="4">Médio</option>
-        <option value="5">Grande</option>
-        <option value="6">Extra Grande</option>
-      </select>
-
-      <div className="h-4 w-px bg-slate-300 mx-0.5" />
-
+    <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-2 py-1 rounded-lg w-fit mb-1.5 shadow-sm">
       <button
         type="button"
         onClick={aplicarNegrito}
@@ -141,9 +105,30 @@ function EditorToolbar({ editorRef }) {
         <Bold className="w-3.5 h-3.5" />
       </button>
 
-      <label className="flex items-center gap-1 cursor-pointer hover:bg-slate-200 px-1.5 py-0.5 rounded transition" title="Mudar Cor da Fonte">
-        <span className="font-extrabold text-xs" style={{ color: corAtual }}>A</span>
-        <span className="w-3.5 h-3.5 rounded-sm border border-slate-400 inline-block" style={{ backgroundColor: corAtual }} />
+      <div className="h-4 w-px bg-slate-300 mx-0.5" />
+
+      {/* Cores comerciais pré-definidas */}
+      <button
+        type="button"
+        onClick={() => aplicarCor("#0f172a")}
+        className="w-4 h-4 rounded-full bg-slate-900 border border-slate-400"
+        title="Grafite Escuro (Padrão)"
+      />
+      <button
+        type="button"
+        onClick={() => aplicarCor("#1d4ed8")}
+        className="w-4 h-4 rounded-full bg-blue-700 border border-slate-400"
+        title="Azul Destaque"
+      />
+      <button
+        type="button"
+        onClick={() => aplicarCor("#ea580c")}
+        className="w-4 h-4 rounded-full bg-orange-600 border border-slate-400"
+        title="Laranja Chamativo"
+      />
+
+      <label className="flex items-center gap-1 cursor-pointer hover:bg-slate-200 px-1 py-0.5 rounded transition ml-1" title="Cor personalizada">
+        <span className="font-extrabold text-[11px]" style={{ color: corAtual }}>A</span>
         <input
           type="color"
           value={corAtual}
@@ -151,6 +136,17 @@ function EditorToolbar({ editorRef }) {
           className="hidden"
         />
       </label>
+
+      <div className="h-4 w-px bg-slate-300 mx-0.5" />
+
+      <button
+        type="button"
+        onClick={limparFormatacao}
+        className="p-1 hover:bg-slate-200 rounded text-slate-600 text-xs flex items-center justify-center w-6 h-6 transition"
+        title="Limpar formatação suja"
+      >
+        <Eraser className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -181,6 +177,13 @@ export default function GestaoHoteis() {
 
   const descRef = useRef(null);
   const obsRef = useRef(null);
+
+  // Higieniza texto colado (remove HTML e fontes estranhas de sites externos)
+  const handlePasteLimpo = (e) => {
+    e.preventDefault();
+    const textoLimpo = (e.clipboardData || window.clipboardData).getData("text/plain");
+    document.execCommand("insertText", false, textoLimpo);
+  };
 
   useEffect(() => {
     const dadosSalvos = localStorage.getItem("fast_agencia");
@@ -235,7 +238,7 @@ export default function GestaoHoteis() {
     try {
       const url = await uploadParaCloudinary(file);
       setLogoUrl(url);
-    } catch (err) {
+    } catch {
       alert("Erro ao enviar logo.");
     } finally {
       setEnviandoLogo(false);
@@ -384,9 +387,6 @@ export default function GestaoHoteis() {
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
-      const descricaoHtml = descRef.current ? descRef.current.innerHTML : "";
-      const observacoesHtml = obsRef.current ? obsRef.current.innerHTML : "";
-
       const dados = {
         agenciaId: agencia.id,
         nome: nome.trim(),
@@ -395,9 +395,9 @@ export default function GestaoHoteis() {
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
         formaPagamento: formaPagamentoPadrao.trim(),
-        descricao: descricaoHtml,
+        descricao: descRef.current ? descRef.current.innerHTML : "",
         parquesDisponiveis: listaIncluso,
-        observacoes: observacoesHtml,
+        observacoes: obsRef.current ? obsRef.current.innerHTML : "",
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
         tiposApto: tiposApto.filter((a) => a.nome && a.nome.trim().length > 0),
@@ -419,8 +419,7 @@ export default function GestaoHoteis() {
 
       setModoVisualizacao("lista");
       carregarHoteis(agencia.id);
-    } catch (err) {
-      console.error(err);
+    } catch {
       alert("Erro ao gravar os dados do hotel.");
     } finally {
       setSalvando(false);
@@ -438,7 +437,7 @@ export default function GestaoHoteis() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans">
       <header className="bg-brand-900 text-white px-4 md:px-8 py-4 shadow sticky top-0 z-30 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
@@ -617,9 +616,9 @@ export default function GestaoHoteis() {
                 <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Logotipo do Hotel / Resort (PNG ou JPG)
+                      Logotipo do Hotel / Resort (PNG transparente ou JPG)
                     </label>
-                    <p className="text-[11px] text-slate-500">Aparecerá no banner principal da vitrine em frente ao nome do hotel.</p>
+                    <p className="text-[11px] text-slate-500">Aparecerá no banner principal da proposta.</p>
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -702,6 +701,7 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
+                {/* SOBRE O HOTEL COM TEXTO LIMPO E PADRONIZADO */}
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -712,10 +712,11 @@ export default function GestaoHoteis() {
                   <div
                     ref={descRef}
                     contentEditable
-                    className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
-                    placeholder="Descreva a estrutura, piscinas termais, localização e atrativos..."
+                    onPaste={handlePasteLimpo}
+                    className="w-full min-h-[170px] max-h-[320px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
+                    placeholder="Cole ou digite a descrição do hotel. Títulos podem ser selecionados e destacados em negrito."
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">Pressione Enter para quebrar linhas. Selecione palavras e clique em B ou no seletor de cores.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Ao colar, formatações externas são higienizadas para garantir alinhamento limpo.</p>
                 </div>
               </div>
             </div>
@@ -763,10 +764,10 @@ export default function GestaoHoteis() {
                 <div
                   ref={obsRef}
                   contentEditable
-                  className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
+                  onPaste={handlePasteLimpo}
+                  className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
                   placeholder="Ex: Taxa de turismo inclusa. Proibido entrada com alimentos na área de piscinas."
                 />
-                <p className="text-[11px] text-slate-500 mt-1">Pressione Enter para quebrar linhas. Selecione palavras e clique em B ou no seletor de cores.</p>
               </div>
             </div>
 
@@ -904,7 +905,7 @@ export default function GestaoHoteis() {
                                   onClick={() => removerFotoApto(index, fIdx)}
                                   className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
                                 >
-                                  <X className="w-3.5 h-3.5" />
+                                  <X className="w-3 h-3" />
                                 </button>
                               </div>
                             ))}
