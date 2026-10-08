@@ -303,7 +303,7 @@ export default function GestaoHoteis() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="font-bold text-base md:text-lg leading-tight">Gestão de Hotéis & Resorts</h1>
+            <h1 className="font-bold text-base md:text-lg leading-tight">Gestão de Hotéis / Resorts / Flats</h1>
             <p className="text-xs text-brand-100">{agencia?.nome || "Painel da Agência"}</p>
           </div>
         </div>
