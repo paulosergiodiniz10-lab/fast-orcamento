@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2, Hotel, LogOut, BedDouble, Baby } from "lucide-react";
+import { 
+  Copy, Check, MessageSquare, Building2, ExternalLink, 
+  Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText 
+} from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
 import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
@@ -40,6 +43,10 @@ export default function FastOrcamento() {
   const [hoteis, setHoteis] = useState([]);
   const [hotelSelecionado, setHotelSelecionado] = useState(null);
   const [aptoSelecionado, setAptoSelecionado] = useState("");
+
+  // Dados do Cliente (Opcional)
+  const [clienteNome, setClienteNome] = useState("");
+  const [clienteWhatsapp, setClienteWhatsapp] = useState("");
 
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
@@ -152,7 +159,14 @@ export default function FastOrcamento() {
   const gerarTextoZap = (urlVitrine) => {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
-    let texto = `*${hotelSelecionado.nome.toUpperCase()}*\n`;
+    let texto = "";
+
+    // Se informou o nome, inclui a saudação
+    if (clienteNome.trim()) {
+      texto += `Olá, ${clienteNome.trim()}! Segue seu orçamento:\n\n`;
+    }
+
+    texto += `*${hotelSelecionado.nome.toUpperCase()}*\n`;
     texto += `*Período:* ${formatarDatas()}\n`;
 
     let textoHospedes = `${adultos} adulto(s)`;
@@ -225,6 +239,8 @@ export default function FastOrcamento() {
 
       const dadosOrcamento = {
         agenciaId: agencia?.id || "avulso",
+        clienteNome: clienteNome.trim() || null,
+        clienteWhatsapp: clienteWhatsapp.replace(/\D/g, "") || null,
         hotel: {
           nome: hotelSelecionado.nome,
           logoUrl: hotelSelecionado.logoUrl || "",
@@ -293,6 +309,17 @@ export default function FastOrcamento() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botão para ver o Histórico de Cotações */}
+          <Link
+            href="/orcamentos"
+            className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+            title="Ver Cotações Salvas"
+          >
+            <FileText className="w-4 h-4 text-emerald-400" />
+            <span className="hidden sm:inline">Cotações</span>
+          </Link>
+
+          {/* Botão Meus Hotéis */}
           <Link
             href="/hoteis"
             className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
@@ -328,7 +355,46 @@ export default function FastOrcamento() {
 
       <main className="max-w-5xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
         <div className="space-y-4">
-          {/* ESCOLHA SUA HOSPEDAGEM */}
+          
+          {/* ================= QUADRO: DADOS DO CLIENTE (OPCIONAL) ================= */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <User className="w-4 h-4 text-brand-700" />
+              Dados do Cliente <span className="text-[10px] text-slate-400 font-normal lowercase">(opcional)</span>
+            </label>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">Nome do Cliente</label>
+                <div className="relative">
+                  <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
+                  <input
+                    type="text"
+                    placeholder="Ex: Paulo Sérgio"
+                    value={clienteNome}
+                    onChange={(e) => setClienteNome(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">WhatsApp com DDD</label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
+                  <input
+                    type="text"
+                    placeholder="Ex: 64 99999-9999"
+                    value={clienteWhatsapp}
+                    onChange={(e) => setClienteWhatsapp(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ================= ESCOLHA SUA HOSPEDAGEM ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -387,11 +453,11 @@ export default function FastOrcamento() {
                         aptoSelecionado === ap.nome
                           ? "bg-brand-900 text-white border-brand-900 font-bold"
                           : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {ap.nome}
-                  </button>
-                ))}
+                      }`}
+                    >
+                      {ap.nome}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
