@@ -207,6 +207,7 @@ export default function FastOrcamento() {
         agenciaId: agencia?.id || "avulso",
         hotel: {
           nome: hotelSelecionado.nome,
+          logoUrl: hotelSelecionado.logoUrl || "", // Repassa o logotipo para a vitrine
           localizacao: hotelSelecionado.localizacao || "",
           descricao: hotelSelecionado.descricao || "",
           observacoes: hotelSelecionado.observacoes || "",
