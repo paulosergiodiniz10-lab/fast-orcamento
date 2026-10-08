@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2 } from "lucide-react";
-import { db } from "@/lib/firebase";
+import { db } from "../lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const HOTEIS_EXEMPLO = [
