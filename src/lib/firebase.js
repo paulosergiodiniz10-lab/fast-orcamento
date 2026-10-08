@@ -10,8 +10,7 @@ const firebaseConfig = {
   appId: "1:502921268112:web:a7a831094c42f770680115"
 };
 
-// Garante que o Firebase não seja inicializado em duplicado no Next.js
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+const db = getFirestore(app, "(default)");
 
 export { app, db };
