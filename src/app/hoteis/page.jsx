@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
-  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold 
+  MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Image as ImageIcon 
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -17,7 +17,6 @@ const UPLOAD_PRESET = "guia_temporada";
 // Função para comprimir fotos pesadas no próprio navegador antes do upload
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
   return new Promise((resolve) => {
-    // Se não for imagem comum, envia original
     if (!file.type.startsWith("image/")) {
       resolve(file);
       return;
@@ -156,6 +155,7 @@ export default function GestaoHoteis() {
   const [hoteis, setHoteis] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [enviandoLogo, setEnviandoLogo] = useState(false);
   const [enviandoFotoGeral, setEnviandoFotoGeral] = useState(false);
   const [enviandoFotoAptoIndex, setEnviandoFotoAptoIndex] = useState(null);
 
@@ -164,6 +164,7 @@ export default function GestaoHoteis() {
 
   // Campos do Formulário
   const [nome, setNome] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
   const [localizacao, setLocalizacao] = useState("");
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
@@ -202,7 +203,6 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Upload para Cloudinary com compressão prévia automática
   const uploadParaCloudinary = async (fileOriginal) => {
     const arquivoComprimido = await comprimirImagem(fileOriginal);
 
@@ -220,6 +220,22 @@ export default function GestaoHoteis() {
       throw new Error(data.error?.message || "Falha no upload da imagem");
     }
     return data.secure_url;
+  };
+
+  const handleUploadLogo = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setEnviandoLogo(true);
+    try {
+      const url = await uploadParaCloudinary(file);
+      setLogoUrl(url);
+    } catch (err) {
+      alert("Erro ao enviar logo.");
+    } finally {
+      setEnviandoLogo(false);
+      e.target.value = "";
+    }
   };
 
   const handleUploadFotosGerais = async (e) => {
@@ -306,6 +322,7 @@ export default function GestaoHoteis() {
   const abrirNovoHotel = () => {
     setHotelEditandoId(null);
     setNome("");
+    setLogoUrl("");
     setLocalizacao("");
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
@@ -327,6 +344,7 @@ export default function GestaoHoteis() {
   const iniciarEdicao = (hotel) => {
     setHotelEditandoId(hotel.id);
     setNome(hotel.nome || "");
+    setLogoUrl(hotel.logoUrl || "");
     setLocalizacao(hotel.localizacao || "");
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
@@ -367,6 +385,7 @@ export default function GestaoHoteis() {
       const dados = {
         agenciaId: agencia.id,
         nome: nome.trim(),
+        logoUrl: logoUrl.trim(),
         localizacao: localizacao.trim(),
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
@@ -460,7 +479,7 @@ export default function GestaoHoteis() {
                 <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-base font-semibold text-slate-700">Nenhum hotel cadastrado ainda</h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto mb-5">
-                  Cadastre os seus hotéis e resorts com fotos, tipos de apartamento e benefícios para gerar cotações e vitrines automáticas.
+                  Cadastre os seus hotéis e resorts com fotos, logotipo, tipos de apartamento e benefícios.
                 </p>
                 <button
                   onClick={abrirNovoHotel}
@@ -485,8 +504,13 @@ export default function GestaoHoteis() {
                             alt={h.nome}
                             className="w-full h-full object-cover"
                           />
+                          {h.logoUrl && (
+                            <div className="absolute top-2 left-2 bg-white/95 p-1 rounded-lg shadow-md max-w-[70px] max-h-[40px] flex items-center justify-center">
+                              <img src={h.logoUrl} alt="Logo" className="max-h-8 max-w-full object-contain" />
+                            </div>
+                          )}
                           <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg">
-                            {h.fotos?.length || 0} fotos gerais
+                            {h.fotos?.length || 0} fotos
                           </div>
                         </div>
                       ) : (
@@ -548,7 +572,6 @@ export default function GestaoHoteis() {
           </div>
         )}
 
-        {/* ================= TELA: FORMULÁRIO COMPLETO ================= */}
         {modoVisualizacao === "formulario" && (
           <form onSubmit={salvarHotel} className="space-y-6">
             <div className="flex items-center justify-between">
@@ -583,6 +606,43 @@ export default function GestaoHoteis() {
                     onChange={(e) => setNome(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
                   />
+                </div>
+
+                {/* LOGO DO HOTEL */}
+                <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase block">
+                      Logotipo do Hotel / Resort (PNG ou JPG)
+                    </label>
+                    <p className="text-[11px] text-slate-500">Aparecerá no banner principal da vitrine em frente ao nome do hotel.</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {logoUrl && (
+                      <div className="h-12 w-20 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center relative group">
+                        <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setLogoUrl("")}
+                          className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 shadow"
+                          title="Remover logo"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    <label className={`cursor-pointer inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:border-slate-400 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition shadow-sm ${enviandoLogo ? "opacity-50 pointer-events-none" : ""}`}>
+                      {enviandoLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4 text-brand-700" />}
+                      <span>{enviandoLogo ? "Enviando..." : logoUrl ? "Trocar Logo" : "Upload Logo"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadLogo}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
