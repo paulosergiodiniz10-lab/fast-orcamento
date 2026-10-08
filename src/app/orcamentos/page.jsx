@@ -3,12 +3,15 @@
 import React, { useState, useEffect } from "react";
 import { 
   FileText, Search, ArrowLeft, MessageCircle, ExternalLink, 
-  Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle 
+  Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle, 
+  Clock, ChevronLeft, ChevronRight 
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
 import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
+
+const ITENS_POR_PAGINA = 50;
 
 export default function GestaoOrcamentos() {
   const router = useRouter();
@@ -19,6 +22,11 @@ export default function GestaoOrcamentos() {
   // Filtros
   const [buscaGeral, setBuscaGeral] = useState("");
   const [filtroCheckin, setFiltroCheckin] = useState("");
+  const [filtroPeriodo, setFiltroPeriodo] = useState("todos"); // 'todos', 'hoje', 'ontem', '7dias', 'personalizado'
+  const [dataPersonalizada, setDataPersonalizada] = useState("");
+
+  // Paginação
+  const [paginaAtual, setPaginaAtual] = useState(1);
 
   useEffect(() => {
     const dadosSalvos = localStorage.getItem("fast_agencia");
@@ -62,6 +70,9 @@ export default function GestaoOrcamentos() {
   const limparFiltros = () => {
     setBuscaGeral("");
     setFiltroCheckin("");
+    setFiltroPeriodo("todos");
+    setDataPersonalizada("");
+    setPaginaAtual(1);
   };
 
   const excluirOrcamento = async (id) => {
@@ -87,6 +98,18 @@ export default function GestaoOrcamentos() {
     router.push(`/?${params.toString()}`);
   };
 
+  const formatarDataHoraCriacao = (timestamp) => {
+    if (!timestamp?.seconds) return "Data não registrada";
+    const data = new Date(timestamp.seconds * 1000);
+    const dia = String(data.getDate()).padStart(2, "0");
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const ano = data.getFullYear();
+    const hora = String(data.getHours()).padStart(2, "0");
+    const min = String(data.getMinutes()).padStart(2, "0");
+    return `${dia}/${mes}/${ano} às ${hora}:${min}`;
+  };
+
+  // Filtragem dos orçamentos
   const orcamentosFiltrados = orcamentos.filter((o) => {
     const termo = buscaGeral.toLowerCase();
     const idCurto = o.id.slice(0, 6).toLowerCase();
@@ -104,8 +127,55 @@ export default function GestaoOrcamentos() {
     const bateCheckin =
       filtroCheckin === "" || (o.checkin && o.checkin === filtroCheckin);
 
-    return bateGeral && bateCheckin;
+    // Filtro por Data de Criação (Hoje, Ontem, 7 Dias, Personalizado)
+    let bateDataCriacao = true;
+    if (filtroPeriodo !== "todos" && o.criadoEm?.seconds) {
+      const dataCriacao = new Date(o.criadoEm.seconds * 1000);
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      const dataCriacaoZerada = new Date(dataCriacao);
+      dataCriacaoZerada.setHours(0, 0, 0, 0);
+
+      if (filtroPeriodo === "hoje") {
+        bateDataCriacao = dataCriacaoZerada.getTime() === hoje.getTime();
+      } else if (filtroPeriodo === "ontem") {
+        const ontem = new Date(hoje);
+        ontem.setDate(ontem.getDate() - 1);
+        bateDataCriacao = dataCriacaoZerada.getTime() === ontem.getTime();
+      } else if (filtroPeriodo === "7dias") {
+        const seteDiasAtras = new Date(hoje);
+        seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+        bateDataCriacao = dataCriacaoZerada.getTime() >= seteDiasAtras.getTime();
+      } else if (filtroPeriodo === "personalizado" && dataPersonalizada) {
+        const [ano, mes, dia] = dataPersonalizada.split("-").map(Number);
+        const dataAlvo = new Date(ano, mes - 1, dia);
+        dataAlvo.setHours(0, 0, 0, 0);
+        bateDataCriacao = dataCriacaoZerada.getTime() === dataAlvo.getTime();
+      }
+    }
+
+    return bateGeral && bateCheckin && bateDataCriacao;
   });
+
+  // Cálculo da Paginação (Máximo 50 por página)
+  const totalPaginas = Math.ceil(orcamentosFiltrados.length / ITENS_POR_PAGINA) || 1;
+  const indexInicial = (paginaAtual - 1) * ITENS_POR_PAGINA;
+  const orcamentosPaginados = orcamentosFiltrados.slice(indexInicial, indexInicial + ITENS_POR_PAGINA);
+
+  const irParaPaginaAnterior = () => {
+    if (paginaAtual > 1) {
+      setPaginaAtual((p) => p - 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const irParaProximaPagina = () => {
+    if (paginaAtual < totalPaginas) {
+      setPaginaAtual((p) => p + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans">
@@ -136,48 +206,106 @@ export default function GestaoOrcamentos() {
       </header>
 
       <main className="max-w-6xl mx-auto p-4 md:p-6 mt-2 space-y-4">
-        {/* BARRA DE PESQUISA, DATA CHECK-IN E BOTÃO LIMPAR */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-          <div className="sm:col-span-7">
-            <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
-              Pesquisar
-            </label>
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+        {/* BARRA DE PESQUISA, FILTROS E DATAS */}
+        <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <div className="sm:col-span-6">
+              <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                Pesquisar
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Buscar por ID, Nome do Cliente, Hotel ou Telefone..."
+                  value={buscaGeral}
+                  onChange={(e) => {
+                    setBuscaGeral(e.target.value);
+                    setPaginaAtual(1);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                />
+              </div>
+            </div>
+
+            <div className="sm:col-span-4">
+              <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                Check-in
+              </label>
               <input
-                type="text"
-                placeholder="Buscar por ID, Nome do Cliente, Hotel ou Telefone..."
-                value={buscaGeral}
-                onChange={(e) => setBuscaGeral(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                type="date"
+                title="Filtrar por data de check-in"
+                value={filtroCheckin}
+                onChange={(e) => {
+                  setFiltroCheckin(e.target.value);
+                  setPaginaAtual(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 px-3 text-xs md:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
               />
+            </div>
+
+            <div className="sm:col-span-2">
+              <button
+                type="button"
+                onClick={limparFiltros}
+                disabled={!buscaGeral && !filtroCheckin && filtroPeriodo === "todos" && !dataPersonalizada}
+                className="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Limpar todos os filtros"
+              >
+                <X className="w-3.5 h-3.5 text-slate-500" />
+                <span>Limpar</span>
+              </button>
             </div>
           </div>
 
-          <div className="sm:col-span-3">
-            <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
-              Check-in
-            </label>
-            <input
-              type="date"
-              title="Filtrar por data de check-in"
-              value={filtroCheckin}
-              onChange={(e) => setFiltroCheckin(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 px-3 text-xs md:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
-            />
-          </div>
+          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO DO ORÇAMENTO */}
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold uppercase text-slate-500 mr-1 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" /> Criado em:
+              </span>
 
-          <div className="sm:col-span-2">
-            <button
-              type="button"
-              onClick={limparFiltros}
-              disabled={!buscaGeral && !filtroCheckin}
-              className="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Limpar pesquisa e calendário"
-            >
-              <X className="w-3.5 h-3.5 text-slate-500" />
-              <span>Limpar</span>
-            </button>
+              {[
+                { id: "todos", label: "Todos" },
+                { id: "hoje", label: "Hoje" },
+                { id: "ontem", label: "Ontem" },
+                { id: "7dias", label: "Últimos 7 dias" },
+                { id: "personalizado", label: "Personalizado" },
+              ].map((btn) => (
+                <button
+                  key={btn.id}
+                  type="button"
+                  onClick={() => {
+                    setFiltroPeriodo(btn.id);
+                    setPaginaAtual(1);
+                  }}
+                  className={`text-xs px-3 py-1 rounded-lg border font-semibold transition ${
+                    filtroPeriodo === btn.id
+                      ? "bg-brand-900 text-white border-brand-900 shadow-sm"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  {btn.label}
+                </button>
+              ))}
+
+              {filtroPeriodo === "personalizado" && (
+                <input
+                  type="date"
+                  value={dataPersonalizada}
+                  onChange={(e) => {
+                    setDataPersonalizada(e.target.value);
+                    setPaginaAtual(1);
+                  }}
+                  className="bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900 ml-1"
+                />
+              )}
+            </div>
+
+            {/* CONTADORES */}
+            <div className="text-xs text-slate-500 font-medium">
+              Mostrando <strong className="text-slate-800">{orcamentosFiltrados.length}</strong> cotação(ões) • Total Geral: <strong className="text-slate-800">{orcamentos.length}</strong>
+            </div>
           </div>
         </div>
 
@@ -192,23 +320,19 @@ export default function GestaoOrcamentos() {
             <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-base font-semibold text-slate-700">Nenhum orçamento encontrado</h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto mb-5">
-              Gere novas cotações na tela principal e todas ficarão salvas automaticamente aqui.
+              Tente alterar os termos da busca ou limpe os filtros.
             </p>
-            <Link
-              href="/"
+            <button
+              onClick={limparFiltros}
               className="inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow transition"
             >
-              Criar Nova Cotação
-            </Link>
+              Mostrar Todos os Orçamentos
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-500 px-1 font-semibold">
-              <span>Mostrando {orcamentosFiltrados.length} cotação(ões)</span>
-            </div>
-
             <div className="grid grid-cols-1 gap-3">
-              {orcamentosFiltrados.map((orc) => {
+              {orcamentosPaginados.map((orc) => {
                 const idCurto = orc.id.slice(0, 6).toUpperCase();
                 const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
                 
@@ -243,6 +367,12 @@ export default function GestaoOrcamentos() {
                             {orc.acomodacaoEscolhida}
                           </span>
                         )}
+
+                        {/* Data e Hora de Criação */}
+                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md flex items-center gap-1 font-medium ml-auto sm:ml-0">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {formatarDataHoraCriacao(orc.criadoEm)}
+                        </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600 pt-1">
@@ -332,6 +462,37 @@ export default function GestaoOrcamentos() {
                 );
               })}
             </div>
+
+            {/* CONTROLES DE PAGINAÇÃO (MÁXIMO 50 POR PÁGINA) */}
+            {totalPaginas > 1 && (
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between text-xs font-semibold text-slate-600 mt-4">
+                <span>
+                  Página <strong>{paginaAtual}</strong> de <strong>{totalPaginas}</strong> (Exibindo até 50 por página)
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={irParaPaginaAnterior}
+                    disabled={paginaAtual === 1}
+                    className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Anterior</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={irParaProximaPagina}
+                    disabled={paginaAtual === totalPaginas}
+                    className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1"
+                  >
+                    <span>Próxima</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
