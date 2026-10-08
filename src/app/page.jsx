@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2, Hotel, LogOut, BedDouble } from "lucide-react";
+import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2, Hotel, LogOut, BedDouble, Baby } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
 import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
@@ -45,6 +45,7 @@ export default function FastOrcamento() {
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
   const [adultos, setAdultos] = useState("2");
   const [criancas, setCriancas] = useState("0");
+  const [idadesCriancas, setIdadesCriancas] = useState("");
   const [parquesMarcados, setParquesMarcados] = useState([]);
 
   const [regimesValores, setRegimesValores] = useState({});
@@ -145,12 +146,22 @@ export default function FastOrcamento() {
     return `${diaIn}/${mesIn} a ${diaOut}/${mesOut}/${anoOut}`;
   };
 
+  const numCriancas = parseInt(criancas, 10) || 0;
+
   const gerarTextoZap = (urlVitrine) => {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
     let texto = `🏨 *${hotelSelecionado.nome}*\n`;
     texto += `📅 *Período:* ${formatarDatas()}\n`;
-    texto += `👥 *Hóspedes:* ${adultos} adulto(s)${criancas > 0 ? ` e ${criancas} criança(s)` : ""}\n`;
+
+    let textoHospedes = `${adultos} adulto(s)`;
+    if (numCriancas > 0) {
+      textoHospedes += ` e ${numCriancas} criança(s)`;
+      if (idadesCriancas.trim()) {
+        textoHospedes += ` (${idadesCriancas.trim()})`;
+      }
+    }
+    texto += `👥 *Hóspedes:* ${textoHospedes}\n`;
 
     if (aptoSelecionado) {
       texto += `🛏️ *Acomodação:* ${aptoSelecionado}\n`;
@@ -203,6 +214,14 @@ export default function FastOrcamento() {
     try {
       setSalvando(true);
 
+      let hospedesFormatado = `${adultos} Adulto(s)`;
+      if (numCriancas > 0) {
+        hospedesFormatado += ` e ${numCriancas} Criança(s)`;
+        if (idadesCriancas.trim()) {
+          hospedesFormatado += ` (${idadesCriancas.trim()})`;
+        }
+      }
+
       const dadosOrcamento = {
         agenciaId: agencia?.id || "avulso",
         hotel: {
@@ -228,7 +247,8 @@ export default function FastOrcamento() {
         periodoFormatado: formatarDatas(),
         adultos,
         criancas,
-        hospedes: `${adultos} Adulto(s)${criancas > 0 ? ` e ${criancas} Criança(s)` : ""}`,
+        idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
+        hospedes: hospedesFormatado,
         parques: parquesMarcados,
         regimes: REGIMES_OPCOES.filter((r) => regimesValores[r.id] && regimesValores[r.id].trim() !== "").map((r) => ({
           id: r.id,
@@ -377,48 +397,70 @@ export default function FastOrcamento() {
             )}
           </div>
 
-          {/* DATAS SEM RETROATIVIDADE */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-in</label>
-              <input
-                type="date"
-                min={hojeStr}
-                value={checkin}
-                onChange={handleCheckinChange}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
-              />
+          {/* DATAS E HÓSPEDES COM CAMPO CONDICIONAL DE IDADES DE CRIANÇAS */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-in</label>
+                <input
+                  type="date"
+                  min={hojeStr}
+                  value={checkin}
+                  onChange={handleCheckinChange}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-out</label>
+                <input
+                  type="date"
+                  min={somarDias(checkin || hojeStr, 1)}
+                  value={checkout}
+                  onChange={(e) => setCheckout(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Adultos</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={adultos}
+                  onChange={(e) => setAdultos(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Crianças</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={criancas}
+                  onChange={(e) => setCriancas(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-out</label>
-              <input
-                type="date"
-                min={somarDias(checkin || hojeStr, 1)}
-                value={checkout}
-                onChange={(e) => setCheckout(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Adultos</label>
-              <input
-                type="number"
-                min="1"
-                value={adultos}
-                onChange={(e) => setAdultos(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Crianças</label>
-              <input
-                type="number"
-                min="0"
-                value={criancas}
-                onChange={(e) => setCriancas(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-              />
-            </div>
+
+            {/* CAMPO CONDICIONAL: APARECE SOMENTE QUANDO CRIANÇAS > 0 */}
+            {numCriancas > 0 && (
+              <div className="pt-2 border-t border-slate-100 animate-fadeIn">
+                <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5 mb-1">
+                  <Baby className="w-3.5 h-3.5 text-brand-700" />
+                  Idades / Detalhes das Crianças
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 5, 8 e 11 anos (ou '1 bebê de 8 meses e 1 de 6 anos')"
+                  value={idadesCriancas}
+                  onChange={(e) => setIdadesCriancas(e.target.value)}
+                  className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Esta informação será adicionada ao texto do WhatsApp e ao card de hóspedes da vitrine.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* PARQUES E BENEFÍCIOS */}
