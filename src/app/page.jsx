@@ -1,34 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2, Hotel, LogOut } from "lucide-react";
+import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2, Hotel, LogOut, BedDouble } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
 import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
-
-const HOTEIS_PADRAO = [
-  {
-    id: "1",
-    nome: "HOTEL PRIVE RIVIERA PARK",
-    localizacao: "Bairro do Turista, Centro - Caldas Novas, GO",
-    parquesDisponiveis: ["Clube Water Park", "Clube Prive", "Clube Náutico", "Clube Kawana"],
-    fotos: [
-      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80",
-      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&q=80",
-      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&q=80",
-    ]
-  },
-  {
-    id: "2",
-    nome: "RESORT DO LAGO",
-    localizacao: "Às margens do Lago Corumbá - Caldas Novas, GO",
-    parquesDisponiveis: ["Clube Water Park", "Clube Prive", "Clube Náutico"],
-    fotos: [
-      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&q=80",
-      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80"
-    ]
-  }
-];
 
 const REGIMES_OPCOES = [
   { id: "sem_refeicao", label: "Sem refeições", emoji: "🏠" },
@@ -38,25 +14,43 @@ const REGIMES_OPCOES = [
   { id: "pensao_completa", label: "Pensão Completa", emoji: "🍲" },
 ];
 
-export default function FastOrcamento() {
-  const [agencia, setAgencia] = useState(null);
-  const [hoteis, setHoteis] = useState(HOTEIS_PADRAO);
-  const [hotelSelecionado, setHotelSelecionado] = useState(HOTEIS_PADRAO[0]);
+const obterDataHojeLocal = () => {
+  const d = new Date();
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
 
-  const [checkin, setCheckin] = useState("2026-11-05");
-  const [checkout, setCheckout] = useState("2026-11-09");
+const somarDias = (dataStr, dias) => {
+  if (!dataStr) return "";
+  const [ano, mes, dia] = dataStr.split("-").map(Number);
+  const data = new Date(ano, mes - 1, dia);
+  data.setDate(data.getDate() + dias);
+  const a = data.getFullYear();
+  const m = String(data.getMonth() + 1).padStart(2, "0");
+  const d = String(data.getDate()).padStart(2, "0");
+  return `${a}-${m}-${d}`;
+};
+
+export default function FastOrcamento() {
+  const hojeStr = obterDataHojeLocal();
+
+  const [agencia, setAgencia] = useState(null);
+  const [hoteis, setHoteis] = useState([]);
+  const [hotelSelecionado, setHotelSelecionado] = useState(null);
+  const [aptoSelecionado, setAptoSelecionado] = useState("");
+
+  const [checkin, setCheckin] = useState(hojeStr);
+  const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
   const [adultos, setAdultos] = useState("2");
   const [criancas, setCriancas] = useState("0");
-  const [parquesMarcados, setParquesMarcados] = useState(HOTEIS_PADRAO[0].parquesDisponiveis || []);
+  const [parquesMarcados, setParquesMarcados] = useState([]);
 
-  const [regimesValores, setRegimesValores] = useState({
-    cafe: "1.571,61",
-    cafe_jantar: "1.951,67",
-    pensao_completa: "2.336,94"
-  });
-
+  const [regimesValores, setRegimesValores] = useState({});
   const [formaPagamento, setFormaPagamento] = useState("Cartão em até 10x sem juros ou PIX com desconto especial");
   const [aptosRestantes, setAptosRestantes] = useState("2");
+
   const [copiado, setCopiado] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [linkGerado, setLinkGerado] = useState("");
@@ -81,11 +75,39 @@ export default function FastOrcamento() {
 
       if (lista.length > 0) {
         setHoteis(lista);
-        setHotelSelecionado(lista[0]);
-        setParquesMarcados(lista[0].parquesDisponiveis || []);
+        selecionarHotel(lista[0]);
       }
     } catch (err) {
       console.error("Erro ao carregar hotéis:", err);
+    }
+  };
+
+  const selecionarHotel = (hotel) => {
+    setHotelSelecionado(hotel);
+    setParquesMarcados(hotel.parquesDisponiveis || []);
+    setAptoSelecionado(hotel.tiposApto?.[0]?.nome || "");
+    setRegimesValores({});
+
+    if (hotel.formaPagamento && hotel.formaPagamento.trim() !== "") {
+      setFormaPagamento(hotel.formaPagamento);
+    } else {
+      setFormaPagamento("Cartão em até 10x sem juros ou PIX com desconto especial");
+    }
+  };
+
+  const handleHotelChange = (e) => {
+    const hotel = hoteis.find((h) => h.id === e.target.value);
+    if (hotel) {
+      selecionarHotel(hotel);
+    }
+  };
+
+  const handleCheckinChange = (e) => {
+    const novoCheckin = e.target.value;
+    setCheckin(novoCheckin);
+
+    if (!checkout || checkout <= novoCheckin) {
+      setCheckout(somarDias(novoCheckin, 1));
     }
   };
 
@@ -94,21 +116,12 @@ export default function FastOrcamento() {
     window.location.href = "/login";
   };
 
-  const handleHotelChange = (e) => {
-    const hotel = hoteis.find((h) => h.id === e.target.value);
-    if (hotel) {
-      setHotelSelecionado(hotel);
-      setParquesMarcados(hotel.parquesDisponiveis || []);
-    }
-  };
-
   const toggleParque = (parque) => {
     setParquesMarcados((prev) =>
       prev.includes(parque) ? prev.filter((p) => p !== parque) : [...prev, parque]
     );
   };
 
-  // Máscara automática de moeda brasileira
   const formatarMoeda = (valorDigitado) => {
     const apenasNumeros = valorDigitado.replace(/\D/g, "");
     if (!apenasNumeros) return "";
@@ -133,28 +146,39 @@ export default function FastOrcamento() {
   };
 
   const gerarTextoZap = (urlVitrine) => {
+    if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
+
     let texto = `🏨 *${hotelSelecionado.nome}*\n`;
     if (hotelSelecionado.localizacao) {
       texto += `📍 *Local:* ${hotelSelecionado.localizacao}\n`;
     }
     texto += `📅 *Período:* ${formatarDatas()}\n`;
-    texto += `👥 *Hóspedes:* ${adultos} adulto(s)${criancas > 0 ? ` e ${criancas} criança(s)` : ""}\n\n`;
+    texto += `👥 *Hóspedes:* ${adultos} adulto(s)${criancas > 0 ? ` e ${criancas} criança(s)` : ""}\n`;
+
+    if (aptoSelecionado) {
+      texto += `🛏️ *Acomodação:* ${aptoSelecionado}\n`;
+    }
+
+    texto += `\n`;
 
     if (parquesMarcados.length > 0) {
-      texto += `🎟️ *Parques inclusos no pacote:*\n`;
+      texto += `🎟️ *Incluso no pacote:*\n`;
       parquesMarcados.forEach((p) => {
         texto += `👉 ${p}\n`;
       });
       texto += `\n`;
     }
 
-    texto += `💰 *Valor total do pacote:*\n`;
-    REGIMES_OPCOES.forEach((reg) => {
-      const valor = regimesValores[reg.id];
-      if (valor && valor.trim() !== "") {
-        texto += `${reg.emoji} *${reg.label}:* R$ ${valor}\n`;
-      }
-    });
+    const regimesComValor = REGIMES_OPCOES.filter(
+      (r) => regimesValores[r.id] && regimesValores[r.id].trim() !== ""
+    );
+
+    if (regimesComValor.length > 0) {
+      texto += `💰 *Valor total do pacote:*\n`;
+      regimesComValor.forEach((reg) => {
+        texto += `${reg.emoji} *${reg.label}:* R$ ${regimesValores[reg.id]}\n`;
+      });
+    }
 
     if (formaPagamento) {
       texto += `\n💳 *Formas de Pagamento:*\n${formaPagamento}\n`;
@@ -174,6 +198,11 @@ export default function FastOrcamento() {
   };
 
   const salvarEGerarLink = async () => {
+    if (!hotelSelecionado) {
+      alert("Por favor, selecione uma hospedagem primeiro.");
+      return;
+    }
+
     try {
       setSalvando(true);
 
@@ -182,13 +211,19 @@ export default function FastOrcamento() {
         hotel: {
           nome: hotelSelecionado.nome,
           localizacao: hotelSelecionado.localizacao || "",
+          descricao: hotelSelecionado.descricao || "",
+          observacoes: hotelSelecionado.observacoes || "",
+          checkinHora: hotelSelecionado.checkinHora || "14:00",
+          checkoutHora: hotelSelecionado.checkoutHora || "11:00",
+          videoUrl: hotelSelecionado.videoUrl || "",
           fotos: hotelSelecionado.fotos || [],
+          tiposApto: hotelSelecionado.tiposApto || [],
         },
+        acomodacaoEscolhida: aptoSelecionado || null,
         agencia: {
           nome: agencia?.nome || "Caldas Novas Viagens",
-          whatsapp: agencia?.whatsapp || "5564999999999",
-          cidade: "Caldas Novas - GO",
-          cadastur: agencia?.cadastur || "Regular / Ativo",
+          whatsapp: agencia?.whatsapp || "",
+          cadastur: agencia?.cadastur || "",
         },
         checkin,
         checkout,
@@ -219,8 +254,8 @@ export default function FastOrcamento() {
 
       return urlCompleta;
     } catch (err) {
-      console.error("Erro ao salvar:", err);
-      alert("Erro ao conectar com Firebase. Verifique o console.");
+      console.error("Erro ao salvar orçamento:", err);
+      alert("Erro ao conectar com Firebase. Verifique sua conexão.");
     } finally {
       setSalvando(false);
     }
@@ -250,7 +285,7 @@ export default function FastOrcamento() {
 
           <button
             onClick={salvarEGerarLink}
-            disabled={salvando}
+            disabled={salvando || !hotelSelecionado}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
           >
             {salvando ? (
@@ -275,49 +310,99 @@ export default function FastOrcamento() {
 
       <main className="max-w-5xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
         <div className="space-y-4">
+          {/* ESCOLHA SUA HOSPEDAGEM */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Hotel Cadastrado
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Escolha sua Hospedagem
               </label>
               <Link href="/hoteis" className="text-xs text-brand-700 hover:underline font-semibold">
                 + Gerenciar
               </Link>
             </div>
-            <select
-              value={hotelSelecionado.id}
-              onChange={handleHotelChange}
-              className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-brand-900 outline-none"
-            >
-              {hoteis.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.nome}
-                </option>
-              ))}
-            </select>
+            {hoteis.length === 0 ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                Nenhuma hospedagem cadastrada.{" "}
+                <Link href="/hoteis" className="underline font-bold">
+                  Clique aqui para cadastrar a primeira.
+                </Link>
+              </div>
+            ) : (
+              <select
+                value={hotelSelecionado?.id || ""}
+                onChange={handleHotelChange}
+                className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+              >
+                {hoteis.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.nome}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* SELEÇÃO DO TIPO DE APARTAMENTO */}
+            {hotelSelecionado?.tiposApto?.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <label className="text-xs font-bold text-slate-600 uppercase block mb-1.5 flex items-center gap-1">
+                  <BedDouble className="w-3.5 h-3.5 text-brand-700" />
+                  Tipo de Apartamento Cotado
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAptoSelecionado("")}
+                    className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                      aptoSelecionado === ""
+                        ? "bg-brand-900 text-white border-brand-900 font-bold"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    Nenhum (Geral)
+                  </button>
+                  {hotelSelecionado.tiposApto.map((ap, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setAptoSelecionado(ap.nome)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                        aptoSelecionado === ap.nome
+                          ? "bg-brand-900 text-white border-brand-900 font-bold"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {ap.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* DATAS SEM RETROATIVIDADE */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Check-in</label>
+              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-in</label>
               <input
                 type="date"
+                min={hojeStr}
                 value={checkin}
-                onChange={(e) => setCheckin(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                onChange={handleCheckinChange}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Check-out</label>
+              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-out</label>
               <input
                 type="date"
+                min={somarDias(checkin || hojeStr, 1)}
                 value={checkout}
                 onChange={(e) => setCheckout(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Adultos</label>
+              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Adultos</label>
               <input
                 type="number"
                 min="1"
@@ -327,7 +412,7 @@ export default function FastOrcamento() {
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Crianças</label>
+              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Crianças</label>
               <input
                 type="number"
                 min="0"
@@ -338,11 +423,12 @@ export default function FastOrcamento() {
             </div>
           </div>
 
+          {/* PARQUES E BENEFÍCIOS */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-2">
               Parques e Benefícios
             </label>
-            {hotelSelecionado.parquesDisponiveis?.length > 0 ? (
+            {hotelSelecionado?.parquesDisponiveis?.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {hotelSelecionado.parquesDisponiveis.map((parque) => {
                   const ativo = parquesMarcados.includes(parque);
@@ -353,7 +439,7 @@ export default function FastOrcamento() {
                       onClick={() => toggleParque(parque)}
                       className={`text-xs text-left p-2.5 rounded-lg border flex items-center gap-2 font-medium transition ${
                         ativo
-                          ? "bg-brand-50 border-brand-700 text-brand-900"
+                          ? "bg-brand-50 border-brand-700 text-brand-900 font-semibold"
                           : "bg-slate-50 border-slate-200 text-slate-400"
                       }`}
                     >
@@ -366,12 +452,13 @@ export default function FastOrcamento() {
                 })}
               </div>
             ) : (
-              <p className="text-xs text-slate-400 italic">Nenhum parque cadastrado para este hotel.</p>
+              <p className="text-xs text-slate-400 italic">Nenhum parque ou benefício cadastrado para esta hospedagem.</p>
             )}
           </div>
 
+          {/* REGIMES E VALORES ZERADOS */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
               Regimes de Pensão e Valores (R$)
             </label>
             {REGIMES_OPCOES.map((reg) => (
@@ -390,9 +477,10 @@ export default function FastOrcamento() {
             ))}
           </div>
 
+          {/* APTOS RESTANTES E FORMA DE PAGAMENTO */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Aptos Disponíveis</label>
+              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Aptos Disponíveis</label>
               <input
                 type="text"
                 value={aptosRestantes}
@@ -401,7 +489,7 @@ export default function FastOrcamento() {
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Forma de Pagamento</label>
+              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Forma de Pagamento</label>
               <input
                 type="text"
                 value={formaPagamento}
@@ -412,6 +500,7 @@ export default function FastOrcamento() {
           </div>
         </div>
 
+        {/* PRÉVIA DO WHATSAPP */}
         <div className="md:sticky md:top-20 h-fit space-y-3">
           <div className="bg-white p-4 rounded-xl shadow-md border border-slate-200">
             <div className="flex items-center justify-between border-b pb-3 mb-3">
@@ -421,7 +510,7 @@ export default function FastOrcamento() {
               </span>
               <button
                 onClick={salvarEGerarLink}
-                disabled={salvando}
+                disabled={salvando || !hotelSelecionado}
                 className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
               >
                 {salvando ? (
