@@ -279,7 +279,6 @@ export default function VitrineOrcamento() {
                       className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:border-blue-500 transition"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-xl">{r.emoji || "🍽️"}</span>
                         <span className="text-xs sm:text-sm font-bold text-slate-800">{r.nome}</span>
                       </div>
                       <div className="text-right">
@@ -322,14 +321,14 @@ export default function VitrineOrcamento() {
           </div>
         </div>
 
-        {/* ================= 2. SOBRE O HOTEL (TEXTO PADRONIZADO E HIGIENIZADO) ================= */}
+        {/* ================= 2. SOBRE O HOTEL (BLINDAGEM TIPOGRÁFICA COM COR DOS CLUBES) ================= */}
         {hotel?.descricao && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6 space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Sobre a Estrutura do Hotel
             </h3>
             <div
-              className="text-xs md:text-sm text-slate-700 leading-relaxed space-y-2.5 font-normal break-words [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-slate-900 [&_h2]:pt-2 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:text-slate-900 [&_strong]:font-semibold [&_strong]:text-slate-900"
+              className="text-xs md:text-sm leading-relaxed space-y-2.5 font-normal break-words text-slate-900 [&_*]:!text-slate-900 [&_*]:!font-sans [&_strong]:!font-bold [&_h2]:!text-base [&_h2]:!font-bold [&_h2]:!text-slate-900 [&_h3]:!text-sm [&_h3]:!font-bold [&_h3]:!text-slate-900"
               dangerouslySetInnerHTML={{ __html: hotel.descricao }}
             />
           </div>
@@ -346,6 +345,7 @@ export default function VitrineOrcamento() {
               </div>
             </div>
 
+            {/* Slide da Acomodação */}
             <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
               <img
                 src={fotosApto[fotoAptoIndex]}
@@ -376,6 +376,7 @@ export default function VitrineOrcamento() {
               )}
             </div>
 
+            {/* Miniaturas da Acomodação */}
             {fotosApto.length > 1 && (
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
                 {fotosApto.map((url, idx) => (
@@ -488,7 +489,7 @@ export default function VitrineOrcamento() {
               Observações & Políticas
             </h3>
             <div
-              className="text-xs md:text-sm text-slate-700 leading-relaxed space-y-2 [&_strong]:font-semibold [&_strong]:text-slate-900"
+              className="text-xs md:text-sm leading-relaxed space-y-2 text-slate-900 [&_*]:!text-slate-900 [&_strong]:!font-bold"
               dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
             />
           </div>
