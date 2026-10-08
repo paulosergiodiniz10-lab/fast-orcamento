@@ -10,23 +10,27 @@ import {
 import { db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
-// Converte links normais, Shorts ou encurtados do YouTube em embed funcional
-const formatarEmbedYouTube = (url) => {
+// Converte links normais, Shorts ou encurtados do YouTube e identifica orientação
+const obterDadosVideoYouTube = (url) => {
   if (!url) return null;
   try {
+    let id = "";
+    let isVertical = false;
+
     if (url.includes("youtube.com/shorts/")) {
-      const id = url.split("youtube.com/shorts/")[1].split("?")[0].split("/")[0];
-      return `https://www.youtube.com/embed/${id}`;
+      id = url.split("youtube.com/shorts/")[1].split("?")[0].split("/")[0];
+      isVertical = true;
+    } else if (url.includes("youtu.be/")) {
+      id = url.split("youtu.be/")[1].split("?")[0].split("/")[0];
+    } else if (url.includes("watch?v=")) {
+      id = url.split("watch?v=")[1].split("&")[0];
     }
-    if (url.includes("youtu.be/")) {
-      const id = url.split("youtu.be/")[1].split("?")[0].split("/")[0];
-      return `https://www.youtube.com/embed/${id}`;
-    }
-    if (url.includes("watch?v=")) {
-      const id = url.split("watch?v=")[1].split("&")[0];
-      return `https://www.youtube.com/embed/${id}`;
-    }
-    return url;
+
+    if (!id) return null;
+    return {
+      embedUrl: `https://www.youtube.com/embed/${id}`,
+      isVertical,
+    };
   } catch {
     return null;
   }
@@ -69,7 +73,7 @@ export default function VitrineOrcamento() {
   if (carregando) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-white">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-400 mb-3" />
+        <Loader2 className="w-10 h-10 animate-spin text-sky-400 mb-3" />
         <p className="text-sm font-semibold tracking-wide">Carregando proposta personalizada...</p>
       </div>
     );
@@ -79,7 +83,7 @@ export default function VitrineOrcamento() {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-center text-white">
         <div className="bg-white/10 p-4 rounded-2xl mb-3">
-          <Building2 className="w-10 h-10 text-emerald-400" />
+          <Building2 className="w-10 h-10 text-sky-400" />
         </div>
         <h1 className="text-xl font-bold">Proposta não encontrada</h1>
         <p className="text-xs text-slate-400 mt-1 max-w-xs">
@@ -111,11 +115,10 @@ export default function VitrineOrcamento() {
 
   const linkWhatsApp = `https://wa.me/${whatsappFormatado}?text=${mensagemReserva}`;
 
-  // Fotos gerais e da acomodação selecionada
   const fotosGerais = hotel?.fotos || [];
   const aptoCotadoDados = (hotel?.tiposApto || []).find((a) => a.nome === acomodacaoEscolhida);
   const fotosApto = aptoCotadoDados?.fotos || [];
-  const videoEmbedUrl = formatarEmbedYouTube(hotel?.videoUrl);
+  const videoInfo = obterDadosVideoYouTube(hotel?.videoUrl);
 
   const proximaFoto = () => {
     if (fotosGerais.length > 0) {
@@ -131,12 +134,14 @@ export default function VitrineOrcamento() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 pb-28">
-      {/* CABEÇALHO COM BOTÃO "FALAR AGORA" DINÂMICO */}
-      <header className="bg-emerald-950 text-white sticky top-0 z-40 shadow-md">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      {/* CABEÇALHO AZUL ESCURO NOBRE COM BOTÃO VERDE WHATSAPP */}
+      <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="font-bold text-sm md:text-base leading-tight">{agencia?.nome || "Caldas Novas Viagens"}</h1>
-            <p className="text-[11px] text-emerald-300 flex items-center gap-1">
+            <h1 className="font-bold text-sm md:text-base leading-tight tracking-wide text-white">
+              {agencia?.nome || "Caldas Novas Viagens"}
+            </h1>
+            <p className="text-[11px] text-sky-400 flex items-center gap-1 font-medium">
               <ShieldCheck className="w-3.5 h-3.5" /> Proposta Exclusiva • CADASTUR Verificado
             </p>
           </div>
@@ -144,7 +149,7 @@ export default function VitrineOrcamento() {
             href={linkWhatsApp}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-2 rounded-full transition shadow"
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-full transition shadow-md active:scale-95"
           >
             <MessageCircle className="w-4 h-4" />
             <span>Falar Agora</span>
@@ -152,27 +157,44 @@ export default function VitrineOrcamento() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto p-4 space-y-5 mt-2">
-        {/* ================= 1. CARD PRINCIPAL: DETALHES E VALORES DO ORÇAMENTO ================= */}
+      <main className="max-w-3xl mx-auto p-4 space-y-5 mt-2">
+        {/* ================= 1. CARD PRINCIPAL: AZUL OCEANO COM LOGO DO HOTEL ================= */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="bg-emerald-900 text-white p-5">
-            <span className="text-[10px] uppercase font-bold tracking-wider bg-emerald-800/80 px-2.5 py-1 rounded-md">
-              Hospedagem Selecionada
-            </span>
-            <h2 className="text-xl md:text-2xl font-extrabold mt-2 leading-tight">{hotel?.nome}</h2>
-            {hotel?.localizacao && (
-              <p className="text-xs text-emerald-200 flex items-center gap-1.5 mt-1">
-                <MapPin className="w-4 h-4 shrink-0 text-emerald-300" />
-                {hotel.localizacao}
-              </p>
-            )}
+          <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white p-5 md:p-6 relative">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex-1 pr-2">
+                <span className="text-[10px] uppercase font-bold tracking-wider bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-md text-sky-100 inline-block mb-2">
+                  Hospedagem Selecionada
+                </span>
+                <h2 className="text-xl md:text-2xl font-black leading-tight drop-shadow-sm">
+                  {hotel?.nome}
+                </h2>
+                {hotel?.localizacao && (
+                  <p className="text-xs text-sky-100 flex items-center gap-1.5 mt-2 font-medium">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 text-sky-300" />
+                    {hotel.localizacao}
+                  </p>
+                )}
+              </div>
+
+              {/* LOGO DO HOTEL EM BOX BRANCO */}
+              {hotel?.logoUrl && (
+                <div className="bg-white p-2 rounded-xl shadow-lg border border-white/80 shrink-0 self-start sm:self-center h-16 w-24 md:h-20 md:w-28 flex items-center justify-center">
+                  <img
+                    src={hotel.logoUrl}
+                    alt={`Logo ${hotel.nome}`}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="p-5 space-y-4">
+          <div className="p-5 md:p-6 space-y-4">
             {/* Período, Hóspedes e Acomodação */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center gap-3">
-                <div className="bg-emerald-100 text-emerald-900 p-2.5 rounded-lg">
+                <div className="bg-blue-100 text-blue-900 p-2.5 rounded-lg">
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
@@ -182,7 +204,7 @@ export default function VitrineOrcamento() {
               </div>
 
               <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center gap-3">
-                <div className="bg-emerald-100 text-emerald-900 p-2.5 rounded-lg">
+                <div className="bg-blue-100 text-blue-900 p-2.5 rounded-lg">
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
@@ -208,11 +230,11 @@ export default function VitrineOrcamento() {
             {(hotel?.checkinHora || hotel?.checkoutHora) && (
               <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="flex items-center gap-1 font-medium">
-                  <Clock className="w-4 h-4 text-emerald-700" />
+                  <Clock className="w-4 h-4 text-blue-700" />
                   Check-in: <strong className="text-slate-900 ml-1">{hotel.checkinHora || "14:00"}</strong>
                 </span>
                 <span className="flex items-center gap-1 font-medium">
-                  <Clock className="w-4 h-4 text-emerald-700" />
+                  <Clock className="w-4 h-4 text-blue-700" />
                   Check-out: <strong className="text-slate-900 ml-1">{hotel.checkoutHora || "11:00"}</strong>
                 </span>
               </div>
@@ -228,9 +250,9 @@ export default function VitrineOrcamento() {
                   {parques.map((item, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 bg-emerald-50/70 border border-emerald-200 p-2.5 rounded-xl text-xs font-semibold text-emerald-950"
+                      className="flex items-center gap-2 bg-blue-50/70 border border-blue-200 p-2.5 rounded-xl text-xs font-semibold text-blue-950"
                     >
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
                       <span>{item}</span>
                     </div>
                   ))}
@@ -248,7 +270,7 @@ export default function VitrineOrcamento() {
                   {regimes.map((r, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:border-emerald-500 transition"
+                      className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:border-blue-500 transition"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-xl">{r.emoji || "🍽️"}</span>
@@ -256,7 +278,7 @@ export default function VitrineOrcamento() {
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] text-slate-400 font-medium block">Total do Pacote</span>
-                        <span className="text-sm sm:text-base font-extrabold text-emerald-950">
+                        <span className="text-sm sm:text-base font-extrabold text-blue-950">
                           R$ {r.valor}
                         </span>
                       </div>
@@ -266,11 +288,11 @@ export default function VitrineOrcamento() {
               </div>
             )}
 
-            {/* FORMAS DE PAGAMENTO E AVISO DE VAGAS DINÂMICOS */}
+            {/* FORMAS DE PAGAMENTO E AVISO DE VAGAS */}
             <div className="space-y-2 pt-2">
               {formaPagamento && (
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-start gap-2">
-                  <CreditCard className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <CreditCard className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold text-slate-900 block">Formas de Pagamento:</span>
                     <span>{formaPagamento}</span>
@@ -369,7 +391,7 @@ export default function VitrineOrcamento() {
                   key={idx}
                   onClick={() => setFotoGeralIndex(idx)}
                   className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                    fotoGeralIndex === idx ? "border-emerald-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
+                    fotoGeralIndex === idx ? "border-blue-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
                   }`}
                 >
                   <img src={url} alt="" className="w-full h-full object-cover" />
@@ -379,22 +401,39 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. VÍDEO DO HOTEL (YOUTUBE) ================= */}
-        {videoEmbedUrl && (
+        {/* ================= 5. VÍDEO DO HOTEL (ADAPTATIVO: HORIZONTAL OU SHORTS VERTICAL) ================= */}
+        {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Video className="w-5 h-5 text-red-600" />
               Vídeo da Hospedagem
             </h3>
-            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
-              <iframe
-                src={videoEmbedUrl}
-                title="Vídeo do Hotel"
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
+
+            {videoInfo.isVertical ? (
+              // Formato Vertical (Shorts/Reels) sem faixas pretas laterais
+              <div className="flex justify-center py-2">
+                <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
+                  <iframe
+                    src={videoInfo.embedUrl}
+                    title="Vídeo Vertical da Hospedagem"
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : (
+              // Formato Horizontal padrão (16:9)
+              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
+                <iframe
+                  src={videoInfo.embedUrl}
+                  title="Vídeo da Hospedagem"
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -421,12 +460,12 @@ export default function VitrineOrcamento() {
 
       {/* BOTÃO FIXO INFERIOR COM LINK DO WHATSAPP DA AGÊNCIA */}
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg z-30">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-3xl mx-auto">
           <a
             href={linkWhatsApp}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm shadow-md transition"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm shadow-md transition active:scale-[0.99]"
           >
             <MessageCircle className="w-5 h-5" />
             <span>Quero Reservar no WhatsApp</span>
