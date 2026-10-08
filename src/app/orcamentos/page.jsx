@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from "react";
 import { 
   FileText, Search, ArrowLeft, MessageCircle, ExternalLink, 
-  Loader2, Calendar, Users, Building2, Trash2, RefreshCw 
+  Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle 
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
-import { collection, query, where, getDocs, deleteDoc, doc, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
 
 export default function GestaoOrcamentos() {
+  const router = useRouter();
   const [agencia, setAgencia] = useState(null);
   const [orcamentos, setOrcamentos] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -57,6 +59,11 @@ export default function GestaoOrcamentos() {
     }
   };
 
+  const limparFiltros = () => {
+    setBuscaGeral("");
+    setFiltroCheckin("");
+  };
+
   const excluirOrcamento = async (id) => {
     if (!confirm("Deseja realmente excluir este orçamento salvo?")) return;
     try {
@@ -68,7 +75,18 @@ export default function GestaoOrcamentos() {
     }
   };
 
-  // Filtragem dos orçamentos
+  // Redireciona para a página principal pré-carregando os dados
+  const criarNovaCotacaoComDados = (orc) => {
+    const params = new URLSearchParams();
+    if (orc.clienteNome) params.set("clienteNome", orc.clienteNome);
+    if (orc.clienteWhatsapp) params.set("clienteWhatsapp", orc.clienteWhatsapp);
+    if (orc.adultos) params.set("adultos", orc.adultos);
+    if (orc.criancas) params.set("criancas", orc.criancas);
+    if (orc.idadesCriancas) params.set("idadesCriancas", orc.idadesCriancas);
+    if (orc.hotel?.nome) params.set("hotelNome", orc.hotel.nome);
+    router.push(`/?${params.toString()}`);
+  };
+
   const orcamentosFiltrados = orcamentos.filter((o) => {
     const termo = buscaGeral.toLowerCase();
     const idCurto = o.id.slice(0, 6).toLowerCase();
@@ -118,27 +136,48 @@ export default function GestaoOrcamentos() {
       </header>
 
       <main className="max-w-6xl mx-auto p-4 md:p-6 mt-2 space-y-4">
-        {/* BARRA DE PESQUISA E FILTROS */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="sm:col-span-2 relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-            <input
-              type="text"
-              placeholder="Buscar por ID, Nome do Cliente, Hotel ou Telefone..."
-              value={buscaGeral}
-              onChange={(e) => setBuscaGeral(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2.5 pl-9 pr-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
-            />
+        {/* BARRA DE PESQUISA, DATA CHECK-IN E BOTÃO LIMPAR */}
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+          <div className="sm:col-span-7">
+            <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+              Pesquisar
+            </label>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar por ID, Nome do Cliente, Hotel ou Telefone..."
+                value={buscaGeral}
+                onChange={(e) => setBuscaGeral(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+              />
+            </div>
           </div>
 
-          <div>
+          <div className="sm:col-span-3">
+            <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+              Check-in
+            </label>
             <input
               type="date"
               title="Filtrar por data de check-in"
               value={filtroCheckin}
               onChange={(e) => setFiltroCheckin(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 px-3 text-xs md:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
             />
+          </div>
+
+          <div className="sm:col-span-2">
+            <button
+              type="button"
+              onClick={limparFiltros}
+              disabled={!buscaGeral && !filtroCheckin}
+              className="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Limpar pesquisa e calendário"
+            >
+              <X className="w-3.5 h-3.5 text-slate-500" />
+              <span>Limpar</span>
+            </button>
           </div>
         </div>
 
@@ -172,10 +211,15 @@ export default function GestaoOrcamentos() {
               {orcamentosFiltrados.map((orc) => {
                 const idCurto = orc.id.slice(0, 6).toUpperCase();
                 const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
+                
+                // Mensagem de Remarketing
+                const saudacao = orc.clienteNome ? `Olá, ${orc.clienteNome}!` : "Olá!";
+                const textoRemarketing = encodeURIComponent(
+                  `${saudacao} Vi que fez um *orçamento* conosco recentemente. *Ficou alguma dúvida?*\n\nTemos ofertas especiais e *pagamento facilitado*.\n\nQuer que eu prepare uma nova proposta para você?`
+                );
+
                 const linkZapCliente = zapTratado
-                  ? `https://wa.me/${zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`}?text=${encodeURIComponent(
-                      `Olá, ${orc.clienteNome || "tudo bem"}! Segue o link com as fotos e detalhes do seu orçamento no ${orc.hotel?.nome}: ${window.location.origin}/o/${orc.id}`
-                    )}`
+                  ? `https://wa.me/${zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`}?text=${textoRemarketing}`
                   : null;
 
                 const urlVitrine = `/o/${orc.id}`;
@@ -241,13 +285,25 @@ export default function GestaoOrcamentos() {
 
                     {/* Ações Rápidas */}
                     <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 shrink-0 justify-end">
+                      {/* Botão Novo Orçamento (Recotar carregando dados) */}
+                      <button
+                        type="button"
+                        onClick={() => criarNovaCotacaoComDados(orc)}
+                        className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow active:scale-95"
+                        title="Fazer novo orçamento pré-carregando os dados deste cliente"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        <span>Novo</span>
+                      </button>
+
+                      {/* Botão WhatsApp com Remarketing */}
                       {linkZapCliente && (
                         <a
                           href={linkZapCliente}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow"
-                          title="Chamar cliente no WhatsApp"
+                          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow active:scale-95"
+                          title="Enviar mensagem de remarketing"
                         >
                           <MessageCircle className="w-4 h-4" />
                           <span>WhatsApp</span>
