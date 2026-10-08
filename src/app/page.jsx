@@ -1,20 +1,31 @@
 "use client";
 
 import React, { useState } from "react";
-import { Copy, Check, MessageSquare, Building2 } from "lucide-react";
+import { Copy, Check, MessageSquare, Building2, ExternalLink, Loader2 } from "lucide-react";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const HOTEIS_EXEMPLO = [
   {
     id: "1",
     nome: "HOTEL PRIVE RIVIERA PARK",
-    localizacao: "Bairro do Turista, Centro",
+    localizacao: "Bairro do Turista, Centro - Caldas Novas, GO",
     parquesDisponiveis: ["Clube Water Park", "Clube Prive", "Clube Náutico", "Clube Kawana"],
+    fotos: [
+      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80",
+      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&q=80",
+      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&q=80",
+    ]
   },
   {
     id: "2",
     nome: "RESORT DO LAGO",
-    localizacao: "Às margens do Lago Corumbá",
+    localizacao: "Às margens do Lago Corumbá - Caldas Novas, GO",
     parquesDisponiveis: ["Clube Water Park", "Clube Prive", "Clube Náutico"],
+    fotos: [
+      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&q=80",
+      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80"
+    ]
   }
 ];
 
@@ -43,6 +54,8 @@ export default function FastOrcamento() {
   const [formaPagamento, setFormaPagamento] = useState("Cartão em até 10x sem juros ou PIX com desconto especial");
   const [aptosRestantes, setAptosRestantes] = useState("2");
   const [copiado, setCopiado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [linkGerado, setLinkGerado] = useState("");
 
   const handleHotelChange = (e) => {
     const hotel = HOTEIS_EXEMPLO.find((h) => h.id === e.target.value);
@@ -69,7 +82,7 @@ export default function FastOrcamento() {
     return `${diaIn}/${mesIn} a ${diaOut}/${mesOut}/${anoOut}`;
   };
 
-  const gerarTextoZap = () => {
+  const gerarTextoZap = (urlVitrine) => {
     let texto = `🏨 *${hotelSelecionado.nome}*\n`;
     texto += `📍 *Local:* ${hotelSelecionado.localizacao}\n`;
     texto += `📅 *Período:* ${formatarDatas()}\n`;
@@ -99,16 +112,63 @@ export default function FastOrcamento() {
       texto += `\n⚠️ *Restam apenas ${aptosRestantes} apartamentos disponíveis!*\n`;
     }
 
-    texto += `\n🔗 *Fotos e detalhes completos:* https://fastorcamento.vercel.app/o/exemplo123\n`;
+    const finalUrl = urlVitrine || linkGerado || "https://fast-orcamento.vercel.app";
+    texto += `\n🔗 *Fotos e detalhes completos:* ${finalUrl}\n`;
     texto += `\n_Oferta sujeita a alteração e disponibilidade sem prévio aviso._`;
 
     return texto;
   };
 
-  const copiarTexto = () => {
-    navigator.clipboard.writeText(gerarTextoZap());
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
+  const salvarEGerarLink = async () => {
+    try {
+      setSalvando(true);
+
+      const dadosOrcamento = {
+        hotel: {
+          nome: hotelSelecionado.nome,
+          localizacao: hotelSelecionado.localizacao,
+          fotos: hotelSelecionado.fotos || [],
+        },
+        agencia: {
+          nome: "Caldas Novas Viagens",
+          whatsapp: "5564999999999",
+          cidade: "Caldas Novas - GO",
+          cadastur: "Regular / Ativo",
+        },
+        checkin,
+        checkout,
+        periodoFormatado: formatarDatas(),
+        adultos,
+        criancas,
+        hospedes: `${adultos} Adulto(s)${criancas > 0 ? ` e ${criancas} Criança(s)` : ""}`,
+        parques: parquesMarcados,
+        regimes: REGIMES_OPCOES.filter((r) => regimesValores[r.id] && regimesValores[r.id].trim() !== "").map((r) => ({
+          id: r.id,
+          nome: r.label,
+          emoji: r.emoji,
+          valor: regimesValores[r.id],
+        })),
+        formaPagamento,
+        aptosRestantes,
+        criadoEm: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(collection(db, "orcamentos"), dadosOrcamento);
+      const urlCompleta = `${window.location.origin}/o/${docRef.id}`;
+      setLinkGerado(urlCompleta);
+
+      const textoFinal = gerarTextoZap(urlCompleta);
+      navigator.clipboard.writeText(textoFinal);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+
+      return urlCompleta;
+    } catch (err) {
+      console.error("Erro ao salvar:", err);
+      alert("Erro ao conectar com Firebase. Verifique o console.");
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -124,11 +184,18 @@ export default function FastOrcamento() {
           </div>
         </div>
         <button
-          onClick={copiarTexto}
-          className="flex items-center gap-1.5 bg-brand-700 hover:bg-brand-800 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition"
+          onClick={salvarEGerarLink}
+          disabled={salvando}
+          className="flex items-center gap-1.5 bg-brand-700 hover:bg-brand-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
         >
-          {copiado ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-          <span>{copiado ? "Copiado!" : "Copiar"}</span>
+          {salvando ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : copiado ? (
+            <Check className="w-4 h-4 text-emerald-300" />
+          ) : (
+            <Copy className="w-4 h-4" />
+          )}
+          <span>{salvando ? "Gerando..." : copiado ? "Copiado c/ Link!" : "Gerar e Copiar"}</span>
         </button>
       </header>
 
@@ -269,17 +336,41 @@ export default function FastOrcamento() {
                 Prévia do WhatsApp
               </span>
               <button
-                onClick={copiarTexto}
-                className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow"
+                onClick={salvarEGerarLink}
+                disabled={salvando}
+                className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
               >
-                {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiado ? "Copiado!" : "Copiar Orçamento"}
+                {salvando ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : copiado ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-300" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                {salvando ? "Salvando..." : copiado ? "Copiado!" : "Salvar e Copiar"}
               </button>
             </div>
 
             <div className="bg-[#f0f4f2] p-4 rounded-lg font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-200">
               {gerarTextoZap()}
             </div>
+
+            {linkGerado && (
+              <div className="mt-3 p-3 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between">
+                <div className="truncate mr-2">
+                  <p className="text-[10px] font-bold uppercase text-brand-800">Vitrine Ativa</p>
+                  <p className="text-xs text-brand-950 truncate font-mono">{linkGerado}</p>
+                </div>
+                <a
+                  href={linkGerado}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-brand-900 text-white p-2 rounded-lg hover:bg-brand-950 transition shrink-0"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </main>
