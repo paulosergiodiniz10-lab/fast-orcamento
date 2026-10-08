@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { 
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
-  Users, Plus, Trash2, CopyPlus, RotateCcw
+  Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -53,7 +53,7 @@ function GeradorOrcamentoConteudo() {
   const [clienteNome, setClienteNome] = useState(searchParams.get("clienteNome") || "");
   const [clienteWhatsapp, setClienteWhatsapp] = useState(searchParams.get("clienteWhatsapp") || "");
 
-  // Datas comuns
+  // Datas
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
 
@@ -63,7 +63,7 @@ function GeradorOrcamentoConteudo() {
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
-  // Grupos (Inicializa com campos limpos)
+  // Grupos
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
       id: 1,
@@ -82,6 +82,39 @@ function GeradorOrcamentoConteudo() {
   const [linkGerado, setLinkGerado] = useState("");
   const [idOrcamentoAtual, setIdOrcamentoAtual] = useState("");
 
+  // Modal Customizado
+  const [modalConfig, setModalConfig] = useState({
+    aberto: false,
+    tipo: "confirm", // 'confirm' ou 'alert'
+    titulo: "",
+    mensagem: "",
+    onConfirm: null,
+  });
+
+  const abrirAlerta = (titulo, mensagem) => {
+    setModalConfig({
+      aberto: true,
+      tipo: "alert",
+      titulo,
+      mensagem,
+      onConfirm: null,
+    });
+  };
+
+  const abrirConfirmacao = (titulo, mensagem, onConfirm) => {
+    setModalConfig({
+      aberto: true,
+      tipo: "confirm",
+      titulo,
+      mensagem,
+      onConfirm,
+    });
+  };
+
+  const fecharModal = () => {
+    setModalConfig((prev) => ({ ...prev, aberto: false }));
+  };
+
   useEffect(() => {
     const dadosSalvos = localStorage.getItem("fast_agencia");
     if (!dadosSalvos) {
@@ -95,7 +128,7 @@ function GeradorOrcamentoConteudo() {
 
   const carregarHoteisDaAgencia = async (agenciaId) => {
     try {
-      const q = query(collection(db, "hoteis"), where("agenciaId", "==", agenciaId));
+      const q = query(collection(db, "hoteis"), where("agenciaId", "==", agencyIdSafe(agenciaId)));
       const snap = await getDocs(q);
       const lista = [];
       snap.forEach((d) => lista.push({ id: d.id, ...d.data() }));
@@ -110,6 +143,8 @@ function GeradorOrcamentoConteudo() {
       console.error("Erro ao carregar hotéis:", err);
     }
   };
+
+  const agencyIdSafe = (id) => id || "";
 
   const selecionarHotel = (hotel) => {
     setHotelSelecionado(hotel);
@@ -167,9 +202,8 @@ function GeradorOrcamentoConteudo() {
     setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
   };
 
-  // Botão Limpar Formulário Completo
-  const limparFormulario = () => {
-    if (!confirm("Deseja realmente limpar todos os dados preenchidos?")) return;
+  // Botão Limpar com Modal Personalizado
+  const executarLimpeza = () => {
     setClienteNome("");
     setClienteWhatsapp("");
     setCheckin(hojeStr);
@@ -190,7 +224,14 @@ function GeradorOrcamentoConteudo() {
     setIdOrcamentoAtual("");
   };
 
-  // Adicionar novo apartamento 100% limpo
+  const limparFormulario = () => {
+    abrirConfirmacao(
+      "Limpar Dados",
+      "Deseja realmente limpar todos os dados preenchidos deste orçamento?",
+      executarLimpeza
+    );
+  };
+
   const adicionarApartamentoGrupo = () => {
     setApartamentosGrupo((prev) => [
       ...prev,
@@ -205,7 +246,7 @@ function GeradorOrcamentoConteudo() {
 
   const removerApartamentoGrupo = (id) => {
     if (apartamentosGrupo.length <= 1) {
-      alert("O orçamento de grupo deve conter pelo menos 1 apartamento.");
+      abrirAlerta("Atenção", "O orçamento de grupo deve conter pelo menos 1 apartamento.");
       return;
     }
     setApartamentosGrupo((prev) => prev.filter((ap) => ap.id !== id));
@@ -257,7 +298,6 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Gerador de Texto para WhatsApp
   const gerarTextoZap = (urlVitrine, idDoc) => {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
@@ -346,7 +386,7 @@ function GeradorOrcamentoConteudo() {
 
   const salvarEGerarLink = async () => {
     if (!hotelSelecionado) {
-      alert("Por favor, selecione uma hospedagem primeiro.");
+      abrirAlerta("Hospedagem Necessária", "Por favor, selecione uma hospedagem primeiro.");
       return;
     }
 
@@ -416,14 +456,14 @@ function GeradorOrcamentoConteudo() {
       return urlCompleta;
     } catch (err) {
       console.error("Erro ao salvar orçamento:", err);
-      alert("Erro ao conectar com Firebase. Verifique sua conexão.");
+      abrirAlerta("Erro de Conexão", "Não foi possível conectar com o Firebase. Verifique sua conexão.");
     } finally {
       setSalvando(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-12 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-12 font-sans relative">
       <header className="bg-brand-900 text-white px-4 py-3 shadow-md sticky top-0 z-30 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-brand-700 p-2 rounded-lg text-white">
@@ -782,7 +822,6 @@ function GeradorOrcamentoConteudo() {
                     />
                   </div>
 
-                  {/* SELEÇÃO POR BOTÕES DO TIPO DE APARTAMENTO PARA ESTE QUARTO DO GRUPO */}
                   {hotelSelecionado?.tiposApto?.length > 0 && (
                     <div className="pt-2 border-t border-slate-100">
                       <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
@@ -819,7 +858,6 @@ function GeradorOrcamentoConteudo() {
                     </div>
                   )}
 
-                  {/* REGIMES E VALORES DO APARTAMENTO */}
                   <div className="pt-2 border-t border-slate-100 space-y-2">
                     <span className="text-[11px] font-bold uppercase text-slate-500 block">
                       Valores para este Apto (R$):
@@ -946,6 +984,67 @@ function GeradorOrcamentoConteudo() {
           </div>
         </div>
       </main>
+
+      {/* ================= MODAL ESTILIZADO DE CONFIRMAÇÃO / ALERTA ================= */}
+      {modalConfig.aberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${
+                modalConfig.tipo === "confirm" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+              }`}>
+                {modalConfig.tipo === "confirm" ? (
+                  <HelpCircle className="w-6 h-6" />
+                ) : (
+                  <AlertCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 leading-tight">
+                  {modalConfig.titulo}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Fast Orçamento</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              {modalConfig.mensagem}
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              {modalConfig.tipo === "confirm" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={fecharModal}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (modalConfig.onConfirm) modalConfig.onConfirm();
+                      fecharModal();
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow"
+                  >
+                    Confirmar
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={fecharModal}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-900 hover:bg-brand-950 transition shadow"
+                >
+                  Entendido
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
