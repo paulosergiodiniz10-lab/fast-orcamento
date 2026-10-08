@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { 
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
-  Users, Plus, Trash2, CopyPlus
+  Users, Plus, Trash2, CopyPlus, RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -42,7 +42,7 @@ function GeradorOrcamentoConteudo() {
   const searchParams = useSearchParams();
   const hojeStr = obterDataHojeLocal();
 
-  const [abaAtiva, setAbaAtiva] = useState("individual"); // 'individual' ou 'grupos'
+  const [abaAtiva, setAbaAtiva] = useState(searchParams.get("tipoOrcamento") === "grupos" ? "grupos" : "individual");
 
   const [agencia, setAgencia] = useState(null);
   const [hoteis, setHoteis] = useState([]);
@@ -57,23 +57,17 @@ function GeradorOrcamentoConteudo() {
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
 
-  // Estado Individual
+  // Individual
   const [adultos, setAdultos] = useState(searchParams.get("adultos") || "2");
   const [criancas, setCriancas] = useState(searchParams.get("criancas") || "0");
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
-  // Estado Grupos (Múltiplos Apartamentos)
+  // Grupos (Inicializa com campos limpos)
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
       id: 1,
-      titulo: "02 adultos + 01 criança 13 anos",
-      acomodacao: "",
-      valores: {},
-    },
-    {
-      id: 2,
-      titulo: "02 adultos",
+      titulo: "",
       acomodacao: "",
       valores: {},
     },
@@ -173,14 +167,37 @@ function GeradorOrcamentoConteudo() {
     setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
   };
 
-  // Funções de manipulação do grupo
+  // Botão Limpar Formulário Completo
+  const limparFormulario = () => {
+    if (!confirm("Deseja realmente limpar todos os dados preenchidos?")) return;
+    setClienteNome("");
+    setClienteWhatsapp("");
+    setCheckin(hojeStr);
+    setCheckout(somarDias(hojeStr, 1));
+    setAdultos("2");
+    setCriancas("0");
+    setIdadesCriancas("");
+    setRegimesValores({});
+    setApartamentosGrupo([
+      {
+        id: Date.now(),
+        titulo: "",
+        acomodacao: "",
+        valores: {},
+      },
+    ]);
+    setLinkGerado("");
+    setIdOrcamentoAtual("");
+  };
+
+  // Adicionar novo apartamento 100% limpo
   const adicionarApartamentoGrupo = () => {
     setApartamentosGrupo((prev) => [
       ...prev,
       {
         id: Date.now(),
-        titulo: "02 adultos",
-        acomodacao: aptoSelecionado || "",
+        titulo: "",
+        acomodacao: "",
         valores: {},
       },
     ]);
@@ -221,8 +238,12 @@ function GeradorOrcamentoConteudo() {
     if (indexAtual === 0) return;
     setApartamentosGrupo((prev) => {
       const novos = [...prev];
-      const valoresAnterior = { ...(novos[indexAtual - 1].valores || {}) };
-      novos[indexAtual] = { ...novos[indexAtual], valores: valoresAnterior };
+      const aptoAnterior = novos[indexAtual - 1];
+      novos[indexAtual] = { 
+        ...novos[indexAtual], 
+        acomodacao: aptoAnterior.acomodacao || "",
+        valores: { ...(aptoAnterior.valores || {}) } 
+      };
       return novos;
     });
   };
@@ -236,7 +257,7 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Gerador de Texto para WhatsApp (Alterna entre Individual e Grupos)
+  // Gerador de Texto para WhatsApp
   const gerarTextoZap = (urlVitrine, idDoc) => {
     if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
 
@@ -280,7 +301,6 @@ function GeradorOrcamentoConteudo() {
         texto += `*${reg.label}:*\nR$ ${regimesValores[reg.id]}\n\n`;
       });
     } else {
-      // Aba Grupos
       apartamentosGrupo.forEach((ap, idx) => {
         texto += `*${ap.titulo || `Apto ${idx + 1}`}*\n`;
         if (ap.acomodacao) {
@@ -343,7 +363,7 @@ function GeradorOrcamentoConteudo() {
 
       const dadosOrcamento = {
         agenciaId: agencia?.id || "avulso",
-        tipoOrcamento: abaAtiva, // 'individual' ou 'grupos'
+        tipoOrcamento: abaAtiva,
         clienteNome: clienteNome.trim() || null,
         clienteWhatsapp: clienteWhatsapp.replace(/\D/g, "") || null,
         hotel: {
@@ -490,12 +510,24 @@ function GeradorOrcamentoConteudo() {
             </button>
           </div>
 
-          {/* ================= QUADRO: DADOS DO CLIENTE (OPCIONAL) ================= */}
+          {/* ================= QUADRO: DADOS DO CLIENTE COM BOTÃO LIMPAR ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <User className="w-4 h-4 text-brand-700" />
-              Dados do Cliente <span className="text-[10px] text-slate-400 font-normal lowercase">(opcional)</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <User className="w-4 h-4 text-brand-700" />
+                Dados do Cliente <span className="text-[10px] text-slate-400 font-normal lowercase">(opcional)</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={limparFormulario}
+                className="text-xs text-slate-500 hover:text-red-600 flex items-center gap-1 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 border border-slate-200 hover:border-red-200 transition"
+                title="Limpar todos os campos desta cotação"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Limpar Dados</span>
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -690,7 +722,7 @@ function GeradorOrcamentoConteudo() {
             </>
           )}
 
-          {/* ================= CONTEÚDO DA ABA GRUPOS (MÚLTIPLOS APTOS) ================= */}
+          {/* ================= CONTEÚDO DA ABA GRUPOS ================= */}
           {abaAtiva === "grupos" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -720,10 +752,10 @@ function GeradorOrcamentoConteudo() {
                           type="button"
                           onClick={() => duplicarValoresAptoAnterior(index)}
                           className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
-                          title="Copiar valores do apartamento anterior"
+                          title="Copiar configuração do apartamento anterior"
                         >
                           <CopyPlus className="w-3 h-3" />
-                          Repetir valores do Apto #{index}
+                          Repetir Apto #{index}
                         </button>
                       )}
                       <button
@@ -737,34 +769,57 @@ function GeradorOrcamentoConteudo() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
-                        Descrição dos Hóspedes
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ex: 02 adultos + 01 criança 13"
-                        value={apto.titulo}
-                        onChange={(e) => atualizarApartamentoGrupo(index, "titulo", e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
-                        Acomodação (Opcional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Flat Luxo / Quarto Família"
-                        value={apto.acomodacao}
-                        onChange={(e) => atualizarApartamentoGrupo(index, "acomodacao", e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                      Descrição dos Hóspedes
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 02 adultos + 01 criança 13 anos"
+                      value={apto.titulo}
+                      onChange={(e) => atualizarApartamentoGrupo(index, "titulo", e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
+                    />
                   </div>
 
+                  {/* SELEÇÃO POR BOTÕES DO TIPO DE APARTAMENTO PARA ESTE QUARTO DO GRUPO */}
+                  {hotelSelecionado?.tiposApto?.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
+                        <BedDouble className="w-3 h-3 text-brand-700" />
+                        Tipo de Apartamento deste Quarto:
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => atualizarApartamentoGrupo(index, "acomodacao", "")}
+                          className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                            !apto.acomodacao
+                              ? "bg-brand-900 text-white border-brand-900 font-bold"
+                              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          Geral (Padrão)
+                        </button>
+                        {hotelSelecionado.tiposApto.map((ap, apIdx) => (
+                          <button
+                            key={apIdx}
+                            type="button"
+                            onClick={() => atualizarApartamentoGrupo(index, "acomodacao", ap.nome)}
+                            className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                              apto.acomodacao === ap.nome
+                                ? "bg-brand-900 text-white border-brand-900 font-bold"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {ap.nome}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* REGIMES E VALORES DO APARTAMENTO */}
                   <div className="pt-2 border-t border-slate-100 space-y-2">
                     <span className="text-[11px] font-bold uppercase text-slate-500 block">
                       Valores para este Apto (R$):
