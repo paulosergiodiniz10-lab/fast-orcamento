@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Building2, Lock, User, Loader2, AlertCircle } from "lucide-react";
+import { Building2, Lock, User, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { db } from "../../lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
 export default function LoginPage() {
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -98,13 +99,25 @@ export default function LoginPage() {
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
-                type="password"
+                type={mostrarSenha ? "text" : "password"}
                 required
                 placeholder="••••••••"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2.5 pl-9 pr-10 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
               />
+              <button
+                type="button"
+                onClick={() => setMostrarSenha((prev) => !prev)}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none p-0.5 rounded transition"
+                title={mostrarSenha ? "Ocultar senha" : "Ver senha"}
+              >
+                {mostrarSenha ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
             </div>
           </div>
 
