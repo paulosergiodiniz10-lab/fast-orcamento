@@ -490,6 +490,8 @@ function GeradorOrcamentoConteudo() {
           tiposApto: hotelSelecionado.tiposApto || [],
           tituloFotosParque: hotelSelecionado.tituloFotosParque || "Fotos dos Parques Aquáticos",
           fotosParque: hotelSelecionado.fotosParque || [],
+          tituloVideoParque: hotelSelecionado.tituloVideoParque || "Vídeo dos Parques Aquáticos",
+          videoParqueUrl: hotelSelecionado.videoParqueUrl || "",
         },
         acomodacaoEscolhida: aptoSelecionado || null,
         agencia: {
@@ -945,7 +947,7 @@ function GeradorOrcamentoConteudo() {
                         {numCrApto > 0 && (
                           <div>
                             <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 mb-0.5">
-                              <Baby className="w-3 h-3 text-brand-700" />
+                              <Baby className="w-3.5 h-3.5 text-brand-700" />
                               Idades / Detalhes das Crianças
                             </label>
                             <input
