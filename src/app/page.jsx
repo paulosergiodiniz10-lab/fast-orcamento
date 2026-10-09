@@ -63,9 +63,13 @@ function GeradorOrcamentoConteudo() {
   const [hotelSelecionado, setHotelSelecionado] = useState(null);
   const [aptoSelecionado, setAptoSelecionado] = useState("");
 
-  // Dados do Cliente
-  const [clienteNome, setClienteNome] = useState(searchParams.get("clienteNome") || "");
-  const [clienteWhatsapp, setClienteWhatsapp] = useState(searchParams.get("clienteWhatsapp") || "");
+  // Dados do Cliente (sempre em MAIÚSCULO e telefone somente números)
+  const [clienteNome, setClienteNome] = useState(
+    (searchParams.get("clienteNome") || "").toUpperCase()
+  );
+  const [clienteWhatsapp, setClienteWhatsapp] = useState(
+    (searchParams.get("clienteWhatsapp") || "").replace(/\D/g, "")
+  );
 
   // Datas
   const [checkin, setCheckin] = useState(hojeStr);
@@ -153,7 +157,9 @@ function GeradorOrcamentoConteudo() {
         setHoteis(lista);
         const hotelNomeUrl = searchParams.get("hotelNome");
         const hotelEncontrado = hotelNomeUrl ? lista.find((h) => h.nome === hotelNomeUrl) : null;
-        selecionarHotel(hotelEncontrado || lista[0]);
+        if (hotelEncontrado) {
+          selecionarHotel(hotelEncontrado);
+        }
       }
     } catch (err) {
       console.error("Erro ao carregar hotéis:", err);
@@ -163,6 +169,14 @@ function GeradorOrcamentoConteudo() {
   const agencyIdSafe = (id) => id || "";
 
   const selecionarHotel = (hotel) => {
+    if (!hotel) {
+      setHotelSelecionado(null);
+      setParquesMarcados([]);
+      setAptoSelecionado("");
+      setRegimesValores({});
+      return;
+    }
+
     setHotelSelecionado(hotel);
     setParquesMarcados(hotel.parquesDisponiveis || []);
     setAptoSelecionado(hotel.tiposApto?.[0]?.nome || "");
@@ -176,7 +190,12 @@ function GeradorOrcamentoConteudo() {
   };
 
   const handleHotelChange = (e) => {
-    const hotel = hoteis.find((h) => h.id === e.target.value);
+    const idEscolhido = e.target.value;
+    if (!idEscolhido) {
+      selecionarHotel(null);
+      return;
+    }
+    const hotel = hoteis.find((h) => h.id === idEscolhido);
     if (hotel) {
       selecionarHotel(hotel);
     }
@@ -221,6 +240,8 @@ function GeradorOrcamentoConteudo() {
   const executarLimpeza = () => {
     setClienteNome("");
     setClienteWhatsapp("");
+    setHotelSelecionado(null);
+    setAptoSelecionado("");
     setCheckin(hojeStr);
     setCheckout(somarDias(hojeStr, 1));
     setAdultos("2");
@@ -337,12 +358,14 @@ function GeradorOrcamentoConteudo() {
   const numCriancas = parseInt(criancas, 10) || 0;
 
   const gerarTextoZap = (urlVitrine, idDoc) => {
-    if (!hotelSelecionado) return "Selecione uma hospedagem para gerar a prévia.";
+    let texto = `*Fast Orçamento & Reservas*\nwww.orcamentofast.com.br\n\n`;
 
-    let texto = "";
+    if (!hotelSelecionado) {
+      return texto + "👉 Selecione uma hospedagem para gerar a prévia do orçamento.";
+    }
 
     if (clienteNome.trim()) {
-      texto += `Olá, ${clienteNome.trim()}! Segue seu orçamento:\n\n`;
+      texto += `Olá, *${clienteNome.trim().toUpperCase()}*! Segue seu orçamento:\n\n`;
     }
 
     texto += `*${hotelSelecionado.nome.toUpperCase()}*\n`;
@@ -429,7 +452,7 @@ function GeradorOrcamentoConteudo() {
 
   const salvarEGerarLink = async () => {
     if (!hotelSelecionado) {
-      abrirAlerta("Hospedagem Necessária", "Por favor, selecione uma hospedagem primeiro.");
+      abrirAlerta("Hospedagem Necessária", "Por favor, selecione uma hospedagem na lista antes de gerar.");
       return;
     }
 
@@ -452,7 +475,7 @@ function GeradorOrcamentoConteudo() {
       const dadosOrcamento = {
         agenciaId: agencia?.id || "avulso",
         tipoOrcamento: abaAtiva,
-        clienteNome: clienteNome.trim() || null,
+        clienteNome: clienteNome.trim().toUpperCase() || null,
         clienteWhatsapp: clienteWhatsapp.replace(/\D/g, "") || null,
         hotel: {
           nome: hotelSelecionado.nome,
@@ -495,7 +518,6 @@ function GeradorOrcamentoConteudo() {
 
       const docRef = await addDoc(collection(db, "orcamentos"), dadosOrcamento);
       
-      // Monta o link amigável: nome-do-hotel-codigoId
       const slugHotel = gerarSlug(hotelSelecionado.nome);
       const codigoCurto = docRef.id.slice(0, 6);
       const urlCompleta = `${window.location.origin}/o/${slugHotel}-${codigoCurto}`;
@@ -576,7 +598,7 @@ function GeradorOrcamentoConteudo() {
       <main className="max-w-5xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
         <div className="space-y-4">
           
-          {/* ================= SELETOR DE ABAS: INDIVIDUAL VS GRUPOS ================= */}
+          {/* ================= SELETOR DE ABAS ================= */}
           <div className="bg-slate-200/80 p-1 rounded-xl flex items-center gap-1 border border-slate-300 shadow-inner">
             <button
               type="button"
@@ -605,7 +627,7 @@ function GeradorOrcamentoConteudo() {
             </button>
           </div>
 
-          {/* ================= QUADRO: DADOS DO CLIENTE COM BOTÃO LIMPAR ================= */}
+          {/* ================= QUADRO: DADOS DO CLIENTE ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -631,10 +653,10 @@ function GeradorOrcamentoConteudo() {
                   <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
                   <input
                     type="text"
-                    placeholder="Ex: Paulo Sérgio"
+                    placeholder="EX: PAULO SÉRGIO"
                     value={clienteNome}
-                    onChange={(e) => setClienteNome(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                    onChange={(e) => setClienteNome(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium uppercase"
                   />
                 </div>
               </div>
@@ -645,9 +667,10 @@ function GeradorOrcamentoConteudo() {
                   <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
                   <input
                     type="text"
-                    placeholder="Ex: 64 99999-9999"
+                    inputMode="numeric"
+                    placeholder="Ex: 64981005505"
                     value={clienteWhatsapp}
-                    onChange={(e) => setClienteWhatsapp(e.target.value)}
+                    onChange={(e) => setClienteWhatsapp(e.target.value.replace(/\D/g, ""))}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
                   />
                 </div>
@@ -655,7 +678,7 @@ function GeradorOrcamentoConteudo() {
             </div>
           </div>
 
-          {/* ================= ESCOLHA SUA HOSPEDAGEM ================= */}
+          {/* ================= ESCOLHA SUA HOSPEDAGEM (COM OPÇÃO INICIAL SELECIONE) ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -678,6 +701,7 @@ function GeradorOrcamentoConteudo() {
                 onChange={handleHotelChange}
                 className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
               >
+                <option value="">-- Selecione uma hospedagem --</option>
                 {hoteis.map((h) => (
                   <option key={h.id} value={h.id}>
                     {h.nome}
@@ -724,7 +748,7 @@ function GeradorOrcamentoConteudo() {
             )}
           </div>
 
-          {/* ================= DATAS (COMUNS A INDIVIDUAL E GRUPOS) ================= */}
+          {/* ================= DATAS ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -753,7 +777,6 @@ function GeradorOrcamentoConteudo() {
           {/* ================= CONTEÚDO DA ABA INDIVIDUAL ================= */}
           {abaAtiva === "individual" && (
             <>
-              {/* HÓSPEDES INDIVIDUAL */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -795,7 +818,6 @@ function GeradorOrcamentoConteudo() {
                 )}
               </div>
 
-              {/* REGIMES E VALORES INDIVIDUAL */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
                   Regimes de Pensão e Valores (R$)
@@ -835,7 +857,6 @@ function GeradorOrcamentoConteudo() {
                 </button>
               </div>
 
-              {/* Container com scrollbar reforçada para rolagem ágil em desktop e celular */}
               <div 
                 className="max-h-[620px] overflow-y-auto pr-2 space-y-4 rounded-xl border border-slate-200 p-2 bg-slate-100/50 shadow-inner"
                 style={{
@@ -893,7 +914,6 @@ function GeradorOrcamentoConteudo() {
                         </div>
                       </div>
 
-                      {/* Hóspedes Rápidos: Adultos + Crianças + Idades */}
                       <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -939,11 +959,10 @@ function GeradorOrcamentoConteudo() {
                         )}
                       </div>
 
-                      {/* Seleção por Botões do Tipo de Apartamento */}
                       {hotelSelecionado?.tiposApto?.length > 0 && (
                         <div className="pt-2 border-t border-slate-100">
                           <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
-                            <BedDouble className="w-3 h-3 text-brand-700" />
+                            <BedDouble className="w-3.5 h-3.5 text-brand-700" />
                             Tipo de Apartamento deste Quarto:
                           </label>
                           <div className="flex flex-wrap gap-1.5">
@@ -976,14 +995,13 @@ function GeradorOrcamentoConteudo() {
                         </div>
                       )}
 
-                      {/* Regimes e Valores do Apartamento */}
                       <div className="pt-2 border-t border-slate-100 space-y-2">
                         <span className="text-[11px] font-bold uppercase text-slate-500 block">
                           Valores para este Apto (R$):
                         </span>
                         {REGIMES_OPCOES.map((reg) => (
                           <div key={reg.id} className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
+                            <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
                             <input
                               type="text"
                               inputMode="numeric"
@@ -1031,7 +1049,9 @@ function GeradorOrcamentoConteudo() {
                 })}
               </div>
             ) : (
-              <p className="text-xs text-slate-400 italic">Nenhum parque ou benefício cadastrado para esta hospedagem.</p>
+              <p className="text-xs text-slate-400 italic">
+                {hotelSelecionado ? "Nenhum parque ou benefício cadastrado para esta hospedagem." : "Selecione uma hospedagem acima para carregar as opções de parques."}
+              </p>
             )}
           </div>
 
@@ -1106,7 +1126,7 @@ function GeradorOrcamentoConteudo() {
         </div>
       </main>
 
-      {/* ================= MODAL ESTILIZADO DE CONFIRMAÇÃO / ALERTA ================= */}
+      {/* ================= MODAL DE ALERTA E CONFIRMAÇÃO ================= */}
       {modalConfig.aberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
