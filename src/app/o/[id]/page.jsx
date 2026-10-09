@@ -274,11 +274,27 @@ export default function VitrineOrcamento() {
                 <h2 className="text-xl md:text-2xl font-black leading-tight drop-shadow-sm">
                   {hotel?.nome}
                 </h2>
+                
+                {/* LOCALIZAÇÃO: BOTÃO QUANDO FOR LINK OU TEXTO QUANDO FOR ENDEREÇO */}
                 {hotel?.localizacao && (
-                  <p className="text-xs text-sky-100 flex items-center gap-1.5 mt-2 font-medium">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 text-sky-300" />
-                    {hotel.localizacao}
-                  </p>
+                  <div className="mt-2.5">
+                    {hotel.localizacao.startsWith("http://") || hotel.localizacao.startsWith("https://") ? (
+                      <a
+                        href={hotel.localizacao}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 active:scale-95 text-white border border-white/30 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-sm transition shadow-sm"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+                        <span>Ver localização no Google Maps</span>
+                      </a>
+                    ) : (
+                      <p className="text-xs text-sky-100 flex items-center gap-1.5 font-medium">
+                        <MapPin className="w-3.5 h-3.5 shrink-0 text-sky-300" />
+                        {hotel.localizacao}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
