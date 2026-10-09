@@ -576,7 +576,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. FOTOS DOS PARQUES AQUÁTICOS (ANTES DO VÍDEO) ================= */}
+        {/* ================= 5. FOTOS DOS PARQUES AQUÁTICOS (DINÂMICO E CONDICIONAL) ================= */}
         {fotosParque.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <div className="flex items-center gap-2">
@@ -635,20 +635,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. OBSERVAÇÕES GERAIS E POLÍTICAS ================= */}
-        {hotel?.observacoes && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Observações & Políticas
-            </h3>
-            <div
-              className="text-xs md:text-sm leading-relaxed space-y-2 text-slate-900 [&_*]:!text-slate-900 [&_strong]:!font-bold"
-              dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
-            />
-          </div>
-        )}
-
-        {/* ================= 7. VÍDEO DO HOTEL (POR ÚLTIMO) ================= */}
+        {/* ================= 6. VÍDEO DO HOTEL (ADAPTATIVO) ================= */}
         {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -679,6 +666,19 @@ export default function VitrineOrcamento() {
                 />
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================= 7. OBSERVAÇÕES GERAIS E POLÍTICAS (ABAIXO DO VÍDEO) ================= */}
+        {hotel?.observacoes && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Observações & Políticas
+            </h3>
+            <div
+              className="text-xs md:text-sm leading-relaxed space-y-2 text-slate-900 [&_*]:!text-slate-900 [&_strong]:!font-bold"
+              dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
+            />
           </div>
         )}
 
