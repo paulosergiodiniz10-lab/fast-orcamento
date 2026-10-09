@@ -8,7 +8,7 @@ import {
   Clock, AlertTriangle, CreditCard, ChevronLeft, ChevronRight, Waves 
 } from "lucide-react";
 import { db } from "../../../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 // Converte links normais, Shorts ou encurtados do YouTube e identifica orientação
 const obterDadosVideoYouTube = (url) => {
@@ -59,7 +59,29 @@ export default function VitrineOrcamento() {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          setOrcamento({ id: docSnap.id, ...docSnap.data() });
+          const dados = { id: docSnap.id, ...docSnap.data() };
+
+          // Fallback inteligente: se o orçamento salvo não tiver fotosParque, busca no cadastro atual do hotel
+          if ((!dados.hotel?.fotosParque || dados.hotel.fotosParque.length === 0) && dados.hotel?.nome) {
+            try {
+              const qHotel = query(
+                collection(db, "hoteis"),
+                where("nome", "==", dados.hotel.nome)
+              );
+              const snapH = await getDocs(qHotel);
+              if (!snapH.empty) {
+                const dadosHotelAtual = snapH.docs[0].data();
+                if (dadosHotelAtual.fotosParque && dadosHotelAtual.fotosParque.length > 0) {
+                  dados.hotel.fotosParque = dadosHotelAtual.fotosParque;
+                  dados.hotel.tituloFotosParque = dadosHotelAtual.tituloFotosParque || "Fotos dos Parques Aquáticos";
+                }
+              }
+            } catch (errHotel) {
+              console.warn("Aviso ao buscar dados extras do hotel:", errHotel);
+            }
+          }
+
+          setOrcamento(dados);
         } else {
           setErro(true);
         }
@@ -554,7 +576,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. NOVO: FOTOS DOS PARQUES AQUÁTICOS (DINÂMICO E CONDICIONAL) ================= */}
+        {/* ================= 5. FOTOS DOS PARQUES AQUÁTICOS (ANTES DO VÍDEO) ================= */}
         {fotosParque.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <div className="flex items-center gap-2">
@@ -613,7 +635,20 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. VÍDEO DO HOTEL (ADAPTATIVO) ================= */}
+        {/* ================= 6. OBSERVAÇÕES GERAIS E POLÍTICAS ================= */}
+        {hotel?.observacoes && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Observações & Políticas
+            </h3>
+            <div
+              className="text-xs md:text-sm leading-relaxed space-y-2 text-slate-900 [&_*]:!text-slate-900 [&_strong]:!font-bold"
+              dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
+            />
+          </div>
+        )}
+
+        {/* ================= 7. VÍDEO DO HOTEL (POR ÚLTIMO) ================= */}
         {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -644,19 +679,6 @@ export default function VitrineOrcamento() {
                 />
               </div>
             )}
-          </div>
-        )}
-
-        {/* ================= 7. OBSERVAÇÕES GERAIS E POLÍTICAS ================= */}
-        {hotel?.observacoes && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Observações & Políticas
-            </h3>
-            <div
-              className="text-xs md:text-sm leading-relaxed space-y-2 text-slate-900 [&_*]:!text-slate-900 [&_strong]:!font-bold"
-              dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
-            />
           </div>
         )}
 
