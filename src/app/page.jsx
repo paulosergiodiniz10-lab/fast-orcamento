@@ -63,11 +63,13 @@ function GeradorOrcamentoConteudo() {
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
-  // Grupos
+  // Grupos (com campos ágeis de hóspedes)
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
       id: 1,
-      titulo: "",
+      adultos: "2",
+      criancas: "0",
+      idadesCriancas: "",
       acomodacao: "",
       valores: {},
     },
@@ -85,7 +87,7 @@ function GeradorOrcamentoConteudo() {
   // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
-    tipo: "confirm", // 'confirm' ou 'alert'
+    tipo: "confirm",
     titulo: "",
     mensagem: "",
     onConfirm: null,
@@ -202,7 +204,6 @@ function GeradorOrcamentoConteudo() {
     setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
   };
 
-  // Botão Limpar com Modal Personalizado
   const executarLimpeza = () => {
     setClienteNome("");
     setClienteWhatsapp("");
@@ -215,7 +216,9 @@ function GeradorOrcamentoConteudo() {
     setApartamentosGrupo([
       {
         id: Date.now(),
-        titulo: "",
+        adultos: "2",
+        criancas: "0",
+        idadesCriancas: "",
         acomodacao: "",
         valores: {},
       },
@@ -237,7 +240,9 @@ function GeradorOrcamentoConteudo() {
       ...prev,
       {
         id: Date.now(),
-        titulo: "",
+        adultos: "2",
+        criancas: "0",
+        idadesCriancas: "",
         acomodacao: "",
         valores: {},
       },
@@ -282,11 +287,30 @@ function GeradorOrcamentoConteudo() {
       const aptoAnterior = novos[indexAtual - 1];
       novos[indexAtual] = { 
         ...novos[indexAtual], 
+        adultos: aptoAnterior.adultos || "2",
+        criancas: aptoAnterior.criancas || "0",
+        idadesCriancas: aptoAnterior.idadesCriancas || "",
         acomodacao: aptoAnterior.acomodacao || "",
         valores: { ...(aptoAnterior.valores || {}) } 
       };
       return novos;
     });
+  };
+
+  const formatarDescricaoHospedes = (ad, cr, idades) => {
+    const qtdAd = parseInt(ad, 10) || 0;
+    const qtdCr = parseInt(cr, 10) || 0;
+    const adStr = qtdAd < 10 ? `0${qtdAd}` : `${qtdAd}`;
+    let texto = `${adStr} adulto${qtdAd > 1 ? "s" : ""}`;
+
+    if (qtdCr > 0) {
+      const crStr = qtdCr < 10 ? `0${qtdCr}` : `${qtdCr}`;
+      texto += ` + ${crStr} criança${qtdCr > 1 ? "s" : ""}`;
+      if (idades && idades.trim()) {
+        texto += ` (${idades.trim()})`;
+      }
+    }
+    return texto;
   };
 
   const formatarDatas = () => {
@@ -341,8 +365,9 @@ function GeradorOrcamentoConteudo() {
         texto += `*${reg.label}:*\nR$ ${regimesValores[reg.id]}\n\n`;
       });
     } else {
-      apartamentosGrupo.forEach((ap, idx) => {
-        texto += `*${ap.titulo || `Apto ${idx + 1}`}*\n`;
+      apartamentosGrupo.forEach((ap) => {
+        const descHosp = formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas);
+        texto += `*${descHosp}*\n`;
         if (ap.acomodacao) {
           texto += `Acomodação: ${ap.acomodacao}\n`;
         }
@@ -401,6 +426,11 @@ function GeradorOrcamentoConteudo() {
         }
       }
 
+      const apartamentosTratados = apartamentosGrupo.map((ap) => ({
+        ...ap,
+        titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
+      }));
+
       const dadosOrcamento = {
         agenciaId: agencia?.id || "avulso",
         tipoOrcamento: abaAtiva,
@@ -437,7 +467,7 @@ function GeradorOrcamentoConteudo() {
           nome: r.label,
           valor: regimesValores[r.id],
         })),
-        apartamentosGrupo: abaAtiva === "grupos" ? apartamentosGrupo : null,
+        apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
         formaPagamento,
         aptosRestantes,
         criadoEm: serverTimestamp(),
@@ -764,7 +794,7 @@ function GeradorOrcamentoConteudo() {
 
           {/* ================= CONTEÚDO DA ABA GRUPOS ================= */}
           {abaAtiva === "grupos" && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                   <BedDouble className="w-4 h-4 text-brand-700" />
@@ -780,104 +810,170 @@ function GeradorOrcamentoConteudo() {
                 </button>
               </div>
 
-              {apartamentosGrupo.map((apto, index) => (
-                <div key={apto.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between border-b pb-2">
-                    <span className="font-extrabold text-xs text-brand-900 uppercase">
-                      Apartamento #{index + 1}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {index > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => duplicarValoresAptoAnterior(index)}
-                          className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
-                          title="Copiar configuração do apartamento anterior"
-                        >
-                          <CopyPlus className="w-3 h-3" />
-                          Repetir Apto #{index}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removerApartamentoGrupo(apto.id)}
-                        className="text-slate-400 hover:text-red-600 p-1 rounded"
-                        title="Remover apartamento"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+              {/* Container com scrollbar reforçada para rolagem ágil em desktop e celular */}
+              <div 
+                className="max-h-[620px] overflow-y-auto pr-2 space-y-4 rounded-xl border border-slate-200 p-2 bg-slate-100/50 shadow-inner"
+                style={{
+                  scrollbarWidth: "auto",
+                  scrollbarColor: "#94a3b8 #f1f5f9",
+                }}
+              >
+                <style jsx>{`
+                  div::-webkit-scrollbar {
+                    width: 10px;
+                  }
+                  div::-webkit-scrollbar-track {
+                    background: #f1f5f9;
+                    border-radius: 8px;
+                  }
+                  div::-webkit-scrollbar-thumb {
+                    background: #94a3b8;
+                    border-radius: 8px;
+                    border: 2px solid #f1f5f9;
+                  }
+                  div::-webkit-scrollbar-thumb:hover {
+                    background: #64748b;
+                  }
+                `}</style>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      Descrição dos Hóspedes
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 02 adultos + 01 criança 13 anos"
-                      value={apto.titulo}
-                      onChange={(e) => atualizarApartamentoGrupo(index, "titulo", e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
-                    />
-                  </div>
+                {apartamentosGrupo.map((apto, index) => {
+                  const numCrApto = parseInt(apto.criancas, 10) || 0;
 
-                  {hotelSelecionado?.tiposApto?.length > 0 && (
-                    <div className="pt-2 border-t border-slate-100">
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
-                        <BedDouble className="w-3 h-3 text-brand-700" />
-                        Tipo de Apartamento deste Quarto:
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => atualizarApartamentoGrupo(index, "acomodacao", "")}
-                          className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
-                            !apto.acomodacao
-                              ? "bg-brand-900 text-white border-brand-900 font-bold"
-                              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                          }`}
-                        >
-                          Geral (Padrão)
-                        </button>
-                        {hotelSelecionado.tiposApto.map((ap, apIdx) => (
+                  return (
+                    <div key={apto.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <span className="font-extrabold text-xs text-brand-900 uppercase">
+                          Apartamento #{index + 1}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {index > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => duplicarValoresAptoAnterior(index)}
+                              className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
+                              title="Copiar configuração do apartamento anterior"
+                            >
+                              <CopyPlus className="w-3 h-3" />
+                              Repetir Apto #{index}
+                            </button>
+                          )}
                           <button
-                            key={apIdx}
                             type="button"
-                            onClick={() => atualizarApartamentoGrupo(index, "acomodacao", ap.nome)}
-                            className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
-                              apto.acomodacao === ap.nome
-                                ? "bg-brand-900 text-white border-brand-900 font-bold"
-                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                            }`}
+                            onClick={() => removerApartamentoGrupo(apto.id)}
+                            className="text-slate-400 hover:text-red-600 p-1 rounded"
+                            title="Remover apartamento"
                           >
-                            {ap.nome}
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                        </div>
+                      </div>
+
+                      {/* Hóspedes Rápidos: Adultos + Crianças + Idades */}
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
+                              Adultos
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={apto.adultos || "2"}
+                              onChange={(e) => atualizarApartamentoGrupo(index, "adultos", e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
+                              Crianças
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={apto.criancas || "0"}
+                              onChange={(e) => atualizarApartamentoGrupo(index, "criancas", e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
+                            />
+                          </div>
+                        </div>
+
+                        {numCrApto > 0 && (
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 mb-0.5">
+                              <Baby className="w-3 h-3 text-brand-700" />
+                              Idades / Detalhes das Crianças
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ex: 13 anos (ou '5 e 9 anos')"
+                              value={apto.idadesCriancas || ""}
+                              onChange={(e) => atualizarApartamentoGrupo(index, "idadesCriancas", e.target.value)}
+                              className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Seleção por Botões do Tipo de Apartamento */}
+                      {hotelSelecionado?.tiposApto?.length > 0 && (
+                        <div className="pt-2 border-t border-slate-100">
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
+                            <BedDouble className="w-3 h-3 text-brand-700" />
+                            Tipo de Apartamento deste Quarto:
+                          </label>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => atualizarApartamentoGrupo(index, "acomodacao", "")}
+                              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                                !apto.acomodacao
+                                  ? "bg-brand-900 text-white border-brand-900 font-bold"
+                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              Geral (Padrão)
+                            </button>
+                            {hotelSelecionado.tiposApto.map((ap, apIdx) => (
+                              <button
+                                key={apIdx}
+                                type="button"
+                                onClick={() => atualizarApartamentoGrupo(index, "acomodacao", ap.nome)}
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                                  apto.acomodacao === ap.nome
+                                    ? "bg-brand-900 text-white border-brand-900 font-bold"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                {ap.nome}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Regimes e Valores do Apartamento */}
+                      <div className="pt-2 border-t border-slate-100 space-y-2">
+                        <span className="text-[11px] font-bold uppercase text-slate-500 block">
+                          Valores para este Apto (R$):
+                        </span>
+                        {REGIMES_OPCOES.map((reg) => (
+                          <div key={reg.id} className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0,00"
+                              value={apto.valores[reg.id] || ""}
+                              onChange={(e) => atualizarValorGrupo(index, reg.id, e.target.value)}
+                              className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs text-slate-900 font-semibold focus:ring-1 focus:ring-brand-900 outline-none"
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
-                  )}
-
-                  <div className="pt-2 border-t border-slate-100 space-y-2">
-                    <span className="text-[11px] font-bold uppercase text-slate-500 block">
-                      Valores para este Apto (R$):
-                    </span>
-                    {REGIMES_OPCOES.map((reg) => (
-                      <div key={reg.id} className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="0,00"
-                          value={apto.valores[reg.id] || ""}
-                          onChange={(e) => atualizarValorGrupo(index, reg.id, e.target.value)}
-                          className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs text-slate-900 font-semibold focus:ring-1 focus:ring-brand-900 outline-none"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           )}
 
