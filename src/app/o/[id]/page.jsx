@@ -82,11 +82,12 @@ export default function VitrineOrcamento() {
         }
 
         if (dadosEncontrados) {
-          // Fallback inteligente: se o orçamento salvo não tiver fotosParque, busca no cadastro atual do hotel
-          if (
-            (!dadosEncontrados.hotel?.fotosParque || dadosEncontrados.hotel.fotosParque.length === 0) &&
-            dadosEncontrados.hotel?.nome
-          ) {
+          // Fallback inteligente: se o orçamento salvo não tiver fotos/vídeos dos parques, busca no cadastro atual do hotel
+          const precisaBuscarHotel = 
+            (!dadosEncontrados.hotel?.fotosParque || dadosEncontrados.hotel.fotosParque.length === 0) ||
+            (!dadosEncontrados.hotel?.videoParqueUrl);
+
+          if (precisaBuscarHotel && dadosEncontrados.hotel?.nome) {
             try {
               const qHotel = query(
                 collection(db, "hoteis"),
@@ -99,6 +100,11 @@ export default function VitrineOrcamento() {
                   dadosEncontrados.hotel.fotosParque = dadosHotelAtual.fotosParque;
                   dadosEncontrados.hotel.tituloFotosParque =
                     dadosHotelAtual.tituloFotosParque || "Fotos dos Parques Aquáticos";
+                }
+                if (dadosHotelAtual.videoParqueUrl) {
+                  dadosEncontrados.hotel.videoParqueUrl = dadosHotelAtual.videoParqueUrl;
+                  dadosEncontrados.hotel.tituloVideoParque =
+                    dadosHotelAtual.tituloVideoParque || "Vídeo dos Parques Aquáticos";
                 }
               }
             } catch (errHotel) {
@@ -172,9 +178,15 @@ export default function VitrineOrcamento() {
   const fotosGerais = hotel?.fotos || [];
   const fotosParque = hotel?.fotosParque || [];
   const tituloParque = hotel?.tituloFotosParque || "Fotos dos Parques Aquáticos";
+  
+  // Vídeo principal do hotel
   const videoInfo = obterDadosVideoYouTube(hotel?.videoUrl);
 
-  // Mapeia todos os tipos de apartamentos ÚNICOS que foram cotados
+  // Vídeo dos Parques Aquáticos
+  const videoParqueInfo = obterDadosVideoYouTube(hotel?.videoParqueUrl);
+  const tituloVideoParque = hotel?.tituloVideoParque || "Vídeo dos Parques Aquáticos";
+
+  // Mapeia todos os tipos de apartamentos ÚNICOS cotados
   const tiposAptoCadastrados = hotel?.tiposApto || [];
   let nomesAptosCotados = [];
 
@@ -190,12 +202,11 @@ export default function VitrineOrcamento() {
     nomesAptosCotados = [acomodacaoEscolhida];
   }
 
-  // Lista com dados e fotos de cada categoria cotada (sem duplicidades)
   const categoriasAptoExibir = nomesAptosCotados
     .map((nomeApto) => tiposAptoCadastrados.find((t) => t.nome === nomeApto))
     .filter((obj) => Boolean(obj && obj.fotos && obj.fotos.length > 0));
 
-  // Navegação no slider geral do hotel
+  // Navegação no slider geral
   const proximaFotoGeral = () => {
     if (fotosGerais.length > 0) setFotoGeralIndex((prev) => (prev + 1) % fotosGerais.length);
   };
@@ -203,7 +214,7 @@ export default function VitrineOrcamento() {
     if (fotosGerais.length > 0) setFotoGeralIndex((prev) => (prev - 1 + fotosGerais.length) % fotosGerais.length);
   };
 
-  // Navegação no slider dos parques aquáticos
+  // Navegação no slider dos parques
   const proximaFotoParque = () => {
     if (fotosParque.length > 0) setFotoParqueIndex((prev) => (prev + 1) % fotosParque.length);
   };
@@ -211,7 +222,7 @@ export default function VitrineOrcamento() {
     if (fotosParque.length > 0) setFotoParqueIndex((prev) => (prev - 1 + fotosParque.length) % fotosParque.length);
   };
 
-  // Navegação para sliders de acomodações
+  // Navegação nos sliders de acomodações
   const mudarFotoApto = (nomeApto, novoIndex) => {
     setIndicesApto((prev) => ({ ...prev, [nomeApto]: novoIndex }));
   };
@@ -651,7 +662,41 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. VÍDEO DO HOTEL ================= */}
+        {/* ================= 6. VÍDEO DO PARQUE AQUÁTICO (LOGO ABAIXO DAS FOTOS DO PARQUE) ================= */}
+        {videoParqueInfo?.embedUrl && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Waves className="w-5 h-5 text-sky-600" />
+              {tituloVideoParque}
+            </h3>
+
+            {videoParqueInfo.isVertical ? (
+              <div className="flex justify-center py-2">
+                <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
+                  <iframe
+                    src={videoParqueInfo.embedUrl}
+                    title={tituloVideoParque}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
+                <iframe
+                  src={videoParqueInfo.embedUrl}
+                  title={tituloVideoParque}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= 7. VÍDEO PRINCIPAL DO HOTEL (ADAPTATIVO) ================= */}
         {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -685,7 +730,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 7. OBSERVAÇÕES & POLÍTICAS ================= */}
+        {/* ================= 8. OBSERVAÇÕES & POLÍTICAS ================= */}
         {hotel?.observacoes && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
