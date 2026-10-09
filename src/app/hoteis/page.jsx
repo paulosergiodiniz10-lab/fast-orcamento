@@ -173,9 +173,11 @@ export default function GestaoHoteis() {
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
 
-  // Novo 3º Bloco: Parques Aquáticos / Lazer Adicional
+  // Bloco: Parques Aquáticos / Lazer Adicional
   const [tituloFotosParque, setTituloFotosParque] = useState("Fotos dos Parques Aquáticos");
   const [fotosParque, setFotosParque] = useState([]);
+  const [tituloVideoParque, setTituloVideoParque] = useState("Vídeo dos Parques Aquáticos");
+  const [videoParqueUrl, setVideoParqueUrl] = useState("");
 
   // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
@@ -295,7 +297,6 @@ export default function GestaoHoteis() {
     setFotosGerais((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Upload das fotos do 3º Bloco (Parques Aquáticos)
   const handleUploadFotosParque = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -391,6 +392,8 @@ export default function GestaoHoteis() {
     setTiposApto([]);
     setTituloFotosParque("Fotos dos Parques Aquáticos");
     setFotosParque([]);
+    setTituloVideoParque("Vídeo dos Parques Aquáticos");
+    setVideoParqueUrl("");
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
@@ -415,6 +418,8 @@ export default function GestaoHoteis() {
     setTiposApto(hotel.tiposApto || []);
     setTituloFotosParque(hotel.tituloFotosParque || "Fotos dos Parques Aquáticos");
     setFotosParque(hotel.fotosParque || []);
+    setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
+    setVideoParqueUrl(hotel.videoParqueUrl || "");
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
@@ -457,6 +462,8 @@ export default function GestaoHoteis() {
         tiposApto: tiposApto.filter((a) => a.nome && a.nome.trim().length > 0),
         tituloFotosParque: tituloFotosParque.trim() || "Fotos dos Parques Aquáticos",
         fotosParque: fotosParque,
+        tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
+        videoParqueUrl: videoParqueUrl.trim(),
       };
 
       if (hotelEditandoId) {
@@ -610,7 +617,7 @@ export default function GestaoHoteis() {
                               {h.fotosParque.length} fotos do parque
                             </span>
                           )}
-                          {h.videoUrl && (
+                          {(h.videoParqueUrl || h.videoUrl) && (
                             <span className="bg-red-50 text-red-700 border border-red-200 text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
                               <Video className="w-3 h-3" /> Vídeo ativo
                             </span>
@@ -701,7 +708,7 @@ export default function GestaoHoteis() {
                           className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 shadow"
                           title="Remover logo"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
@@ -809,7 +816,7 @@ export default function GestaoHoteis() {
 
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Link de Vídeo (YouTube normal ou Shorts vertical) <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
+                  Link de Vídeo Principal do Hotel (YouTube normal ou Shorts vertical) <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
                 </label>
                 <div className="relative">
                   <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
@@ -987,7 +994,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 5. NOVO: PARQUES AQUÁTICOS / LAZER ADICIONAL (TÍTULO EDITÁVEL + FOTOS) */}
+            {/* 5. PARQUES AQUÁTICOS / LAZER ADICIONAL (TÍTULO EDITÁVEL + FOTOS + VÍDEO DO PARQUE) */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -996,7 +1003,7 @@ export default function GestaoHoteis() {
                     Parques Aquáticos / Lazer Adicional <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
                   </h3>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Fotos dos parques aquáticos inclusos no pacote. Se não houver fotos, o bloco não aparecerá na vitrine.
+                    Fotos e vídeo dos parques aquáticos inclusos no pacote. Se vazios, os blocos não aparecerão na vitrine.
                   </p>
                 </div>
                 
@@ -1013,7 +1020,7 @@ export default function GestaoHoteis() {
                 </label>
               </div>
 
-              {/* Título Editável do Bloco */}
+              {/* Título Editável do Bloco de Fotos */}
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                   Título da Seção de Parques (Aparecerá como cabeçalho do slide na vitrine)
@@ -1051,6 +1058,43 @@ export default function GestaoHoteis() {
                   ))}
                 </div>
               )}
+
+              {/* Novo: Bloco de Vídeo dos Parques Aquáticos */}
+              <div className="pt-4 border-t border-slate-200 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                      Título do Vídeo do Parque (Editável)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Conheça as atrações do Water Park"
+                      value={tituloVideoParque}
+                      onChange={(e) => setTituloVideoParque(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                      Link do Vídeo do Parque (YouTube normal ou Shorts vertical)
+                    </label>
+                    <div className="relative">
+                      <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                      <input
+                        type="text"
+                        placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
+                        value={videoParqueUrl}
+                        onChange={(e) => setVideoParqueUrl(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Se preenchido, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos na proposta.
+                </p>
+              </div>
             </div>
 
             {/* Ações Finais */}
