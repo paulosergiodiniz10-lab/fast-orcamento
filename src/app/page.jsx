@@ -451,6 +451,8 @@ function GeradorOrcamentoConteudo() {
           videoUrl: hotelSelecionado.videoUrl || "",
           fotos: hotelSelecionado.fotos || [],
           tiposApto: hotelSelecionado.tiposApto || [],
+          tituloFotosParque: hotelSelecionado.tituloFotosParque || "Fotos dos Parques Aquáticos",
+          fotosParque: hotelSelecionado.fotosParque || [],
         },
         acomodacaoEscolhida: aptoSelecionado || null,
         agencia: {
