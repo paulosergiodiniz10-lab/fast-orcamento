@@ -354,7 +354,9 @@ function GeradorOrcamentoConteudo() {
       }
       texto += `*${textoHospedes}*\n`;
       if (aptoSelecionado) {
-        texto += `Acomodação: ${aptoSelecionado}\n`;
+        texto += `Acomodação: ${aptoSelecionado}\n\n`;
+      } else {
+        texto += `\n`;
       }
 
       const regimesComValor = REGIMES_OPCOES.filter(
@@ -369,7 +371,9 @@ function GeradorOrcamentoConteudo() {
         const descHosp = formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas);
         texto += `*${descHosp}*\n`;
         if (ap.acomodacao) {
-          texto += `Acomodação: ${ap.acomodacao}\n`;
+          texto += `Acomodação: ${ap.acomodacao}\n\n`;
+        } else {
+          texto += `\n`;
         }
 
         const regimesComValor = REGIMES_OPCOES.filter(
