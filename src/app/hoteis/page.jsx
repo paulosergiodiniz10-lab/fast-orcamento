@@ -12,8 +12,8 @@ import {
   collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp 
 } from "firebase/firestore";
 
-const CLOUD_NAME = "s1yeyx4g";
-const UPLOAD_PRESET = "guia_temporada";
+const CLOUD_NAME = "qi6dleli";
+const UPLOAD_PRESET = "fast_orcamento";
 
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
   return new Promise((resolve) => {
