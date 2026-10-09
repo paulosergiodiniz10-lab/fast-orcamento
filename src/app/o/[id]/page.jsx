@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { 
   Building2, MapPin, Calendar, Users, CheckCircle2, 
   MessageCircle, Loader2, BedDouble, ShieldCheck, Video, 
-  Clock, AlertTriangle, CreditCard, ChevronLeft, ChevronRight 
+  Clock, AlertTriangle, CreditCard, ChevronLeft, ChevronRight, Waves 
 } from "lucide-react";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -46,6 +46,7 @@ export default function VitrineOrcamento() {
 
   // Sliders
   const [fotoGeralIndex, setFotoGeralIndex] = useState(0);
+  const [fotoParqueIndex, setFotoParqueIndex] = useState(0);
   const [indicesApto, setIndicesApto] = useState({});
 
   useEffect(() => {
@@ -122,6 +123,8 @@ export default function VitrineOrcamento() {
   const linkWhatsApp = `https://wa.me/${whatsappFormatado}?text=${mensagemReserva}`;
 
   const fotosGerais = hotel?.fotos || [];
+  const fotosParque = hotel?.fotosParque || [];
+  const tituloParque = hotel?.tituloFotosParque || "Fotos dos Parques Aquáticos";
   const videoInfo = obterDadosVideoYouTube(hotel?.videoUrl);
 
   // Mapeia todos os tipos de apartamentos ÚNICOS que foram cotados
@@ -151,6 +154,14 @@ export default function VitrineOrcamento() {
   };
   const fotoAnteriorGeral = () => {
     if (fotosGerais.length > 0) setFotoGeralIndex((prev) => (prev - 1 + fotosGerais.length) % fotosGerais.length);
+  };
+
+  // Navegação no slider dos parques aquáticos
+  const proximaFotoParque = () => {
+    if (fotosParque.length > 0) setFotoParqueIndex((prev) => (prev + 1) % fotosParque.length);
+  };
+  const fotoAnteriorParque = () => {
+    if (fotosParque.length > 0) setFotoParqueIndex((prev) => (prev - 1 + fotosParque.length) % fotosParque.length);
   };
 
   // Navegação para sliders de acomodações
@@ -490,7 +501,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 4. GALERIA GERAL DE FOTOS EM SLIDE ================= */}
+        {/* ================= 4. GALERIA GERAL DE FOTOS EM SLIDE (HOTEL & LAZER) ================= */}
         {fotosGerais.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
@@ -543,7 +554,66 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. VÍDEO DO HOTEL (ADAPTATIVO) ================= */}
+        {/* ================= 5. NOVO: FOTOS DOS PARQUES AQUÁTICOS (DINÂMICO E CONDICIONAL) ================= */}
+        {fotosParque.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Waves className="w-5 h-5 text-sky-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">{tituloParque}</h3>
+                <p className="text-[11px] text-slate-500">Atrações e lazer inclusos no seu pacote</p>
+              </div>
+            </div>
+
+            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
+              <img
+                src={fotosParque[fotoParqueIndex]}
+                alt={tituloParque}
+                className="w-full h-full object-cover transition duration-300"
+              />
+
+              {fotosParque.length > 1 && (
+                <>
+                  <button
+                    onClick={fotoAnteriorParque}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                    title="Foto anterior"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={proximaFotoParque}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                    title="Próxima foto"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                    {fotoParqueIndex + 1} / {fotosParque.length} fotos
+                  </div>
+                </>
+              )}
+            </div>
+
+            {fotosParque.length > 1 && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                {fotosParque.map((url, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setFotoParqueIndex(idx)}
+                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
+                      fotoParqueIndex === idx ? "border-sky-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= 6. VÍDEO DO HOTEL (ADAPTATIVO) ================= */}
         {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -577,7 +647,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. OBSERVAÇÕES GERAIS E POLÍTICAS ================= */}
+        {/* ================= 7. OBSERVAÇÕES GERAIS E POLÍTICAS ================= */}
         {hotel?.observacoes && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
