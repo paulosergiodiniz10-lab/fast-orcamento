@@ -38,7 +38,7 @@ const obterDadosVideoYouTube = (url) => {
 
 export default function VitrineOrcamento() {
   const params = useParams();
-  const id = params?.id;
+  const idParam = params?.id;
 
   const [orcamento, setOrcamento] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -50,30 +50,57 @@ export default function VitrineOrcamento() {
   const [indicesApto, setIndicesApto] = useState({});
 
   useEffect(() => {
-    if (!id) return;
+    if (!idParam) return;
 
     const carregarOrcamento = async () => {
       try {
         setCarregando(true);
-        const docRef = doc(db, "orcamentos", id);
-        const docSnap = await getDoc(docRef);
+        let dadosEncontrados = null;
 
-        if (docSnap.exists()) {
-          const dados = { id: docSnap.id, ...docSnap.data() };
+        // 1. Tenta buscar direto como ID puro (compatibilidade com links antigos)
+        try {
+          const docRef = doc(db, "orcamentos", idParam);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            dadosEncontrados = { id: docSnap.id, ...docSnap.data() };
+          }
+        } catch {
+          // Segue para a busca do link amigável
+        }
 
+        // 2. Se não achou pelo ID direto, trata como link limpo (ex: hotel-resort-do-lago-gZ4tYg)
+        if (!dadosEncontrados) {
+          // Extrai o código do final do slug após o último hífen
+          const partes = idParam.split("-");
+          const codigoFim = partes[partes.length - 1];
+
+          const snapTodos = await getDocs(collection(db, "orcamentos"));
+          snapTodos.forEach((d) => {
+            // Verifica se o ID do documento começa com o código do link
+            if (!dadosEncontrados && (d.id.startsWith(codigoFim) || d.id === idParam)) {
+              dadosEncontrados = { id: d.id, ...d.data() };
+            }
+          });
+        }
+
+        if (dadosEncontrados) {
           // Fallback inteligente: se o orçamento salvo não tiver fotosParque, busca no cadastro atual do hotel
-          if ((!dados.hotel?.fotosParque || dados.hotel.fotosParque.length === 0) && dados.hotel?.nome) {
+          if (
+            (!dadosEncontrados.hotel?.fotosParque || dadosEncontrados.hotel.fotosParque.length === 0) &&
+            dadosEncontrados.hotel?.nome
+          ) {
             try {
               const qHotel = query(
                 collection(db, "hoteis"),
-                where("nome", "==", dados.hotel.nome)
+                where("nome", "==", dadosEncontrados.hotel.nome)
               );
               const snapH = await getDocs(qHotel);
               if (!snapH.empty) {
                 const dadosHotelAtual = snapH.docs[0].data();
                 if (dadosHotelAtual.fotosParque && dadosHotelAtual.fotosParque.length > 0) {
-                  dados.hotel.fotosParque = dadosHotelAtual.fotosParque;
-                  dados.hotel.tituloFotosParque = dadosHotelAtual.tituloFotosParque || "Fotos dos Parques Aquáticos";
+                  dadosEncontrados.hotel.fotosParque = dadosHotelAtual.fotosParque;
+                  dadosEncontrados.hotel.tituloFotosParque =
+                    dadosHotelAtual.tituloFotosParque || "Fotos dos Parques Aquáticos";
                 }
               }
             } catch (errHotel) {
@@ -81,7 +108,7 @@ export default function VitrineOrcamento() {
             }
           }
 
-          setOrcamento(dados);
+          setOrcamento(dadosEncontrados);
         } else {
           setErro(true);
         }
@@ -94,7 +121,7 @@ export default function VitrineOrcamento() {
     };
 
     carregarOrcamento();
-  }, [id]);
+  }, [idParam]);
 
   if (carregando) {
     return (
@@ -441,269 +468,4 @@ export default function VitrineOrcamento() {
 
         {/* ================= 2. SOBRE O HOTEL (BLINDAGEM TIPOGRÁFICA) ================= */}
         {hotel?.descricao && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Sobre a Estrutura do Hotel
-            </h3>
-            <div
-              className="text-xs md:text-sm leading-relaxed space-y-2.5 font-normal break-words text-slate-900 [&_*]:!text-slate-900 [&_*]:!font-sans [&_strong]:!font-bold [&_h2]:!text-base [&_h2]:!font-bold [&_h2]:!text-slate-900 [&_h3]:!text-sm [&_h3]:!font-bold [&_h3]:!text-slate-900"
-              dangerouslySetInnerHTML={{ __html: hotel.descricao }}
-            />
-          </div>
-        )}
-
-        {/* ================= 3. FOTOS DE CADA ACOMODAÇÃO COTADA (SLIDERS INDEPENDENTES) ================= */}
-        {categoriasAptoExibir.length > 0 && (
-          <div className="space-y-4">
-            {categoriasAptoExibir.map((aptoCat) => {
-              const fotos = aptoCat.fotos || [];
-              const indexFotoAtual = indicesApto[aptoCat.nome] || 0;
-
-              return (
-                <div key={aptoCat.nome} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <BedDouble className="w-5 h-5 text-amber-600" />
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900">Fotos de: {aptoCat.nome}</h3>
-                      <p className="text-[11px] text-slate-500">Imagens da acomodação incluída na sua proposta</p>
-                    </div>
-                  </div>
-
-                  <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
-                    <img
-                      src={fotos[indexFotoAtual]}
-                      alt={`Foto de ${aptoCat.nome}`}
-                      className="w-full h-full object-cover transition duration-300"
-                    />
-
-                    {fotos.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => anteriorFotoApto(aptoCat.nome, fotos.length)}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                          title="Foto anterior"
-                        >
-                          <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => proximaFotoApto(aptoCat.nome, fotos.length)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                          title="Próxima foto"
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-                        <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                          {indexFotoAtual + 1} / {fotos.length} fotos
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {fotos.length > 1 && (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-                      {fotos.map((url, fIdx) => (
-                        <button
-                          key={fIdx}
-                          type="button"
-                          onClick={() => mudarFotoApto(aptoCat.nome, fIdx)}
-                          className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                            indexFotoAtual === fIdx ? "border-amber-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
-                          }`}
-                        >
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ================= 4. GALERIA GERAL DE FOTOS EM SLIDE (HOTEL & LAZER) ================= */}
-        {fotosGerais.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
-
-            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
-              <img
-                src={fotosGerais[fotoGeralIndex]}
-                alt="Foto do Hotel"
-                className="w-full h-full object-cover transition duration-300"
-              />
-
-              {fotosGerais.length > 1 && (
-                <>
-                  <button
-                    onClick={fotoAnteriorGeral}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Foto anterior"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={proximaFotoGeral}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Próxima foto"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                    {fotoGeralIndex + 1} / {fotosGerais.length} fotos
-                  </div>
-                </>
-              )}
-            </div>
-
-            {fotosGerais.length > 1 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-                {fotosGerais.map((url, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setFotoGeralIndex(idx)}
-                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                      fotoGeralIndex === idx ? "border-blue-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
-                    }`}
-                  >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= 5. FOTOS DOS PARQUES AQUÁTICOS (DINÂMICO E CONDICIONAL) ================= */}
-        {fotosParque.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Waves className="w-5 h-5 text-sky-600" />
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">{tituloParque}</h3>
-                <p className="text-[11px] text-slate-500">Atrações e lazer inclusos no seu pacote</p>
-              </div>
-            </div>
-
-            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
-              <img
-                src={fotosParque[fotoParqueIndex]}
-                alt={tituloParque}
-                className="w-full h-full object-cover transition duration-300"
-              />
-
-              {fotosParque.length > 1 && (
-                <>
-                  <button
-                    onClick={fotoAnteriorParque}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Foto anterior"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={proximaFotoParque}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Próxima foto"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                    {fotoParqueIndex + 1} / {fotosParque.length} fotos
-                  </div>
-                </>
-              )}
-            </div>
-
-            {fotosParque.length > 1 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-                {fotosParque.map((url, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setFotoParqueIndex(idx)}
-                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                      fotoParqueIndex === idx ? "border-sky-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
-                    }`}
-                  >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= 6. VÍDEO DO HOTEL (ADAPTATIVO) ================= */}
-        {videoInfo?.embedUrl && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Video className="w-5 h-5 text-red-600" />
-              Vídeo da Hospedagem
-            </h3>
-
-            {videoInfo.isVertical ? (
-              <div className="flex justify-center py-2">
-                <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
-                  <iframe
-                    src={videoInfo.embedUrl}
-                    title="Vídeo Vertical da Hospedagem"
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
-                <iframe
-                  src={videoInfo.embedUrl}
-                  title="Vídeo da Hospedagem"
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= 7. OBSERVAÇÕES GERAIS E POLÍTICAS (ABAIXO DO VÍDEO) ================= */}
-        {hotel?.observacoes && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Observações & Políticas
-            </h3>
-            <div
-              className="text-xs md:text-sm leading-relaxed space-y-2 text-slate-900 [&_*]:!text-slate-900 [&_strong]:!font-bold"
-              dangerouslySetInnerHTML={{ __html: hotel.observacoes }}
-            />
-          </div>
-        )}
-
-        {/* RODAPÉ */}
-        <footer className="text-center text-xs text-slate-400 pt-2 space-y-1">
-          <p className="font-semibold text-slate-600">{agencia?.nome || "Caldas Novas Viagens"}</p>
-          {agencia?.cadastur && <p>CADASTUR / CNPJ: {agencia.cadastur}</p>}
-          <p className="text-[11px] text-slate-400">Proposta gerada via Fast Orçamento</p>
-        </footer>
-      </main>
-
-      {/* BOTÃO FIXO INFERIOR */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg z-30">
-        <div className="max-w-3xl mx-auto">
-          <a
-            href={linkWhatsApp}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm shadow-md transition active:scale-[0.99]"
-          >
-            <MessageCircle className="w-5 h-5" />
-            <span>Quero Reservar no WhatsApp</span>
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
+          <div className="bg-white rounded-2xl shadow-
