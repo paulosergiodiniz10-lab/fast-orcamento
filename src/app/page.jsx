@@ -653,7 +653,7 @@ function GeradorOrcamentoConteudo() {
                   <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
                   <input
                     type="text"
-                    placeholder="EX: PAULO SÉRGIO"
+                    placeholder="EX: JOÃO SILVA"
                     value={clienteNome}
                     onChange={(e) => setClienteNome(e.target.value.toUpperCase())}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium uppercase"
@@ -668,7 +668,7 @@ function GeradorOrcamentoConteudo() {
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder="Ex: 64981005505"
+                    placeholder="Ex: 11999999999"
                     value={clienteWhatsapp}
                     onChange={(e) => setClienteWhatsapp(e.target.value.replace(/\D/g, ""))}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-8 pr-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
