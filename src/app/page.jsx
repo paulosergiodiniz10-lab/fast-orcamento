@@ -38,6 +38,20 @@ const somarDias = (dataStr, dias) => {
   return `${a}-${m}-${d}`;
 };
 
+// Transforma texto em formato limpo para link (ex: "HOTEL RESORT DO LAGO" -> "hotel-resort-do-lago")
+const gerarSlug = (texto) => {
+  if (!texto) return "hotel";
+  return texto
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+};
+
 function GeradorOrcamentoConteudo() {
   const searchParams = useSearchParams();
   const hojeStr = obterDataHojeLocal();
@@ -480,7 +494,12 @@ function GeradorOrcamentoConteudo() {
       };
 
       const docRef = await addDoc(collection(db, "orcamentos"), dadosOrcamento);
-      const urlCompleta = `${window.location.origin}/o/${docRef.id}`;
+      
+      // Monta o link amigável: nome-do-hotel-codigoId
+      const slugHotel = gerarSlug(hotelSelecionado.nome);
+      const codigoCurto = docRef.id.slice(0, 6);
+      const urlCompleta = `${window.location.origin}/o/${slugHotel}-${codigoCurto}`;
+
       setLinkGerado(urlCompleta);
       setIdOrcamentoAtual(docRef.id);
 
@@ -964,7 +983,7 @@ function GeradorOrcamentoConteudo() {
                         </span>
                         {REGIMES_OPCOES.map((reg) => (
                           <div key={reg.id} className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
+                            <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
                             <input
                               type="text"
                               inputMode="numeric"
