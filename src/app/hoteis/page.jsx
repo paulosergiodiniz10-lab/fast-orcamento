@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
-  HelpCircle, AlertCircle
+  HelpCircle, AlertCircle, Waves
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -155,6 +155,7 @@ export default function GestaoHoteis() {
   const [salvando, setSalvando] = useState(false);
   const [enviandoLogo, setEnviandoLogo] = useState(false);
   const [enviandoFotoGeral, setEnviandoFotoGeral] = useState(false);
+  const [enviandoFotoParque, setEnviandoFotoParque] = useState(false);
   const [enviandoFotoAptoIndex, setEnviandoFotoAptoIndex] = useState(null);
 
   const [modoVisualizacao, setModoVisualizacao] = useState("lista");
@@ -172,10 +173,14 @@ export default function GestaoHoteis() {
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
 
+  // Novo 3º Bloco: Parques Aquáticos / Lazer Adicional
+  const [tituloFotosParque, setTituloFotosParque] = useState("Fotos dos Parques Aquáticos");
+  const [fotosParque, setFotosParque] = useState([]);
+
   // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
-    tipo: "success", // 'success', 'confirm', 'error'
+    tipo: "success",
     titulo: "",
     mensagem: "",
     onConfirm: null,
@@ -290,6 +295,32 @@ export default function GestaoHoteis() {
     setFotosGerais((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Upload das fotos do 3º Bloco (Parques Aquáticos)
+  const handleUploadFotosParque = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setEnviandoFotoParque(true);
+    try {
+      const urls = [];
+      for (const file of files) {
+        const url = await uploadParaCloudinary(file);
+        urls.push(url);
+      }
+      setFotosParque((prev) => [...prev, ...urls]);
+    } catch (err) {
+      console.error("Erro no upload dos parques:", err);
+      abrirModal("error", "Falha no Upload", err.message || "Tente novamente.");
+    } finally {
+      setEnviandoFotoParque(false);
+      e.target.value = "";
+    }
+  };
+
+  const removerFotoParque = (idx) => {
+    setFotosParque((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const adicionarTipoApto = () => {
     setTiposApto((prev) => [...prev, { nome: "", fotos: [] }]);
   };
@@ -358,6 +389,8 @@ export default function GestaoHoteis() {
     setVideoUrl("");
     setFotosGerais([]);
     setTiposApto([]);
+    setTituloFotosParque("Fotos dos Parques Aquáticos");
+    setFotosParque([]);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
@@ -380,6 +413,8 @@ export default function GestaoHoteis() {
     setVideoUrl(hotel.videoUrl || "");
     setFotosGerais(hotel.fotos || []);
     setTiposApto(hotel.tiposApto || []);
+    setTituloFotosParque(hotel.tituloFotosParque || "Fotos dos Parques Aquáticos");
+    setFotosParque(hotel.fotosParque || []);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
@@ -420,6 +455,8 @@ export default function GestaoHoteis() {
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
         tiposApto: tiposApto.filter((a) => a.nome && a.nome.trim().length > 0),
+        tituloFotosParque: tituloFotosParque.trim() || "Fotos dos Parques Aquáticos",
+        fotosParque: fotosParque,
       };
 
       if (hotelEditandoId) {
@@ -565,6 +602,12 @@ export default function GestaoHoteis() {
                             <span className="bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
                               <BedDouble className="w-3 h-3" />
                               {h.tiposApto.length} tipo(s) de apto
+                            </span>
+                          )}
+                          {h.fotosParque?.length > 0 && (
+                            <span className="bg-sky-50 text-sky-800 border border-sky-200 text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Waves className="w-3 h-3 text-sky-600" />
+                              {h.fotosParque.length} fotos do parque
                             </span>
                           )}
                           {h.videoUrl && (
@@ -797,14 +840,14 @@ export default function GestaoHoteis() {
               </div>
             </div>
 
-            {/* 3. FOTOS GERAIS */}
+            {/* 3. FOTOS GERAIS DO HOTEL */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
                     Fotos Gerais do Hotel / Lazer <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
                   </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">Faça upload de fotos das piscinas, fachada, restaurante e área externa.</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Faça upload de fotos das piscinas do hotel, fachada, restaurante e área externa.</p>
                 </div>
                 
                 <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral ? "opacity-50 pointer-events-none" : ""}`}>
@@ -931,13 +974,79 @@ export default function GestaoHoteis() {
                                   onClick={() => removerFotoApto(index, fIdx)}
                                   className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 5. NOVO: PARQUES AQUÁTICOS / LAZER ADICIONAL (TÍTULO EDITÁVEL + FOTOS) */}
+            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <Waves className="w-5 h-5 text-sky-600" />
+                    Parques Aquáticos / Lazer Adicional <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Fotos dos parques aquáticos inclusos no pacote. Se não houver fotos, o bloco não aparecerá na vitrine.
+                  </p>
+                </div>
+                
+                <label className={`cursor-pointer inline-flex items-center gap-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoParque ? "opacity-50 pointer-events-none" : ""}`}>
+                  {enviandoFotoParque ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                  <span>{enviandoFotoParque ? "Enviando imagens..." : "Adicionar Fotos do Parque"}</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleUploadFotosParque}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Título Editável do Bloco */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                  Título da Seção de Parques (Aparecerá como cabeçalho do slide na vitrine)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Fotos do Water Park & Clube Privê (ou 'Fotos do Hot Park')"
+                  value={tituloFotosParque}
+                  onChange={(e) => setTituloFotosParque(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
+                />
+              </div>
+
+              {/* Grid com as fotos do Parque */}
+              {fotosParque.length === 0 ? (
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
+                  <Waves className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-700">Nenhuma foto de parque adicionada.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Se este produto inclui parque aquático, adicione fotos das atrações aqui.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                  {fotosParque.map((url, idx) => (
+                    <div key={idx} className="relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border border-slate-200">
+                      <img src={url} alt={`Foto Parque ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removerFotoParque(idx)}
+                        className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
+                        title="Remover foto"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
