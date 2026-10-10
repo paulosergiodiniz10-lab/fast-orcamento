@@ -1,23 +1,9 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Fast Orçamento & Reservas",
-  description: "www.orcamentofast.com.br",
+  title: "Fast Orçamento",
+  description: "Gerador de orçamentos",
   manifest: "/manifest.json",
-  metadataBase: new URL("https://www.orcamentofast.com.br"),
-  openGraph: {
-    title: "Fast Orçamento & Reservas",
-    description: "www.orcamentofast.com.br",
-    url: "https://www.orcamentofast.com.br",
-    siteName: "Fast Orçamento & Reservas",
-    locale: "pt_BR",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Fast Orçamento & Reservas",
-    description: "www.orcamentofast.com.br",
-  },
 };
 
 export default function RootLayout({ children }) {
