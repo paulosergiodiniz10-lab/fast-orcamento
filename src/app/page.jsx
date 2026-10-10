@@ -20,6 +20,13 @@ const REGIMES_OPCOES = [
   { id: "pensao_completa", label: "Pensão Completa" },
 ];
 
+const formatarTituloOrtografico = (texto) => {
+  if (!texto) return "Parques que inclui no pacote";
+  const limpo = texto.trim();
+  if (limpo.length === 0) return "Parques que inclui no pacote";
+  return limpo.charAt(0).toUpperCase() + limpo.slice(1).toLowerCase();
+};
+
 const obterDataHojeLocal = () => {
   const d = new Date();
   const ano = d.getFullYear();
@@ -39,7 +46,6 @@ const somarDias = (dataStr, dias) => {
   return `${a}-${m}-${d}`;
 };
 
-// Transforma texto em formato limpo para link (ex: "HOTEL RESORT DO LAGO" -> "hotel-resort-do-lago")
 const gerarSlug = (texto) => {
   if (!texto) return "hotel";
   return texto
@@ -64,7 +70,6 @@ function GeradorOrcamentoConteudo() {
   const [hotelSelecionado, setHotelSelecionado] = useState(null);
   const [aptoSelecionado, setAptoSelecionado] = useState("");
 
-  // Dados do Cliente (sempre em MAIÚSCULO e telefone somente números)
   const [clienteNome, setClienteNome] = useState(
     (searchParams.get("clienteNome") || "").toUpperCase()
   );
@@ -72,17 +77,14 @@ function GeradorOrcamentoConteudo() {
     (searchParams.get("clienteWhatsapp") || "").replace(/\D/g, "")
   );
 
-  // Datas
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
 
-  // Individual
   const [adultos, setAdultos] = useState(searchParams.get("adultos") || "2");
   const [criancas, setCriancas] = useState(searchParams.get("criancas") || "0");
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
-  // Grupos (com campos ágeis de hóspedes)
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
       id: 1,
@@ -104,7 +106,6 @@ function GeradorOrcamentoConteudo() {
   const [linkGerado, setLinkGerado] = useState("");
   const [idOrcamentoAtual, setIdOrcamentoAtual] = useState("");
 
-  // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
     tipo: "confirm",
@@ -359,7 +360,7 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem limpa e condicional
+  // Montagem limpa e condicional com título dinâmico das inclusões
   const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
@@ -381,7 +382,8 @@ function GeradorOrcamentoConteudo() {
     texto += `${formatarDatas()}\n\n`;
 
     if (parquesMarcados.length > 0) {
-      texto += `*Parques que inclui no pacote:*\n`;
+      const tituloInclusoTratado = formatarTituloOrtografico(hotelSelecionado.tituloInclusoPacote);
+      texto += `*${tituloInclusoTratado}:*\n`;
       parquesMarcados.forEach((p) => {
         texto += `${iconeParque} ${p}\n`;
       });
@@ -446,7 +448,6 @@ function GeradorOrcamentoConteudo() {
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
     if (finalUrl) {
-      // Remove https:// e http:// do texto do link para evitar que o WhatsApp crie o balão de prévia no topo
       const urlSemProtocolo = finalUrl.replace(/^https?:\/\//, "");
       texto += `${iconeLink}*Fotos e detalhes completos:*\n${urlSemProtocolo}\n\n`;
     }
@@ -496,6 +497,7 @@ function GeradorOrcamentoConteudo() {
         videoUrl: hotelSelecionado.videoUrl || "",
         fotos: hotelSelecionado.fotos || [],
         tiposApto: hotelSelecionado.tiposApto || [],
+        tituloInclusoPacote: formatarTituloOrtografico(hotelSelecionado.tituloInclusoPacote),
         tituloFotosParque: hotelSelecionado.tituloFotosParque || "Fotos dos Parques Aquáticos",
         fotosParque: hotelSelecionado.fotosParque || [],
         tituloVideoParque: hotelSelecionado.tituloVideoParque || "Vídeo dos Parques Aquáticos",
@@ -544,7 +546,6 @@ function GeradorOrcamentoConteudo() {
       const resultado = await processarGravacaoOrcamento();
       if (!resultado) return;
 
-      // Modo 'copiar': usa emojis completos para a área de transferência
       const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "copiar");
       navigator.clipboard.writeText(textoFinal);
       setCopiado(true);
@@ -574,10 +575,7 @@ function GeradorOrcamentoConteudo() {
       const resultado = await processarGravacaoOrcamento();
       if (!resultado) return;
 
-      // Modo 'enviar': usa caracteres seguros que não quebram ao codificar na URL
       const textoSeguro = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "enviar");
-      
-      // Também alimenta a área de transferência com a versão visual completa
       const textoCopiar = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "copiar");
       navigator.clipboard.writeText(textoCopiar);
 
@@ -1083,7 +1081,9 @@ function GeradorOrcamentoConteudo() {
           {/* ================= PARQUES E BENEFÍCIOS ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-2">
-              Parques e Benefícios
+              {hotelSelecionado?.tituloInclusoPacote
+                ? formatarTituloOrtografico(hotelSelecionado.tituloInclusoPacote)
+                : "Parques e Benefícios"}
             </label>
             {hotelSelecionado?.parquesDisponiveis?.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
@@ -1110,7 +1110,7 @@ function GeradorOrcamentoConteudo() {
               </div>
             ) : (
               <p className="text-xs text-slate-400 italic">
-                {hotelSelecionado ? "Nenhum parque ou benefício cadastrado para esta hospedagem." : "Selecione uma hospedagem acima para carregar as opções de parques."}
+                {hotelSelecionado ? "Nenhum benefício cadastrado para esta hospedagem." : "Selecione uma hospedagem acima para carregar as opções de inclusões."}
               </p>
             )}
           </div>
@@ -1148,7 +1148,6 @@ function GeradorOrcamentoConteudo() {
               </span>
 
               <div className="flex items-center gap-2">
-                {/* Botão Condicional: Salvar e Enviar para o Cliente */}
                 {podeEnviarDireto && (
                   <button
                     onClick={salvarEEnviarZapCliente}
@@ -1165,7 +1164,6 @@ function GeradorOrcamentoConteudo() {
                   </button>
                 )}
 
-                {/* Botão Padrão: Salvar e Copiar */}
                 <button
                   onClick={salvarEGerarLink}
                   disabled={salvando || enviandoZap || !hotelSelecionado}
