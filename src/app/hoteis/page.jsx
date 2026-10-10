@@ -332,13 +332,21 @@ export default function GestaoHoteis() {
   };
 
   const adicionarTipoApto = () => {
-    setTiposApto((prev) => [...prev, { nome: "", fotos: [] }]);
+    setTiposApto((prev) => [...prev, { nome: "", descricao: "", fotos: [] }]);
   };
 
   const atualizarNomeApto = (index, novoNome) => {
     setTiposApto((prev) => {
       const lista = [...prev];
       lista[index] = { ...lista[index], nome: novoNome };
+      return lista;
+    });
+  };
+
+  const atualizarDescricaoApto = (index, novaDescricao) => {
+    setTiposApto((prev) => {
+      const lista = [...prev];
+      lista[index] = { ...lista[index], descricao: novaDescricao };
       return lista;
     });
   };
@@ -426,7 +434,13 @@ export default function GestaoHoteis() {
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
     setVideoUrl(hotel.videoUrl || "");
     setFotosGerais(hotel.fotos || []);
-    setTiposApto(hotel.tiposApto || []);
+    setTiposApto(
+      (hotel.tiposApto || []).map((ap) => ({
+        nome: ap.nome || "",
+        descricao: ap.descricao || "",
+        fotos: ap.fotos || [],
+      }))
+    );
     setTituloFotosParque(hotel.tituloFotosParque || "Fotos dos Parques Aquáticos");
     setFotosParque(hotel.fotosParque || []);
     setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
@@ -471,7 +485,13 @@ export default function GestaoHoteis() {
         observacoes: obsRef.current ? obsRef.current.innerHTML : "",
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
-        tiposApto: tiposApto.filter((a) => a.nome && a.nome.trim().length > 0),
+        tiposApto: tiposApto
+          .filter((a) => a.nome && a.nome.trim().length > 0)
+          .map((a) => ({
+            nome: a.nome.trim(),
+            descricao: (a.descricao || "").trim(),
+            fotos: a.fotos || [],
+          })),
         tituloFotosParque: tituloFotosParque.trim() || "Fotos dos Parques Aquáticos",
         fotosParque: fotosParque,
         tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
@@ -959,25 +979,41 @@ export default function GestaoHoteis() {
                 <div className="space-y-4">
                   {tiposApto.map((apto, index) => (
                     <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex-1">
-                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                            Nome da Categoria #{index + 1}
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Ex: Suíte Master com Varanda"
-                            value={apto.nome}
-                            onChange={(e) => atualizarNomeApto(index, e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                          />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 space-y-2">
+                          <div>
+                            <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                              Nome da Categoria #{index + 1}
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Ex: Suíte Master com Varanda"
+                              value={apto.nome}
+                              onChange={(e) => atualizarNomeApto(index, e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                            />
+                          </div>
+
+                          {/* CAMPO DE DESCRIÇÃO DO QUARTO */}
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                              Descrição da Acomodação (Opcional)
+                            </label>
+                            <textarea
+                              rows={2}
+                              placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
+                              value={apto.descricao || ""}
+                              onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
+                            />
+                          </div>
                         </div>
 
                         <button
                           type="button"
                           onClick={() => removerTipoApto(index)}
-                          className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition self-end"
+                          className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition mt-6"
                           title="Remover categoria"
                         >
                           <Trash2 className="w-4 h-4" />
