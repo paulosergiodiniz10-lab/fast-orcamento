@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { 
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
-  Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle
+  Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
+  Send
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -99,6 +100,7 @@ function GeradorOrcamentoConteudo() {
 
   const [copiado, setCopiado] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [enviandoZap, setEnviandoZap] = useState(false);
   const [linkGerado, setLinkGerado] = useState("");
   const [idOrcamentoAtual, setIdOrcamentoAtual] = useState("");
 
@@ -357,12 +359,13 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
+  // Montagem do texto do WhatsApp sem cabeçalho publicitário
   const gerarTextoZap = (urlVitrine, idDoc) => {
-    let texto = `*Fast Orçamento & Reservas*\nwww.orcamentofast.com.br\n\n`;
-
     if (!hotelSelecionado) {
-      return texto + "👉 Selecione uma hospedagem para gerar a prévia do orçamento.";
+      return "👉 Selecione uma hospedagem para gerar a prévia do orçamento.";
     }
+
+    let texto = "";
 
     if (clienteNome.trim()) {
       texto += `Olá, *${clienteNome.trim().toUpperCase()}*! Segue seu orçamento:\n\n`;
@@ -450,89 +453,96 @@ function GeradorOrcamentoConteudo() {
     return texto;
   };
 
-  const salvarEGerarLink = async () => {
+  // Função central para persistência no Firestore
+  const processarGravacaoOrcamento = async () => {
     if (!hotelSelecionado) {
       abrirAlerta("Hospedagem Necessária", "Por favor, selecione uma hospedagem na lista antes de gerar.");
-      return;
+      return null;
     }
 
+    let hospedesFormatado = `${adultos} Adulto(s)`;
+    if (numCriancas > 0) {
+      hospedesFormatado += ` e ${numCriancas} Criança(s)`;
+      if (idadesCriancas.trim()) {
+        hospedesFormatado += ` (${idadesCriancas.trim()})`;
+      }
+    }
+
+    const apartamentosTratados = apartamentosGrupo.map((ap) => ({
+      ...ap,
+      titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
+    }));
+
+    const dadosOrcamento = {
+      agenciaId: agencia?.id || "avulso",
+      tipoOrcamento: abaAtiva,
+      clienteNome: clienteNome.trim().toUpperCase() || null,
+      clienteWhatsapp: clienteWhatsapp.replace(/\D/g, "") || null,
+      hotel: {
+        nome: hotelSelecionado.nome,
+        logoUrl: hotelSelecionado.logoUrl || "",
+        localizacao: hotelSelecionado.localizacao || "",
+        descricao: hotelSelecionado.descricao || "",
+        observacoes: hotelSelecionado.observacoes || "",
+        checkinHora: hotelSelecionado.checkinHora || "14:00",
+        checkoutHora: hotelSelecionado.checkoutHora || "11:00",
+        videoUrl: hotelSelecionado.videoUrl || "",
+        fotos: hotelSelecionado.fotos || [],
+        tiposApto: hotelSelecionado.tiposApto || [],
+        tituloFotosParque: hotelSelecionado.tituloFotosParque || "Fotos dos Parques Aquáticos",
+        fotosParque: hotelSelecionado.fotosParque || [],
+        tituloVideoParque: hotelSelecionado.tituloVideoParque || "Vídeo dos Parques Aquáticos",
+        videoParqueUrl: hotelSelecionado.videoParqueUrl || "",
+      },
+      acomodacaoEscolhida: aptoSelecionado || null,
+      agencia: {
+        nome: agencia?.nome || "Caldas Novas Viagens",
+        whatsapp: agencia?.whatsapp || "",
+        cadastur: agencia?.cadastur || "",
+      },
+      checkin,
+      checkout,
+      periodoFormatado: formatarDatas(),
+      adultos,
+      criancas,
+      idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
+      hospedes: abaAtiva === "individual" ? hospedesFormatado : `Grupo com ${apartamentosGrupo.length} apartamento(s)`,
+      parques: parquesMarcados,
+      regimes: REGIMES_OPCOES.filter((r) => regimesValores[r.id] && regimesValores[r.id].trim() !== "").map((r) => ({
+        id: r.id,
+        nome: r.label,
+        valor: regimesValores[r.id],
+      })),
+      apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
+      formaPagamento,
+      aptosRestantes,
+      criadoEm: serverTimestamp(),
+    };
+
+    const docRef = await addDoc(collection(db, "orcamentos"), dadosOrcamento);
+
+    const slugHotel = gerarSlug(hotelSelecionado.nome);
+    const codigoCurto = docRef.id.slice(0, 6);
+    const urlCompleta = `${window.location.origin}/o/${slugHotel}-${codigoCurto}`;
+
+    setLinkGerado(urlCompleta);
+    setIdOrcamentoAtual(docRef.id);
+
+    return { urlCompleta, idDoc: docRef.id };
+  };
+
+  const salvarEGerarLink = async () => {
     try {
       setSalvando(true);
+      const resultado = await processarGravacaoOrcamento();
+      if (!resultado) return;
 
-      let hospedesFormatado = `${adultos} Adulto(s)`;
-      if (numCriancas > 0) {
-        hospedesFormatado += ` e ${numCriancas} Criança(s)`;
-        if (idadesCriancas.trim()) {
-          hospedesFormatado += ` (${idadesCriancas.trim()})`;
-        }
-      }
-
-      const apartamentosTratados = apartamentosGrupo.map((ap) => ({
-        ...ap,
-        titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
-      }));
-
-      const dadosOrcamento = {
-        agenciaId: agencia?.id || "avulso",
-        tipoOrcamento: abaAtiva,
-        clienteNome: clienteNome.trim().toUpperCase() || null,
-        clienteWhatsapp: clienteWhatsapp.replace(/\D/g, "") || null,
-        hotel: {
-          nome: hotelSelecionado.nome,
-          logoUrl: hotelSelecionado.logoUrl || "",
-          localizacao: hotelSelecionado.localizacao || "",
-          descricao: hotelSelecionado.descricao || "",
-          observacoes: hotelSelecionado.observacoes || "",
-          checkinHora: hotelSelecionado.checkinHora || "14:00",
-          checkoutHora: hotelSelecionado.checkoutHora || "11:00",
-          videoUrl: hotelSelecionado.videoUrl || "",
-          fotos: hotelSelecionado.fotos || [],
-          tiposApto: hotelSelecionado.tiposApto || [],
-          tituloFotosParque: hotelSelecionado.tituloFotosParque || "Fotos dos Parques Aquáticos",
-          fotosParque: hotelSelecionado.fotosParque || [],
-          tituloVideoParque: hotelSelecionado.tituloVideoParque || "Vídeo dos Parques Aquáticos",
-          videoParqueUrl: hotelSelecionado.videoParqueUrl || "",
-        },
-        acomodacaoEscolhida: aptoSelecionado || null,
-        agencia: {
-          nome: agencia?.nome || "Caldas Novas Viagens",
-          whatsapp: agencia?.whatsapp || "",
-          cadastur: agencia?.cadastur || "",
-        },
-        checkin,
-        checkout,
-        periodoFormatado: formatarDatas(),
-        adultos,
-        criancas,
-        idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
-        hospedes: abaAtiva === "individual" ? hospedesFormatado : `Grupo com ${apartamentosGrupo.length} apartamento(s)`,
-        parques: parquesMarcados,
-        regimes: REGIMES_OPCOES.filter((r) => regimesValores[r.id] && regimesValores[r.id].trim() !== "").map((r) => ({
-          id: r.id,
-          nome: r.label,
-          valor: regimesValores[r.id],
-        })),
-        apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
-        formaPagamento,
-        aptosRestantes,
-        criadoEm: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(collection(db, "orcamentos"), dadosOrcamento);
-      
-      const slugHotel = gerarSlug(hotelSelecionado.nome);
-      const codigoCurto = docRef.id.slice(0, 6);
-      const urlCompleta = `${window.location.origin}/o/${slugHotel}-${codigoCurto}`;
-
-      setLinkGerado(urlCompleta);
-      setIdOrcamentoAtual(docRef.id);
-
-      const textoFinal = gerarTextoZap(urlCompleta, docRef.id);
+      const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc);
       navigator.clipboard.writeText(textoFinal);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
 
-      return urlCompleta;
+      return resultado.urlCompleta;
     } catch (err) {
       console.error("Erro ao salvar orçamento:", err);
       abrirAlerta("Erro de Conexão", "Não foi possível conectar com o Firebase. Verifique sua conexão.");
@@ -540,6 +550,44 @@ function GeradorOrcamentoConteudo() {
       setSalvando(false);
     }
   };
+
+  // Ação exclusiva do botão: Salva, copia e abre direto na conversa do cliente
+  const salvarEEnviarZapCliente = async () => {
+    const zapPuro = clienteWhatsapp.replace(/\D/g, "");
+    if (!clienteNome.trim() || zapPuro.length < 10) {
+      abrirAlerta(
+        "Dados Incompletos",
+        "Para enviar diretamente, informe o nome e o número de WhatsApp completo com DDD."
+      );
+      return;
+    }
+
+    try {
+      setEnviandoZap(true);
+      const resultado = await processarGravacaoOrcamento();
+      if (!resultado) return;
+
+      const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc);
+      navigator.clipboard.writeText(textoFinal);
+
+      const numeroFormatado = zapPuro.startsWith("55") ? zapPuro : `55${zapPuro}`;
+      const urlWhatsapp = `https://wa.me/${numeroFormatado}?text=${encodeURIComponent(textoFinal)}`;
+
+      window.open(urlWhatsapp, "_blank");
+    } catch (err) {
+      console.error("Erro ao salvar e enviar:", err);
+      abrirAlerta("Erro de Conexão", "Não foi possível gravar os dados para envio.");
+    } finally {
+      setEnviandoZap(false);
+    }
+  };
+
+  // Regra booleana que controla a ativação do botão Salvar e Enviar
+  const podeEnviarDireto = Boolean(
+    clienteNome.trim().length > 0 &&
+    clienteWhatsapp.replace(/\D/g, "").length >= 10 &&
+    hotelSelecionado
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-12 font-sans relative">
@@ -574,7 +622,7 @@ function GeradorOrcamentoConteudo() {
 
           <button
             onClick={salvarEGerarLink}
-            disabled={salvando || !hotelSelecionado}
+            disabled={salvando || enviandoZap || !hotelSelecionado}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
           >
             {salvando ? (
@@ -680,7 +728,7 @@ function GeradorOrcamentoConteudo() {
             </div>
           </div>
 
-          {/* ================= ESCOLHA SUA HOSPEDAGEM (COM OPÇÃO INICIAL SELECIONE) ================= */}
+          {/* ================= ESCOLHA SUA HOSPEDAGEM ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1083,25 +1131,46 @@ function GeradorOrcamentoConteudo() {
         {/* ================= PRÉVIA DO WHATSAPP ================= */}
         <div className="md:sticky md:top-20 h-fit space-y-3">
           <div className="bg-white p-4 rounded-xl shadow-md border border-slate-200">
-            <div className="flex items-center justify-between border-b pb-3 mb-3">
+            <div className="flex flex-wrap items-center justify-between border-b pb-3 mb-3 gap-2">
               <span className="text-xs font-bold uppercase text-brand-900 flex items-center gap-1.5">
                 <MessageSquare className="w-4 h-4 text-brand-700" />
                 Prévia do WhatsApp {abaAtiva === "grupos" && <span className="text-emerald-700 text-[10px] lowercase font-normal">(modo grupos)</span>}
               </span>
-              <button
-                onClick={salvarEGerarLink}
-                disabled={salvando || !hotelSelecionado}
-                className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
-              >
-                {salvando ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : copiado ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-300" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
+
+              <div className="flex items-center gap-2">
+                {/* Botão Condicional: Salvar e Enviar para o Cliente */}
+                {podeEnviarDireto && (
+                  <button
+                    onClick={salvarEEnviarZapCliente}
+                    disabled={enviandoZap || salvando}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                    title={`Salvar e enviar diretamente para ${clienteNome}`}
+                  >
+                    {enviandoZap ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>{enviandoZap ? "Enviando..." : "Salvar / Enviar"}</span>
+                  </button>
                 )}
-                {salvando ? "Salvando..." : copiado ? "Copiado!" : "Salvar e Copiar"}
-              </button>
+
+                {/* Botão Padrão: Salvar e Copiar */}
+                <button
+                  onClick={salvarEGerarLink}
+                  disabled={salvando || enviandoZap || !hotelSelecionado}
+                  className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                >
+                  {salvando ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : copiado ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  <span>{salvando ? "Salvando..." : copiado ? "Copiado!" : "Salvar e Copiar"}</span>
+                </button>
+              </div>
             </div>
 
             <div className="bg-[#f0f4f2] p-4 rounded-lg font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-200">
