@@ -15,6 +15,14 @@ import {
 const CLOUD_NAME = "qi6dleli";
 const UPLOAD_PRESET = "fast_orcamento";
 
+// Formatação ortográfica padrão: Primeira letra Maiúscula e o resto minúsculo
+const formatarTituloOrtografico = (texto) => {
+  if (!texto) return "Parques que inclui no pacote";
+  const limpo = texto.trim();
+  if (limpo.length === 0) return "Parques que inclui no pacote";
+  return limpo.charAt(0).toUpperCase() + limpo.slice(1).toLowerCase();
+};
+
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) {
@@ -168,6 +176,7 @@ export default function GestaoHoteis() {
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
   const [formaPagamentoPadrao, setFormaPagamentoPadrao] = useState("Cartão em até 10x sem juros ou PIX com desconto especial");
+  const [tituloInclusoPacote, setTituloInclusoPacote] = useState("Parques que inclui no pacote");
   const [inclusoPacote, setInclusoPacote] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [fotosGerais, setFotosGerais] = useState([]);
@@ -386,6 +395,7 @@ export default function GestaoHoteis() {
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
     setFormaPagamentoPadrao("Cartão em até 10x sem juros ou PIX com desconto especial");
+    setTituloInclusoPacote("Parques que inclui no pacote");
     setInclusoPacote("");
     setVideoUrl("");
     setFotosGerais([]);
@@ -412,6 +422,7 @@ export default function GestaoHoteis() {
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
     setFormaPagamentoPadrao(hotel.formaPagamento || "Cartão em até 10x sem juros ou PIX com desconto especial");
+    setTituloInclusoPacote(hotel.tituloInclusoPacote || "Parques que inclui no pacote");
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
     setVideoUrl(hotel.videoUrl || "");
     setFotosGerais(hotel.fotos || []);
@@ -447,7 +458,7 @@ export default function GestaoHoteis() {
         .filter((p) => p.length > 0);
 
       const dados = {
-        agenciaId: agencia.id,
+        agenciaId: agencyIdSafe(agencia.id),
         nome: nome.trim(),
         logoUrl: logoUrl.trim(),
         localizacao: localizacao.trim(),
@@ -455,6 +466,7 @@ export default function GestaoHoteis() {
         checkoutHora: checkoutHora.trim(),
         formaPagamento: formaPagamentoPadrao.trim(),
         descricao: descRef.current ? descRef.current.innerHTML : "",
+        tituloInclusoPacote: formatarTituloOrtografico(tituloInclusoPacote),
         parquesDisponiveis: listaIncluso,
         observacoes: obsRef.current ? obsRef.current.innerHTML : "",
         videoUrl: videoUrl.trim(),
@@ -488,6 +500,8 @@ export default function GestaoHoteis() {
       setSalvando(false);
     }
   };
+
+  const agencyIdSafe = (id) => id || "";
 
   const executarExclusaoHotel = async (id) => {
     try {
@@ -801,13 +815,31 @@ export default function GestaoHoteis() {
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Inclusões, Mídia & Observações</h3>
 
+              {/* TÍTULO EDITÁVEL DAS INCLUSÕES */}
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Inclui no Pacote (Separados por vírgula)
+                  Título das Inclusões (Orçamento WhatsApp e Vitrine)
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Acesso ao Acqua Park Splash, Splash Kids, Wi-Fi grátis, Estacionamento"
+                  placeholder="Ex: Parques que inclui no pacote (ou 'Inclui no pacote', 'Benefícios inclusos')"
+                  value={tituloInclusoPacote}
+                  onChange={(e) => setTituloInclusoPacote(e.target.value)}
+                  onBlur={(e) => setTituloInclusoPacote(formatarTituloOrtografico(e.target.value))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Ajustado automaticamente com a primeira letra maiúscula e as demais minúsculas.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                  Itens Inclusos no Pacote (Separados por vírgula)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Clube Privê, Water Park, Náutico Praia Clube, Wi-Fi grátis"
                   value={inclusoPacote}
                   onChange={(e) => setInclusoPacote(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
@@ -980,6 +1012,7 @@ export default function GestaoHoteis() {
                                   type="button"
                                   onClick={() => removerFotoApto(index, fIdx)}
                                   className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
+                                  title="Remover foto"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -994,7 +1027,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 5. PARQUES AQUÁTICOS / LAZER ADICIONAL (TÍTULO EDITÁVEL + FOTOS + VÍDEO DO PARQUE) */}
+            {/* 5. PARQUES AQUÁTICOS / LAZER ADICIONAL */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -1059,7 +1092,7 @@ export default function GestaoHoteis() {
                 </div>
               )}
 
-              {/* Novo: Bloco de Vídeo dos Parques Aquáticos */}
+              {/* Bloco de Vídeo dos Parques Aquáticos */}
               <div className="pt-4 border-t border-slate-200 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
