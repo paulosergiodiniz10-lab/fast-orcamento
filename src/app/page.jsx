@@ -359,11 +359,17 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem limpa do texto, sem cabeçalho e com caracteres estáveis (sem emojis corrompidos)
-  const gerarTextoZap = (urlVitrine, idDoc) => {
+  // Montagem dinâmica: 'copiar' preserva emojis visuais; 'enviar' usa símbolos seguros contra corrupção de URL
+  const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
     }
+
+    const iconeParque = modo === "copiar" ? "👉" : "•";
+    const iconeCartao = modo === "copiar" ? "💳 " : "";
+    const iconeAviso = modo === "copiar" ? "⚠️ " : "*Atenção:* ";
+    const iconeLink = modo === "copiar" ? "🔗 " : "";
+    const iconeId = modo === "copiar" ? "🆔 " : "";
 
     let texto = "";
 
@@ -377,7 +383,7 @@ function GeradorOrcamentoConteudo() {
     if (parquesMarcados.length > 0) {
       texto += `*Parques que inclui no pacote:*\n`;
       parquesMarcados.forEach((p) => {
-        texto += `• ${p}\n`;
+        texto += `${iconeParque} ${p}\n`;
       });
       texto += `\n`;
     }
@@ -431,24 +437,23 @@ function GeradorOrcamentoConteudo() {
     }
 
     if (formaPagamento) {
-      texto += `*Formas de Pagamento:*\n${formaPagamento}\n\n`;
+      texto += `${iconeCartao}*Formas de Pagamento:*\n${formaPagamento}\n\n`;
     }
 
     if (aptosRestantes) {
-      texto += `*Atenção:* Restam apenas ${aptosRestantes} apartamentos disponíveis!\n\n`;
+      texto += `${iconeAviso}Restam apenas ${aptosRestantes} apartamentos disponíveis!\n\n`;
     }
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
     if (finalUrl) {
-      // Usar <link> evita que o WhatsApp puxe o card duplo automático poluindo a mensagem
-      texto += `*Fotos e detalhes completos:*\n<${finalUrl}>\n\n`;
+      texto += `${iconeLink}*Fotos e detalhes completos:*\n${finalUrl}\n\n`;
     }
     texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._\n`;
 
     const idFinal = idDoc || idOrcamentoAtual;
     if (idFinal) {
       const idCurto = idFinal.slice(0, 6).toUpperCase();
-      texto += `*ID:* #${idCurto}`;
+      texto += `${iconeId}*ID:* #${idCurto}`;
     }
 
     return texto;
@@ -537,7 +542,8 @@ function GeradorOrcamentoConteudo() {
       const resultado = await processarGravacaoOrcamento();
       if (!resultado) return;
 
-      const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc);
+      // Modo 'copiar': usa emojis completos para o clipboard
+      const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "copiar");
       navigator.clipboard.writeText(textoFinal);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
@@ -566,11 +572,15 @@ function GeradorOrcamentoConteudo() {
       const resultado = await processarGravacaoOrcamento();
       if (!resultado) return;
 
-      const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc);
-      navigator.clipboard.writeText(textoFinal);
+      // Modo 'enviar': usa caracteres seguros que não quebram ao codificar na URL do WhatsApp
+      const textoSeguro = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "enviar");
+      
+      // Também alimenta a área de transferência com a versão visual completa
+      const textoCopiar = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "copiar");
+      navigator.clipboard.writeText(textoCopiar);
 
       const numeroFormatado = zapPuro.startsWith("55") ? zapPuro : `55${zapPuro}`;
-      const urlWhatsapp = `https://wa.me/${numeroFormatado}?text=${encodeURIComponent(textoFinal)}`;
+      const urlWhatsapp = `https://wa.me/${numeroFormatado}?text=${encodeURIComponent(textoSeguro)}`;
 
       window.open(urlWhatsapp, "_blank");
     } catch (err) {
@@ -1172,7 +1182,7 @@ function GeradorOrcamentoConteudo() {
             </div>
 
             <div className="bg-[#f0f4f2] p-4 rounded-lg font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-200">
-              {gerarTextoZap()}
+              {gerarTextoZap(undefined, undefined, "copiar")}
             </div>
 
             {linkGerado && (
