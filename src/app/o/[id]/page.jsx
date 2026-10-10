@@ -82,12 +82,8 @@ export default function VitrineOrcamento() {
         }
 
         if (dadosEncontrados) {
-          // Fallback inteligente: se o orçamento salvo não tiver fotos/vídeos dos parques, busca no cadastro atual do hotel
-          const precisaBuscarHotel = 
-            (!dadosEncontrados.hotel?.fotosParque || dadosEncontrados.hotel.fotosParque.length === 0) ||
-            (!dadosEncontrados.hotel?.videoParqueUrl);
-
-          if (precisaBuscarHotel && dadosEncontrados.hotel?.nome) {
+          // Fallback inteligente: sincroniza dados atualizados do hotel se necessário
+          if (dadosEncontrados.hotel?.nome) {
             try {
               const qHotel = query(
                 collection(db, "hoteis"),
@@ -96,15 +92,33 @@ export default function VitrineOrcamento() {
               const snapH = await getDocs(qHotel);
               if (!snapH.empty) {
                 const dadosHotelAtual = snapH.docs[0].data();
-                if (dadosHotelAtual.fotosParque && dadosHotelAtual.fotosParque.length > 0) {
+
+                // Sincroniza parques caso falte
+                if (
+                  (!dadosEncontrados.hotel.fotosParque || dadosEncontrados.hotel.fotosParque.length === 0) &&
+                  dadosHotelAtual.fotosParque?.length > 0
+                ) {
                   dadosEncontrados.hotel.fotosParque = dadosHotelAtual.fotosParque;
                   dadosEncontrados.hotel.tituloFotosParque =
                     dadosHotelAtual.tituloFotosParque || "Fotos dos Parques Aquáticos";
                 }
-                if (dadosHotelAtual.videoParqueUrl) {
+
+                if (!dadosEncontrados.hotel.videoParqueUrl && dadosHotelAtual.videoParqueUrl) {
                   dadosEncontrados.hotel.videoParqueUrl = dadosHotelAtual.videoParqueUrl;
                   dadosEncontrados.hotel.tituloVideoParque =
                     dadosHotelAtual.tituloVideoParque || "Vídeo dos Parques Aquáticos";
+                }
+
+                // Sincroniza descrições dos tipos de apartamentos
+                if (dadosHotelAtual.tiposApto?.length > 0) {
+                  const tiposAtualizados = (dadosEncontrados.hotel.tiposApto || []).map((apto) => {
+                    const correspondente = dadosHotelAtual.tiposApto.find((t) => t.nome === apto.nome);
+                    return {
+                      ...apto,
+                      descricao: apto.descricao || correspondente?.descricao || "",
+                    };
+                  });
+                  dadosEncontrados.hotel.tiposApto = tiposAtualizados;
                 }
               }
             } catch (errHotel) {
@@ -179,6 +193,9 @@ export default function VitrineOrcamento() {
   const fotosParque = hotel?.fotosParque || [];
   const tituloParque = hotel?.tituloFotosParque || "Fotos dos Parques Aquáticos";
   
+  // Título das Inclusões dinâmico
+  const tituloInclusoVitrine = hotel?.tituloInclusoPacote || "Incluso no Pacote";
+
   // Vídeo principal do hotel
   const videoInfo = obterDadosVideoYouTube(hotel?.videoUrl);
 
@@ -363,7 +380,7 @@ export default function VitrineOrcamento() {
             {parques && parques.length > 0 && (
               <div className="space-y-2 pt-1">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Incluso no Pacote
+                  {tituloInclusoVitrine}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {parques.map((item, idx) => (
@@ -504,11 +521,18 @@ export default function VitrineOrcamento() {
 
               return (
                 <div key={aptoCat.nome} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <BedDouble className="w-5 h-5 text-amber-600" />
-                    <div>
+                  <div className="flex items-start gap-2">
+                    <BedDouble className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
                       <h3 className="text-sm font-bold text-slate-900">Fotos de: {aptoCat.nome}</h3>
                       <p className="text-[11px] text-slate-500">Imagens da acomodação incluída na sua proposta</p>
+
+                      {/* DESCRIÇÃO DA ACOMODAÇÃO ANTES DAS FOTOS */}
+                      {aptoCat.descricao && (
+                        <p className="text-xs text-slate-700 mt-2 bg-amber-50/70 border border-amber-200/80 p-2.5 rounded-xl leading-relaxed">
+                          {aptoCat.descricao}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -678,7 +702,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. VÍDEO DO PARQUE AQUÁTICO (LOGO ABAIXO DAS FOTOS DO PARQUE) ================= */}
+        {/* ================= 6. VÍDEO DO PARQUE AQUÁTICO ================= */}
         {videoParqueInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -712,7 +736,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 7. VÍDEO PRINCIPAL DO HOTEL (ADAPTATIVO) ================= */}
+        {/* ================= 7. VÍDEO PRINCIPAL DO HOTEL ================= */}
         {videoInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
