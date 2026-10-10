@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { 
   FileText, Search, ArrowLeft, MessageCircle, ExternalLink, 
   Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle, 
-  Clock, ChevronLeft, ChevronRight, HelpCircle, AlertCircle
+  Clock, ChevronLeft, ChevronRight, HelpCircle, AlertCircle,
+  Copy, Check, Phone
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,9 @@ export default function GestaoOrcamentos() {
   const [agencia, setAgencia] = useState(null);
   const [orcamentos, setOrcamentos] = useState([]);
   const [carregando, setCarregando] = useState(true);
+
+  // Controle de cópia rápida do telefone
+  const [copiadoId, setCopiadoId] = useState(null);
 
   // Filtros
   const [buscaGeral, setBuscaGeral] = useState("");
@@ -53,7 +57,7 @@ export default function GestaoOrcamentos() {
       tipo: "alert",
       titulo,
       mensagem,
-      onConfirm: null,
+      onConfirm,
     });
   };
 
@@ -126,7 +130,6 @@ export default function GestaoOrcamentos() {
     );
   };
 
-  // Redireciona para a página principal pré-carregando os dados
   const criarNovaCotacaoComDados = (orc) => {
     const params = new URLSearchParams();
     if (orc.clienteNome) params.set("clienteNome", orc.clienteNome);
@@ -150,6 +153,27 @@ export default function GestaoOrcamentos() {
     return `${dia}/${mes}/${ano} às ${hora}:${min}`;
   };
 
+  // Formata o número visualmente: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
+  const formatarNumeroTelefone = (tel) => {
+    if (!tel) return "";
+    const num = tel.replace(/\D/g, "");
+    if (num.length === 11) {
+      return `(${num.slice(0, 2)}) ${num.slice(2, 7)}-${num.slice(7)}`;
+    }
+    if (num.length === 10) {
+      return `(${num.slice(0, 2)}) ${num.slice(2, 6)}-${num.slice(6)}`;
+    }
+    return tel;
+  };
+
+  const copiarTelefone = (tel, id) => {
+    const limpo = (tel || "").replace(/\D/g, "");
+    if (!limpo) return;
+    navigator.clipboard.writeText(limpo);
+    setCopiadoId(id);
+    setTimeout(() => setCopiadoId(null), 2000);
+  };
+
   // Filtragem dos orçamentos
   const orcamentosFiltrados = orcamentos.filter((o) => {
     const termo = buscaGeral.toLowerCase();
@@ -168,7 +192,6 @@ export default function GestaoOrcamentos() {
     const bateCheckin =
       filtroCheckin === "" || (o.checkin && o.checkin === filtroCheckin);
 
-    // Filtro por Data de Criação (Hoje, Ontem, 7 Dias, Personalizado)
     let bateDataCriacao = true;
     if (filtroPeriodo !== "todos" && o.criadoEm?.seconds) {
       const dataCriacao = new Date(o.criadoEm.seconds * 1000);
@@ -199,7 +222,6 @@ export default function GestaoOrcamentos() {
     return bateGeral && bateCheckin && bateDataCriacao;
   });
 
-  // Cálculo da Paginação (Máximo 50 por página)
   const totalPaginas = Math.ceil(orcamentosFiltrados.length / ITENS_POR_PAGINA) || 1;
   const indexInicial = (paginaAtual - 1) * ITENS_POR_PAGINA;
   const orcamentosPaginados = orcamentosFiltrados.slice(indexInicial, indexInicial + ITENS_POR_PAGINA);
@@ -378,7 +400,12 @@ export default function GestaoOrcamentos() {
                 const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
                 const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
                 
-                // Mensagem de Remarketing
+                // Link de WhatsApp direto SEM mensagem prévia
+                const linkZapDiretoSemMensagem = zapTratado
+                  ? `https://wa.me/${zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`}`
+                  : null;
+
+                // Mensagem de Remarketing para o botão da direita
                 const saudacao = orc.clienteNome ? `Olá, ${orc.clienteNome}!` : "Olá!";
                 const textoRemarketing = encodeURIComponent(
                   `${saudacao} Vi que fez um *orçamento* conosco recentemente. *Ficou alguma dúvida?*\n\nTemos ofertas especiais e *pagamento facilitado*.\n\nQuer que eu prepare uma nova proposta para você?`
@@ -423,9 +450,45 @@ export default function GestaoOrcamentos() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600 pt-1">
+                        {/* Cliente + Telefone + Botão Zap Rápido + Botão Copiar */}
                         <div>
                           <strong className="text-slate-800 block text-[11px]">Cliente:</strong>
-                          <span>{orc.clienteNome || "Não informado"}</span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="font-semibold text-slate-800">
+                              {orc.clienteNome || "Não informado"}
+                            </span>
+
+                            {zapTratado && (
+                              <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md text-[11px] text-slate-700 font-mono">
+                                <span>{formatarNumeroTelefone(orc.clienteWhatsapp)}</span>
+
+                                {/* Ícone do WhatsApp para acesso rápido sem texto */}
+                                <a
+                                  href={linkZapDiretoSemMensagem}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-600 hover:text-emerald-700 p-0.5 rounded transition hover:bg-emerald-50"
+                                  title="Abrir WhatsApp direto (conversa limpa sem texto)"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </a>
+
+                                {/* Ícone para Copiar o número */}
+                                <button
+                                  type="button"
+                                  onClick={() => copiarTelefone(orc.clienteWhatsapp, orc.id)}
+                                  className="text-slate-500 hover:text-slate-800 p-0.5 rounded transition hover:bg-slate-200"
+                                  title="Copiar número de telefone"
+                                >
+                                  {copiadoId === orc.id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div>
