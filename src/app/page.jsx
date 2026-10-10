@@ -359,7 +359,7 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem dinâmica: 'copiar' preserva emojis visuais; 'enviar' usa símbolos seguros contra corrupção de URL
+  // Montagem limpa e condicional
   const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
@@ -446,7 +446,9 @@ function GeradorOrcamentoConteudo() {
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
     if (finalUrl) {
-      texto += `${iconeLink}*Fotos e detalhes completos:*\n${finalUrl}\n\n`;
+      // Remove https:// e http:// do texto do link para evitar que o WhatsApp crie o balão de prévia no topo
+      const urlSemProtocolo = finalUrl.replace(/^https?:\/\//, "");
+      texto += `${iconeLink}*Fotos e detalhes completos:*\n${urlSemProtocolo}\n\n`;
     }
     texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._\n`;
 
@@ -542,7 +544,7 @@ function GeradorOrcamentoConteudo() {
       const resultado = await processarGravacaoOrcamento();
       if (!resultado) return;
 
-      // Modo 'copiar': usa emojis completos para o clipboard
+      // Modo 'copiar': usa emojis completos para a área de transferência
       const textoFinal = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "copiar");
       navigator.clipboard.writeText(textoFinal);
       setCopiado(true);
@@ -572,7 +574,7 @@ function GeradorOrcamentoConteudo() {
       const resultado = await processarGravacaoOrcamento();
       if (!resultado) return;
 
-      // Modo 'enviar': usa caracteres seguros que não quebram ao codificar na URL do WhatsApp
+      // Modo 'enviar': usa caracteres seguros que não quebram ao codificar na URL
       const textoSeguro = gerarTextoZap(resultado.urlCompleta, resultado.idDoc, "enviar");
       
       // Também alimenta a área de transferência com a versão visual completa
