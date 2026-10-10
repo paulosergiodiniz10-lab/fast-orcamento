@@ -359,10 +359,10 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem do texto do WhatsApp sem cabeçalho publicitário
+  // Montagem limpa do texto, sem cabeçalho e com caracteres estáveis (sem emojis corrompidos)
   const gerarTextoZap = (urlVitrine, idDoc) => {
     if (!hotelSelecionado) {
-      return "👉 Selecione uma hospedagem para gerar a prévia do orçamento.";
+      return "Selecione uma hospedagem para gerar a prévia do orçamento.";
     }
 
     let texto = "";
@@ -377,7 +377,7 @@ function GeradorOrcamentoConteudo() {
     if (parquesMarcados.length > 0) {
       texto += `*Parques que inclui no pacote:*\n`;
       parquesMarcados.forEach((p) => {
-        texto += `👉 ${p}\n`;
+        texto += `• ${p}\n`;
       });
       texto += `\n`;
     }
@@ -431,29 +431,29 @@ function GeradorOrcamentoConteudo() {
     }
 
     if (formaPagamento) {
-      texto += `💳 *Formas de Pagamento:*\n${formaPagamento}\n\n`;
+      texto += `*Formas de Pagamento:*\n${formaPagamento}\n\n`;
     }
 
     if (aptosRestantes) {
-      texto += `⚠️ Restam apenas ${aptosRestantes} apartamentos disponíveis!\n\n`;
+      texto += `*Atenção:* Restam apenas ${aptosRestantes} apartamentos disponíveis!\n\n`;
     }
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
     if (finalUrl) {
-      texto += `🔗 *Fotos e detalhes completos:*\n${finalUrl}\n\n`;
+      // Usar <link> evita que o WhatsApp puxe o card duplo automático poluindo a mensagem
+      texto += `*Fotos e detalhes completos:*\n<${finalUrl}>\n\n`;
     }
     texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._\n`;
 
     const idFinal = idDoc || idOrcamentoAtual;
     if (idFinal) {
       const idCurto = idFinal.slice(0, 6).toUpperCase();
-      texto += `🆔 *ID:* #${idCurto}`;
+      texto += `*ID:* #${idCurto}`;
     }
 
     return texto;
   };
 
-  // Função central para persistência no Firestore
   const processarGravacaoOrcamento = async () => {
     if (!hotelSelecionado) {
       abrirAlerta("Hospedagem Necessária", "Por favor, selecione uma hospedagem na lista antes de gerar.");
@@ -551,7 +551,6 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
-  // Ação exclusiva do botão: Salva, copia e abre direto na conversa do cliente
   const salvarEEnviarZapCliente = async () => {
     const zapPuro = clienteWhatsapp.replace(/\D/g, "");
     if (!clienteNome.trim() || zapPuro.length < 10) {
@@ -582,7 +581,6 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
-  // Regra booleana que controla a ativação do botão Salvar e Enviar
   const podeEnviarDireto = Boolean(
     clienteNome.trim().length > 0 &&
     clienteWhatsapp.replace(/\D/g, "").length >= 10 &&
