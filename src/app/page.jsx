@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
-  Send
+  Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -19,6 +19,13 @@ const REGIMES_OPCOES = [
   { id: "cafe_jantar", label: "Café + Jantar" },
   { id: "pensao_completa", label: "Pensão Completa" },
 ];
+
+const MESES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
+
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const formatarTituloOrtografico = (texto) => {
   if (!texto) return "Parques que inclui no pacote";
@@ -46,6 +53,12 @@ const somarDias = (dataStr, dias) => {
   return `${a}-${m}-${d}`;
 };
 
+const formatarDataExibicao = (dataStr) => {
+  if (!dataStr) return "--/--/----";
+  const [ano, mes, dia] = dataStr.split("-");
+  return `${dia}/${mes}/${ano}`;
+};
+
 const gerarSlug = (texto) => {
   if (!texto) return "hotel";
   return texto
@@ -58,6 +71,251 @@ const gerarSlug = (texto) => {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 };
+
+// Componente do Calendário Moderno estilo Booking / Airbnb
+function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }) {
+  const [aberto, setAberto] = useState(false);
+  const containerRef = useRef(null);
+
+  const hoje = dataMinima || obterDataHojeLocal();
+  const [anoBase, mesBase] = (checkin || hoje).split("-").map(Number);
+  const [anoVisivel, setAnoVisivel] = useState(anoBase);
+  const [mesVisivel, setMesVisivel] = useState(mesBase - 1); // 0-indexed
+
+  // Estado temporário durante a seleção (primeiro clique = entrada)
+  const [dataInicioTemp, setDataInicioTemp] = useState(null);
+
+  // Fecha o pop-up ao clicar fora
+  useEffect(() => {
+    function handleClickFora(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setAberto(false);
+        setDataInicioTemp(null);
+      }
+    }
+    if (aberto) {
+      document.addEventListener("mousedown", handleClickFora);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickFora);
+    };
+  }, [aberto]);
+
+  const irMesAnterior = () => {
+    if (mesVisivel === 0) {
+      setMesVisivel(11);
+      setAnoVisivel((a) => a - 1);
+    } else {
+      setMesVisivel((m) => m - 1);
+    }
+  };
+
+  const irProximoMes = () => {
+    if (mesVisivel === 11) {
+      setMesVisivel(0);
+      setAnoVisivel((a) => a + 1);
+    } else {
+      setMesVisivel((m) => m + 1);
+    }
+  };
+
+  const limparSelecao = () => {
+    setDataInicioTemp(null);
+    onSelectDates("", "");
+  };
+
+  // Construção dos dias do mês visível
+  const primeiroDiaSemana = new Date(anoVisivel, mesVisivel, 1).getDay();
+  const totalDiasMes = new Date(anoVisivel, mesVisivel + 1, 0).getDate();
+
+  const handleCliqueDia = (dia) => {
+    const mesFormatado = String(mesVisivel + 1).padStart(2, "0");
+    const diaFormatado = String(dia).padStart(2, "0");
+    const dataClicada = `${anoVisivel}-${mesFormatado}-${diaFormatado}`;
+
+    if (!dataInicioTemp) {
+      // 1º Clique: Seleciona Entrada e aguarda o clique de saída
+      setDataInicioTemp(dataClicada);
+    } else {
+      // 2º Clique: Seleciona Saída
+      if (dataClicada <= dataInicioTemp) {
+        // Se clicar em data anterior ou igual, define como nova data de entrada
+        setDataInicioTemp(dataClicada);
+      } else {
+        // Intervalo válido: conclui e fecha o calendário
+        onSelectDates(dataInicioTemp, dataClicada);
+        setDataInicioTemp(null);
+        setAberto(false);
+      }
+    }
+  };
+
+  const dataInicioEfetiva = dataInicioTemp || checkin;
+  const dataFimEfetiva = dataInicioTemp ? null : checkout;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      {/* Botões Visuais de Entrada e Saída */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setAberto(true);
+            setDataInicioTemp(null);
+          }}
+          className={`text-left p-3 rounded-xl border transition flex items-center gap-3 ${
+            aberto && !dataInicioTemp
+              ? "bg-white border-brand-900 ring-2 ring-brand-900/20 shadow-sm"
+              : "bg-slate-50 border-slate-300 hover:bg-slate-100"
+          }`}
+        >
+          <div className="p-2 bg-emerald-100 text-emerald-900 rounded-lg shrink-0">
+            <CalendarIcon className="w-4 h-4" />
+          </div>
+          <div className="truncate">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Check-in</span>
+            <span className="text-xs md:text-sm font-bold text-slate-900">
+              {formatarDataExibicao(checkin)}
+            </span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setAberto(true);
+            setDataInicioTemp(null);
+          }}
+          className={`text-left p-3 rounded-xl border transition flex items-center gap-3 ${
+            aberto && dataInicioTemp
+              ? "bg-white border-brand-900 ring-2 ring-brand-900/20 shadow-sm"
+              : "bg-slate-50 border-slate-300 hover:bg-slate-100"
+          }`}
+        >
+          <div className="p-2 bg-emerald-100 text-emerald-900 rounded-lg shrink-0">
+            <CalendarIcon className="w-4 h-4" />
+          </div>
+          <div className="truncate">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Check-out</span>
+            <span className="text-xs md:text-sm font-bold text-slate-900">
+              {formatarDataExibicao(checkout)}
+            </span>
+          </div>
+        </button>
+      </div>
+
+      {/* Pop-up do Calendário Moderno */}
+      {aberto && (
+        <div className="absolute top-full left-0 right-0 sm:right-auto sm:w-[360px] mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+          {/* Topo do Calendário: Mês / Ano e Setas */}
+          <div className="flex items-center justify-between mb-3 px-1">
+            <button
+              type="button"
+              onClick={irMesAnterior}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition"
+              title="Mês anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h4 className="font-extrabold text-sm text-slate-800">
+              {MESES[mesVisivel]} {anoVisivel}
+            </h4>
+            <button
+              type="button"
+              onClick={irProximoMes}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition"
+              title="Próximo mês"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Cabeçalho dos Dias da Semana */}
+          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            {DIAS_SEMANA.map((diaSem) => (
+              <span key={diaSem} className="text-[11px] font-bold text-slate-400">
+                {diaSem}
+              </span>
+            ))}
+          </div>
+
+          {/* Grade de Dias */}
+          <div className="grid grid-cols-7 gap-1">
+            {/* Espaços em branco antes do 1º dia */}
+            {Array.from({ length: primeiroDiaSemana }).map((_, idx) => (
+              <div key={`vazio-${idx}`} className="h-9 w-9" />
+            ))}
+
+            {/* Dias do Mês */}
+            {Array.from({ length: totalDiasMes }).map((_, idx) => {
+              const diaNum = idx + 1;
+              const mesFormatado = String(mesVisivel + 1).padStart(2, "0");
+              const diaFormatado = String(diaNum).padStart(2, "0");
+              const dataAtualStr = `${anoVisivel}-${mesFormatado}-${diaFormatado}`;
+
+              const desabilitado = dataAtualStr < hoje;
+              const isInicio = dataInicioEfetiva === dataAtualStr;
+              const isFim = dataFimEfetiva === dataAtualStr;
+              const noIntervalo =
+                dataInicioEfetiva &&
+                dataFimEfetiva &&
+                dataAtualStr > dataInicioEfetiva &&
+                dataAtualStr < dataFimEfetiva;
+
+              let classeEstilo = "text-slate-800 hover:bg-slate-100";
+              if (desabilitado) {
+                classeEstilo = "text-slate-300 cursor-not-allowed";
+              } else if (isInicio || isFim) {
+                classeEstilo = "bg-brand-900 text-white font-black shadow-md rounded-full";
+              } else if (noIntervalo) {
+                classeEstilo = "bg-emerald-50 text-brand-950 font-bold rounded-none";
+              }
+
+              return (
+                <button
+                  key={dataAtualStr}
+                  type="button"
+                  disabled={desabilitado}
+                  onClick={() => handleCliqueDia(diaNum)}
+                  className={`h-9 w-9 mx-auto flex items-center justify-center text-xs font-semibold rounded-lg transition ${classeEstilo}`}
+                >
+                  {diaNum}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Rodapé: Dica de Seleção e Botão Limpar */}
+          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-[11px] text-slate-500 font-medium">
+              {dataInicioTemp ? "Selecione a data de saída" : "Selecione o check-in"}
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={limparSelecao}
+                className="text-slate-500 hover:text-red-600 font-bold text-[11px] px-2 py-1 rounded transition"
+              >
+                Limpar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAberto(false);
+                  setDataInicioTemp(null);
+                }}
+                className="bg-brand-900 hover:bg-brand-950 text-white font-bold text-[11px] px-3 py-1 rounded-lg transition shadow-sm"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function GeradorOrcamentoConteudo() {
   const searchParams = useSearchParams();
@@ -204,13 +462,9 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
-  const handleCheckinChange = (e) => {
-    const novoCheckin = e.target.value;
-    setCheckin(novoCheckin);
-
-    if (!checkout || checkout <= novoCheckin) {
-      setCheckout(somarDias(novoCheckin, 1));
-    }
+  const handleSelecaoIntervaloDatas = (novaEntrada, novaSaida) => {
+    setCheckin(novaEntrada);
+    setCheckout(novaSaida);
   };
 
   const handleLogout = () => {
@@ -806,30 +1060,18 @@ function GeradorOrcamentoConteudo() {
             )}
           </div>
 
-          {/* ================= DATAS ================= */}
+          {/* ================= DATAS (CALENDÁRIO MODERNO ESTILO AIRBNB / BOOKING) ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-in</label>
-                <input
-                  type="date"
-                  min={hojeStr}
-                  value={checkin}
-                  onChange={handleCheckinChange}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Check-out</label>
-                <input
-                  type="date"
-                  min={somarDias(checkin || hojeStr, 1)}
-                  value={checkout}
-                  onChange={(e) => setCheckout(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium"
-                />
-              </div>
-            </div>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+              <CalendarIcon className="w-4 h-4 text-brand-700" />
+              Período da Estadia
+            </label>
+            <DateRangePickerModerno
+              checkin={checkin}
+              checkout={checkout}
+              onSelectDates={handleSelecaoIntervaloDatas}
+              dataMinima={hojeStr}
+            />
           </div>
 
           {/* ================= CONTEÚDO DA ABA INDIVIDUAL ================= */}
