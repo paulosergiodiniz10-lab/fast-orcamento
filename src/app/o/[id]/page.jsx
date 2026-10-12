@@ -512,7 +512,41 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 3. FOTOS DOS APARTAMENTOS ================= */}
+        {/* ================= 3. VÍDEO PRINCIPAL DO HOTEL (ANTES DOS APARTAMENTOS) ================= */}
+        {videoInfo?.embedUrl && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Video className="w-5 h-5 text-red-600" />
+              Vídeo da Hospedagem
+            </h3>
+
+            {videoInfo.isVertical ? (
+              <div className="flex justify-center py-2">
+                <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
+                  <iframe
+                    src={videoInfo.embedUrl}
+                    title="Vídeo Vertical da Hospedagem"
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
+                <iframe
+                  src={videoInfo.embedUrl}
+                  title="Vídeo da Hospedagem"
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= 4. FOTOS DOS APARTAMENTOS ================= */}
         {categoriasAptoExibir.length > 0 && (
           <div className="space-y-4">
             {categoriasAptoExibir.map((aptoCat) => {
@@ -590,7 +624,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 4. FOTOS DO HOTEL & LAZER ================= */}
+        {/* ================= 5. FOTOS DO HOTEL & LAZER ================= */}
         {fotosGerais.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
@@ -643,7 +677,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. FOTOS DOS PARQUES AQUÁTICOS ================= */}
+        {/* ================= 6. FOTOS DOS PARQUES AQUÁTICOS ================= */}
         {fotosParque.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <div className="flex items-center gap-2">
@@ -702,7 +736,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. VÍDEO DO PARQUE AQUÁTICO ================= */}
+        {/* ================= 7. VÍDEO DO PARQUE AQUÁTICO ================= */}
         {videoParqueInfo?.embedUrl && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -727,40 +761,6 @@ export default function VitrineOrcamento() {
                 <iframe
                   src={videoParqueInfo.embedUrl}
                   title={tituloVideoParque}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= 7. VÍDEO PRINCIPAL DO HOTEL ================= */}
-        {videoInfo?.embedUrl && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Video className="w-5 h-5 text-red-600" />
-              Vídeo da Hospedagem
-            </h3>
-
-            {videoInfo.isVertical ? (
-              <div className="flex justify-center py-2">
-                <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
-                  <iframe
-                    src={videoInfo.embedUrl}
-                    title="Vídeo Vertical da Hospedagem"
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
-                <iframe
-                  src={videoInfo.embedUrl}
-                  title="Vídeo da Hospedagem"
                   className="w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
