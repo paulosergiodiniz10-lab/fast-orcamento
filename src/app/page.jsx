@@ -72,18 +72,27 @@ const gerarSlug = (texto) => {
     .replace(/-+/g, "-");
 };
 
-// Componente do Calendário Moderno estilo Booking / Airbnb
+// Componente do Calendário Moderno sincronizado com o mês da data selecionada ou do dia atual
 function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }) {
   const [aberto, setAberto] = useState(false);
   const containerRef = useRef(null);
 
   const hoje = dataMinima || obterDataHojeLocal();
-  const [anoBase, mesBase] = (checkin || hoje).split("-").map(Number);
-  const [anoVisivel, setAnoVisivel] = useState(anoBase);
-  const [mesVisivel, setMesVisivel] = useState(mesBase - 1); // 0-indexed
+  const [anoHoje, mesHoje] = hoje.split("-").map(Number);
+
+  const [anoVisivel, setAnoVisivel] = useState(anoHoje);
+  const [mesVisivel, setMesVisivel] = useState(mesHoje - 1); // 0-indexed
 
   // Estado temporário durante a seleção (primeiro clique = entrada)
   const [dataInicioTemp, setDataInicioTemp] = useState(null);
+
+  // Sincroniza o mês visível sempre que o checkin mudar externamente (ex: ao Limpar Dados)
+  useEffect(() => {
+    const dataRef = checkin || hoje;
+    const [ano, mes] = dataRef.split("-").map(Number);
+    setAnoVisivel(ano);
+    setMesVisivel(mes - 1);
+  }, [checkin, hoje]);
 
   // Fecha o pop-up ao clicar fora
   useEffect(() => {
@@ -100,6 +109,15 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
       document.removeEventListener("mousedown", handleClickFora);
     };
   }, [aberto]);
+
+  const abrirCalendario = () => {
+    const dataReferencia = checkin || hoje;
+    const [ano, mes] = dataReferencia.split("-").map(Number);
+    setAnoVisivel(ano);
+    setMesVisivel(mes - 1);
+    setDataInicioTemp(null);
+    setAberto(true);
+  };
 
   const irMesAnterior = () => {
     if (mesVisivel === 0) {
@@ -119,12 +137,14 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
     }
   };
 
-  const limparSelecao = () => {
+  // Limpa e traz a data do dia corrente
+  const limparParaHoje = () => {
     setDataInicioTemp(null);
-    onSelectDates("", "");
+    setAnoVisivel(anoHoje);
+    setMesVisivel(mesHoje - 1);
+    onSelectDates(hoje, somarDias(hoje, 1));
   };
 
-  // Construção dos dias do mês visível
   const primeiroDiaSemana = new Date(anoVisivel, mesVisivel, 1).getDay();
   const totalDiasMes = new Date(anoVisivel, mesVisivel + 1, 0).getDate();
 
@@ -134,15 +154,11 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
     const dataClicada = `${anoVisivel}-${mesFormatado}-${diaFormatado}`;
 
     if (!dataInicioTemp) {
-      // 1º Clique: Seleciona Entrada e aguarda o clique de saída
       setDataInicioTemp(dataClicada);
     } else {
-      // 2º Clique: Seleciona Saída
       if (dataClicada <= dataInicioTemp) {
-        // Se clicar em data anterior ou igual, define como nova data de entrada
         setDataInicioTemp(dataClicada);
       } else {
-        // Intervalo válido: conclui e fecha o calendário
         onSelectDates(dataInicioTemp, dataClicada);
         setDataInicioTemp(null);
         setAberto(false);
@@ -159,10 +175,7 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
       <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
-          onClick={() => {
-            setAberto(true);
-            setDataInicioTemp(null);
-          }}
+          onClick={abrirCalendario}
           className={`text-left p-3 rounded-xl border transition flex items-center gap-3 ${
             aberto && !dataInicioTemp
               ? "bg-white border-brand-900 ring-2 ring-brand-900/20 shadow-sm"
@@ -182,10 +195,7 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
 
         <button
           type="button"
-          onClick={() => {
-            setAberto(true);
-            setDataInicioTemp(null);
-          }}
+          onClick={abrirCalendario}
           className={`text-left p-3 rounded-xl border transition flex items-center gap-3 ${
             aberto && dataInicioTemp
               ? "bg-white border-brand-900 ring-2 ring-brand-900/20 shadow-sm"
@@ -207,7 +217,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
       {/* Pop-up do Calendário Moderno */}
       {aberto && (
         <div className="absolute top-full left-0 right-0 sm:right-auto sm:w-[360px] mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
-          {/* Topo do Calendário: Mês / Ano e Setas */}
           <div className="flex items-center justify-between mb-3 px-1">
             <button
               type="button"
@@ -230,7 +239,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
             </button>
           </div>
 
-          {/* Cabeçalho dos Dias da Semana */}
           <div className="grid grid-cols-7 gap-1 text-center mb-2">
             {DIAS_SEMANA.map((diaSem) => (
               <span key={diaSem} className="text-[11px] font-bold text-slate-400">
@@ -239,14 +247,11 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
             ))}
           </div>
 
-          {/* Grade de Dias */}
           <div className="grid grid-cols-7 gap-1">
-            {/* Espaços em branco antes do 1º dia */}
             {Array.from({ length: primeiroDiaSemana }).map((_, idx) => (
               <div key={`vazio-${idx}`} className="h-9 w-9" />
             ))}
 
-            {/* Dias do Mês */}
             {Array.from({ length: totalDiasMes }).map((_, idx) => {
               const diaNum = idx + 1;
               const mesFormatado = String(mesVisivel + 1).padStart(2, "0");
@@ -285,7 +290,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
             })}
           </div>
 
-          {/* Rodapé: Dica de Seleção e Botão Limpar */}
           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="text-[11px] text-slate-500 font-medium">
               {dataInicioTemp ? "Selecione a data de saída" : "Selecione o check-in"}
@@ -294,7 +298,7 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={limparSelecao}
+                onClick={limparParaHoje}
                 className="text-slate-500 hover:text-red-600 font-bold text-[11px] px-2 py-1 rounded transition"
               >
                 Limpar
@@ -614,7 +618,6 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem limpa e condicional com título dinâmico das inclusões
   const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
