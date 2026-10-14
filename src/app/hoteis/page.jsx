@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
-  HelpCircle, AlertCircle, Waves
+  HelpCircle, AlertCircle, Waves, Filter
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -21,6 +21,18 @@ const formatarTituloOrtografico = (texto) => {
   const limpo = texto.trim();
   if (limpo.length === 0) return "Parques que inclui no pacote";
   return limpo.charAt(0).toUpperCase() + limpo.slice(1).toLowerCase();
+};
+
+// Formatação para nomes de cidade (Ex: "caldas novas" -> "Caldas Novas")
+const formatarNomeCidade = (texto) => {
+  if (!texto) return "";
+  return texto
+    .trim()
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1))
+    .join(" ");
 };
 
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
@@ -169,7 +181,12 @@ export default function GestaoHoteis() {
   const [modoVisualizacao, setModoVisualizacao] = useState("lista");
   const [hotelEditandoId, setHotelEditandoId] = useState(null);
 
+  // Filtro por cidade na lista de hotéis
+  const [filtroCidadeLista, setFiltroCidadeLista] = useState("todas");
+
   // Campos do Formulário
+  const [cidade, setCidade] = useState("Caldas Novas");
+  const [estado, setEstado] = useState("GO");
   const [nome, setNome] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [localizacao, setLocalizacao] = useState("");
@@ -397,6 +414,8 @@ export default function GestaoHoteis() {
 
   const abrirNovoHotel = () => {
     setHotelEditandoId(null);
+    setCidade("Caldas Novas");
+    setEstado("GO");
     setNome("");
     setLogoUrl("");
     setLocalizacao("");
@@ -424,6 +443,8 @@ export default function GestaoHoteis() {
 
   const iniciarEdicao = (hotel) => {
     setHotelEditandoId(hotel.id);
+    setCidade(hotel.cidade || "Caldas Novas");
+    setEstado(hotel.estado || "GO");
     setNome(hotel.nome || "");
     setLogoUrl(hotel.logoUrl || "");
     setLocalizacao(hotel.localizacao || "");
@@ -473,6 +494,8 @@ export default function GestaoHoteis() {
 
       const dados = {
         agenciaId: agencyIdSafe(agencia.id),
+        cidade: formatarNomeCidade(cidade) || "Caldas Novas",
+        estado: (estado || "GO").trim().toUpperCase().slice(0, 2),
         nome: nome.trim(),
         logoUrl: logoUrl.trim(),
         localizacao: localizacao.trim(),
@@ -542,6 +565,18 @@ export default function GestaoHoteis() {
     );
   };
 
+  // Lista de cidades únicas existentes para o filtro
+  const cidadesDisponiveis = Array.from(
+    new Set(hoteis.map((h) => h.cidade || "Caldas Novas").filter(Boolean))
+  );
+
+  // Filtragem dos hotéis exibidos na listagem
+  const hoteisFiltradosLista = hoteis.filter((h) => {
+    if (filtroCidadeLista === "todas") return true;
+    const cid = h.cidade || "Caldas Novas";
+    return cid.toLowerCase() === filtroCidadeLista.toLowerCase();
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans relative">
       <header className="bg-brand-900 text-white px-4 md:px-8 py-4 shadow sticky top-0 z-30 flex items-center justify-between">
@@ -573,10 +608,48 @@ export default function GestaoHoteis() {
       <main className="max-w-5xl mx-auto p-4 md:p-6 mt-2">
         {modoVisualizacao === "lista" && (
           <div>
-            <div className="flex items-center justify-between mb-4">
+            {/* TOPO DA LISTA + FILTRO POR CIDADE */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-base font-bold text-slate-800">
-                Hotéis Cadastrados ({hoteis.length})
+                Hotéis Cadastrados ({hoteisFiltradosLista.length})
               </h2>
+
+              {/* Filtro por Cidade */}
+              {cidadesDisponiveis.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 border border-slate-200 p-1 rounded-xl">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase px-2 flex items-center gap-1">
+                    <Filter className="w-3 h-3 text-brand-700" /> Cidade:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFiltroCidadeLista("todas")}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition ${
+                      filtroCidadeLista === "todas"
+                        ? "bg-brand-900 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Todas ({hoteis.length})
+                  </button>
+                  {cidadesDisponiveis.map((cid) => {
+                    const qtd = hoteis.filter((h) => (h.cidade || "Caldas Novas").toLowerCase() === cid.toLowerCase()).length;
+                    return (
+                      <button
+                        key={cid}
+                        type="button"
+                        onClick={() => setFiltroCidadeLista(cid)}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition ${
+                          filtroCidadeLista.toLowerCase() === cid.toLowerCase()
+                            ? "bg-brand-900 text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        {cid} ({qtd})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {carregando ? (
@@ -599,9 +672,20 @@ export default function GestaoHoteis() {
                   Cadastrar Primeiro Hotel
                 </button>
               </div>
+            ) : hoteisFiltradosLista.length === 0 ? (
+              <div className="bg-white p-12 rounded-2xl text-center border border-slate-200 shadow-sm">
+                <p className="text-sm font-semibold text-slate-700">Nenhum hotel encontrado nesta cidade.</p>
+                <button
+                  type="button"
+                  onClick={() => setFiltroCidadeLista("todas")}
+                  className="mt-3 text-xs text-brand-900 underline font-bold"
+                >
+                  Ver todos os hotéis
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {hoteis.map((h) => (
+                {hoteisFiltradosLista.map((h) => (
                   <div
                     key={h.id}
                     className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition"
@@ -630,11 +714,19 @@ export default function GestaoHoteis() {
                       )}
 
                       <div className="p-4 space-y-2">
+                        {/* Tag de Cidade / Estado */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-emerald-600" />
+                            {h.cidade || "Caldas Novas"} - {h.estado || "GO"}
+                          </span>
+                        </div>
+
                         <h3 className="font-bold text-base text-slate-900">{h.nome}</h3>
                         {h.localizacao && (
-                          <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <p className="text-xs text-slate-500 flex items-center gap-1.5 truncate">
                             <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            {h.localizacao}
+                            <span className="truncate">{h.localizacao}</span>
                           </p>
                         )}
 
@@ -709,8 +801,39 @@ export default function GestaoHoteis() {
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Informações Básicas</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                {/* CIDADE E ESTADO NO TOPO */}
+                <div className="md:col-span-8">
+                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                    Cidade *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Caldas Novas, Rio Quente, Olímpia, Gramado"
+                    value={cidade}
+                    onChange={(e) => setCidade(e.target.value)}
+                    onBlur={(e) => setCidade(formatarNomeCidade(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-brand-900"
+                  />
+                </div>
+
+                <div className="md:col-span-4">
+                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                    Estado (UF) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    placeholder="Ex: GO"
+                    value={estado}
+                    onChange={(e) => setEstado(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-brand-900"
+                  />
+                </div>
+
+                <div className="md:col-span-12">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                     Nome do Hotel / Resort / Flat *
                   </label>
@@ -724,7 +847,7 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="md:col-span-12 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-700 uppercase block">
                       Logotipo do Hotel / Resort (PNG transparente ou JPG)
@@ -760,7 +883,7 @@ export default function GestaoHoteis() {
                   </div>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-12">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                     Localização / Endereço <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
                   </label>
@@ -773,7 +896,7 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                <div>
+                <div className="md:col-span-6">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                     Horário Padrão de Check-in
                   </label>
@@ -786,7 +909,7 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                <div>
+                <div className="md:col-span-6">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                     Horário Padrão de Check-out
                   </label>
@@ -799,7 +922,7 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-12">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                     Forma de Pagamento Padrão
                   </label>
@@ -812,7 +935,7 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-12">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700 uppercase block">
                       Sobre o Hotel <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
