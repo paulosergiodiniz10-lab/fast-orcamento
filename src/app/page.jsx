@@ -81,12 +81,10 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
   const [anoHoje, mesHoje] = hoje.split("-").map(Number);
 
   const [anoVisivel, setAnoVisivel] = useState(anoHoje);
-  const [mesVisivel, setMesVisivel] = useState(mesHoje - 1); // 0-indexed
+  const [mesVisivel, setMesVisivel] = useState(mesHoje - 1);
 
-  // Estado temporário durante a seleção (primeiro clique = entrada)
   const [dataInicioTemp, setDataInicioTemp] = useState(null);
 
-  // Sincroniza o mês visível sempre que o checkin mudar externamente (ex: ao Limpar Dados)
   useEffect(() => {
     const dataRef = checkin || hoje;
     const [ano, mes] = dataRef.split("-").map(Number);
@@ -94,7 +92,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
     setMesVisivel(mes - 1);
   }, [checkin, hoje]);
 
-  // Fecha o pop-up ao clicar fora
   useEffect(() => {
     function handleClickFora(event) {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
@@ -137,7 +134,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
     }
   };
 
-  // Limpa e traz a data do dia corrente
   const limparParaHoje = () => {
     setDataInicioTemp(null);
     setAnoVisivel(anoHoje);
@@ -171,7 +167,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
 
   return (
     <div className="relative" ref={containerRef}>
-      {/* Botões Visuais de Entrada e Saída */}
       <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
@@ -214,7 +209,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
         </button>
       </div>
 
-      {/* Pop-up do Calendário Moderno */}
       {aberto && (
         <div className="absolute top-full left-0 right-0 sm:right-auto sm:w-[360px] mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between mb-3 px-1">
@@ -233,7 +227,6 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
               type="button"
               onClick={irProximoMes}
               className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition"
-              title="Próximo mês"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -482,9 +475,10 @@ function GeradorOrcamentoConteudo() {
     );
   };
 
+  // Permite apagar totalmente o valor sem travar em '0,00'
   const formatarMoeda = (valorDigitado) => {
     const apenasNumeros = valorDigitado.replace(/\D/g, "");
-    if (!apenasNumeros) return "";
+    if (!apenasNumeros || parseInt(apenasNumeros, 10) === 0) return "";
 
     const valorFloat = parseFloat(apenasNumeros) / 100;
     return valorFloat.toLocaleString("pt-BR", {
@@ -618,6 +612,7 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
+  // Montagem limpa e condicional: ignora regimes vazios ou zerados (0,00)
   const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
@@ -664,9 +659,11 @@ function GeradorOrcamentoConteudo() {
         texto += `\n`;
       }
 
-      const regimesComValor = REGIMES_OPCOES.filter(
-        (r) => regimesValores[r.id] && regimesValores[r.id].trim() !== ""
-      );
+      // Filtra apenas regimes preenchidos e diferentes de 0,00
+      const regimesComValor = REGIMES_OPCOES.filter((r) => {
+        const val = regimesValores[r.id];
+        return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
+      });
 
       regimesComValor.forEach((reg) => {
         texto += `*${reg.label}:*\nR$ ${regimesValores[reg.id]}\n\n`;
@@ -681,9 +678,11 @@ function GeradorOrcamentoConteudo() {
           texto += `\n`;
         }
 
-        const regimesComValor = REGIMES_OPCOES.filter(
-          (r) => ap.valores[r.id] && ap.valores[r.id].trim() !== ""
-        );
+        // Filtra apenas regimes preenchidos e diferentes de 0,00
+        const regimesComValor = REGIMES_OPCOES.filter((r) => {
+          const val = ap.valores[r.id];
+          return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
+        });
 
         if (regimesComValor.length > 0) {
           regimesComValor.forEach((reg) => {
@@ -738,6 +737,16 @@ function GeradorOrcamentoConteudo() {
       titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
     }));
 
+    // Grava no banco apenas regimes com valor real válido (> 0)
+    const regimesFiltradosGravar = REGIMES_OPCOES.filter((r) => {
+      const val = regimesValores[r.id];
+      return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
+    }).map((r) => ({
+      id: r.id,
+      nome: r.label,
+      valor: regimesValores[r.id],
+    }));
+
     const dadosOrcamento = {
       agenciaId: agencia?.id || "avulso",
       tipoOrcamento: abaAtiva,
@@ -774,11 +783,7 @@ function GeradorOrcamentoConteudo() {
       idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
       hospedes: abaAtiva === "individual" ? hospedesFormatado : `Grupo com ${apartamentosGrupo.length} apartamento(s)`,
       parques: parquesMarcados,
-      regimes: REGIMES_OPCOES.filter((r) => regimesValores[r.id] && regimesValores[r.id].trim() !== "").map((r) => ({
-        id: r.id,
-        nome: r.label,
-        valor: regimesValores[r.id],
-      })),
+      regimes: regimesFiltradosGravar,
       apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
       formaPagamento,
       aptosRestantes,
