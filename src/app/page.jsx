@@ -6,7 +6,7 @@ import {
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
-  Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X
+  Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -292,9 +292,9 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
               <button
                 type="button"
                 onClick={limparParaHoje}
-                className="text-slate-500 hover:text-red-600 font-bold text-[11px] px-2 py-1 rounded transition"
+                className="text-slate-500 hover:text-brand-900 font-bold text-[11px] px-2 py-1 rounded transition"
               >
-                Limpar
+                Voltar p/ Hoje
               </button>
               <button
                 type="button"
@@ -322,6 +322,9 @@ function GeradorOrcamentoConteudo() {
 
   const [agencia, setAgencia] = useState(null);
   const [hoteis, setHoteis] = useState([]);
+  
+  // Segmentação por Cidade
+  const [cidadeSelecionada, setCidadeSelecionada] = useState("todas");
   const [hotelSelecionado, setHotelSelecionado] = useState(null);
   const [aptoSelecionado, setAptoSelecionado] = useState("");
 
@@ -416,6 +419,9 @@ function GeradorOrcamentoConteudo() {
         const hotelNomeUrl = searchParams.get("hotelNome");
         const hotelEncontrado = hotelNomeUrl ? lista.find((h) => h.nome === hotelNomeUrl) : null;
         if (hotelEncontrado) {
+          if (hotelEncontrado.cidade) {
+            setCidadeSelecionada(hotelEncontrado.cidade);
+          }
           selecionarHotel(hotelEncontrado);
         }
       }
@@ -444,6 +450,31 @@ function GeradorOrcamentoConteudo() {
       setFormaPagamento(hotel.formaPagamento);
     } else {
       setFormaPagamento("Cartão em até 10x sem juros ou PIX com desconto especial");
+    }
+  };
+
+  // Cidades únicas extraídas dinamicamente dos hotéis cadastrados
+  const cidadesDisponiveis = Array.from(
+    new Set(hoteis.map((h) => h.cidade || "Caldas Novas").filter(Boolean))
+  );
+
+  // Lista de hotéis filtrada pela cidade selecionada
+  const hoteisFiltradosPorCidade = hoteis.filter((h) => {
+    if (cidadeSelecionada === "todas") return true;
+    const cid = h.cidade || "Caldas Novas";
+    return cid.toLowerCase() === cidadeSelecionada.toLowerCase();
+  });
+
+  const handleCidadeChange = (e) => {
+    const novaCidade = e.target.value;
+    setCidadeSelecionada(novaCidade);
+
+    // Se o hotel já selecionado não pertencer à nova cidade escolhida, limpa a seleção
+    if (hotelSelecionado && novaCidade !== "todas") {
+      const cidHotel = hotelSelecionado.cidade || "Caldas Novas";
+      if (cidHotel.toLowerCase() !== novaCidade.toLowerCase()) {
+        selecionarHotel(null);
+      }
     }
   };
 
@@ -495,6 +526,7 @@ function GeradorOrcamentoConteudo() {
   const executarLimpeza = () => {
     setClienteNome("");
     setClienteWhatsapp("");
+    setCidadeSelecionada("todas");
     setHotelSelecionado(null);
     setAptoSelecionado("");
     setCheckin(hojeStr);
@@ -754,6 +786,8 @@ function GeradorOrcamentoConteudo() {
       clienteWhatsapp: clienteWhatsapp.replace(/\D/g, "") || null,
       hotel: {
         nome: hotelSelecionado.nome,
+        cidade: hotelSelecionado.cidade || "Caldas Novas",
+        estado: hotelSelecionado.estado || "GO",
         logoUrl: hotelSelecionado.logoUrl || "",
         localizacao: hotelSelecionado.localizacao || "",
         descricao: hotelSelecionado.descricao || "",
@@ -998,41 +1032,70 @@ function GeradorOrcamentoConteudo() {
             </div>
           </div>
 
-          {/* ================= ESCOLHA SUA HOSPEDAGEM ================= */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Escolha sua Hospedagem
+          {/* ================= ESCOLHA DA CIDADE E HOSPEDAGEM ================= */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+            
+            {/* 1. SELETOR DE CIDADE */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-brand-700" />
+                Escolha a Cidade
               </label>
-              <Link href="/hoteis" className="text-xs text-brand-700 hover:underline font-semibold">
-                + Gerenciar
-              </Link>
-            </div>
-            {hoteis.length === 0 ? (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                Nenhuma hospedagem cadastrada.{" "}
-                <Link href="/hoteis" className="underline font-bold">
-                  Clique aqui para cadastrar a primeira.
-                </Link>
-              </div>
-            ) : (
               <select
-                value={hotelSelecionado?.id || ""}
-                onChange={handleHotelChange}
-                className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+                value={cidadeSelecionada}
+                onChange={handleCidadeChange}
+                className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg p-2.5 text-xs md:text-sm font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
               >
-                <option value="">-- Selecione uma hospedagem --</option>
-                {hoteis.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.nome}
+                <option value="todas">-- Todas as Cidades --</option>
+                {cidadesDisponiveis.map((cid) => (
+                  <option key={cid} value={cid}>
+                    {cid}
                   </option>
                 ))}
               </select>
-            )}
+            </div>
+
+            {/* 2. SELETOR DE HOSPEDAGEM */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Escolha sua Hospedagem
+                </label>
+                <Link href="/hoteis" className="text-xs text-brand-700 hover:underline font-semibold">
+                  + Gerenciar
+                </Link>
+              </div>
+
+              {hoteis.length === 0 ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  Nenhuma hospedagem cadastrada.{" "}
+                  <Link href="/hoteis" className="underline font-bold">
+                    Clique aqui para cadastrar a primeira.
+                  </Link>
+                </div>
+              ) : hoteisFiltradosPorCidade.length === 0 ? (
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500 italic">
+                  Nenhum hotel cadastrado nesta cidade. Selecione outra cidade acima ou adicione novos hotéis.
+                </div>
+              ) : (
+                <select
+                  value={hotelSelecionado?.id || ""}
+                  onChange={handleHotelChange}
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+                >
+                  <option value="">-- Selecione uma hospedagem --</option>
+                  {hoteisFiltradosPorCidade.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.nome} {h.cidade ? `(${h.cidade})` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
             {/* SELEÇÃO DO TIPO DE APARTAMENTO (MODO INDIVIDUAL) */}
             {abaAtiva === "individual" && hotelSelecionado?.tiposApto?.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-100">
+              <div className="pt-2 border-t border-slate-100">
                 <label className="text-xs font-bold text-slate-600 uppercase block mb-1.5 flex items-center gap-1">
                   <BedDouble className="w-3.5 h-3.5 text-brand-700" />
                   Tipo de Apartamento Cotado
