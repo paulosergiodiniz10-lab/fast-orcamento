@@ -334,14 +334,27 @@ export default function GestaoHoteis() {
     }
   };
 
+  // UPLOAD FOTOS GERAIS (MÁXIMO 18) COM TRAVA E COMPRESSOR
   const handleUploadFotosGerais = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    const vagasRestantes = 18 - fotosGerais.length;
+    if (vagasRestantes <= 0) {
+      abrirModal("error", "Limite Atingido", "Você já atingiu o limite máximo de 18 fotos gerais para este hotel.");
+      e.target.value = "";
+      return;
+    }
+
+    const arquivosParaEnviar = files.slice(0, vagasRestantes);
+    if (files.length > vagasRestantes) {
+      abrirModal("error", "Limite Parcial", `Você selecionou ${files.length} fotos, mas apenas ${vagasRestantes} foram adicionadas para respeitar o limite máximo de 18.`);
+    }
+
     setEnviandoFotoGeral(true);
     try {
       const urls = [];
-      for (const file of files) {
+      for (const file of arquivosParaEnviar) {
         const url = await uploadParaCloudinary(file);
         urls.push(url);
       }
@@ -369,14 +382,27 @@ export default function GestaoHoteis() {
     });
   };
 
+  // UPLOAD FOTOS DOS PARQUES (MÁXIMO 18) COM TRAVA E COMPRESSOR
   const handleUploadFotosParque = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    const vagasRestantes = 18 - fotosParque.length;
+    if (vagasRestantes <= 0) {
+      abrirModal("error", "Limite Atingido", "Você já atingiu o limite máximo de 18 fotos de parques para este hotel.");
+      e.target.value = "";
+      return;
+    }
+
+    const arquivosParaEnviar = files.slice(0, vagasRestantes);
+    if (files.length > vagasRestantes) {
+      abrirModal("error", "Limite Parcial", `Você selecionou ${files.length} fotos, mas apenas ${vagasRestantes} foram adicionadas para respeitar o limite máximo de 18.`);
+    }
+
     setEnviandoFotoParque(true);
     try {
       const urls = [];
-      for (const file of files) {
+      for (const file of arquivosParaEnviar) {
         const url = await uploadParaCloudinary(file);
         urls.push(url);
       }
@@ -437,14 +463,28 @@ export default function GestaoHoteis() {
     setTiposApto((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // UPLOAD FOTOS DE APARTAMENTOS (MÁXIMO 10) COM TRAVA E COMPRESSOR
   const handleUploadFotosApto = async (index, e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    const fotosAtuais = tiposApto[index].fotos || [];
+    const vagasRestantes = 10 - fotosAtuais.length;
+    if (vagasRestantes <= 0) {
+      abrirModal("error", "Limite Atingido", "Esta categoria de apartamento já atingiu o limite máximo de 10 fotos.");
+      e.target.value = "";
+      return;
+    }
+
+    const arquivosParaEnviar = files.slice(0, vagasRestantes);
+    if (files.length > vagasRestantes) {
+      abrirModal("error", "Limite Parcial", `Você selecionou ${files.length} fotos, mas apenas ${vagasRestantes} foram adicionadas para respeitar o limite máximo de 10 por quarto.`);
+    }
+
     setEnviandoFotoAptoIndex(index);
     try {
       const urls = [];
-      for (const file of files) {
+      for (const file of arquivosParaEnviar) {
         const url = await uploadParaCloudinary(file);
         urls.push(url);
       }
@@ -489,7 +529,6 @@ export default function GestaoHoteis() {
     });
   };
 
-  // Gerenciamento de Opções Pré-cadastradas para Crianças
   const adicionarOpcaoCrianca = () => {
     const textoLimpo = novaOpcaoCrianca.trim();
     if (!textoLimpo) return;
@@ -513,7 +552,6 @@ export default function GestaoHoteis() {
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
     
-    // Pagamentos padrão
     setPagamentoCartao("Em até 10x sem juros");
     setPagamentoPix("Desconto especial");
     setPagamentoBoleto("");
@@ -528,13 +566,11 @@ export default function GestaoHoteis() {
     setTituloVideoParque("Vídeo dos Parques Aquáticos");
     setVideoParqueUrl("");
 
-    // Configurações do Orçamento (WhatsApp)
     setMostrarTituloValores(true);
     setTituloValoresCustomizado("Valor total do pacote:");
     setOpcoesCriancas(["até 12 anos", "0 a 5 anos cortesia"]);
     setNovaOpcaoCrianca("");
 
-    // Botões nascem ativos por padrão
     setMostrarLocalizacao(true);
     setMostrarSobre(true);
     setMostrarVideo(true);
@@ -562,7 +598,6 @@ export default function GestaoHoteis() {
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
 
-    // Formas de Pagamento
     setPagamentoCartao(hotel.pagamentoCartao !== undefined ? hotel.pagamentoCartao : "Em até 10x sem juros");
     setPagamentoPix(hotel.pagamentoPix !== undefined ? hotel.pagamentoPix : "Desconto especial");
     setPagamentoBoleto(hotel.pagamentoBoleto || "");
@@ -584,13 +619,11 @@ export default function GestaoHoteis() {
     setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
     setVideoParqueUrl(hotel.videoParqueUrl || "");
 
-    // Configurações do Orçamento WhatsApp
     setMostrarTituloValores(hotel.mostrarTituloValores !== false);
     setTituloValoresCustomizado(hotel.tituloValoresCustomizado || "Valor total do pacote:");
     setOpcoesCriancas(hotel.opcoesCriancas || ["até 12 anos"]);
     setNovaOpcaoCrianca("");
 
-    // Preferências de visibilidade (default: true)
     setMostrarLocalizacao(hotel.mostrarLocalizacao !== false);
     setMostrarSobre(hotel.mostrarSobre !== false);
     setMostrarVideo(hotel.mostrarVideo !== false);
@@ -624,7 +657,6 @@ export default function GestaoHoteis() {
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
-      // Constrói texto unificado de forma de pagamento para compatibilidade
       const partesPagamento = [];
       if (pagamentoCartao.trim()) partesPagamento.push(`Cartão: ${pagamentoCartao.trim()}`);
       if (pagamentoPix.trim()) partesPagamento.push(`PIX: ${pagamentoPix.trim()}`);
@@ -641,7 +673,6 @@ export default function GestaoHoteis() {
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
 
-        // Formas de Pagamento Estruturadas
         pagamentoCartao: pagamentoCartao.trim(),
         pagamentoPix: pagamentoPix.trim(),
         pagamentoBoleto: pagamentoBoleto.trim(),
@@ -666,12 +697,10 @@ export default function GestaoHoteis() {
         tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
         videoParqueUrl: videoParqueUrl.trim(),
 
-        // Configurações do Orçamento WhatsApp
         mostrarTituloValores,
         tituloValoresCustomizado: tituloValoresCustomizado.trim() || "Valor total do pacote:",
         opcoesCriancas: opcoesCriancas.filter((op) => op && op.trim().length > 0),
 
-        // Chaves Liga/Desliga no Site
         mostrarLocalizacao,
         mostrarSobre,
         mostrarVideo,
@@ -1254,7 +1283,7 @@ export default function GestaoHoteis() {
                 />
               </div>
 
-              {/* ================= NOVO BLOCO DESTACADO: CONFIGURAÇÕES DO ORÇAMENTO (WHATSAPP) ================= */}
+              {/* ================= BLOCO DESTACADO: CONFIGURAÇÕES DO ORÇAMENTO (WHATSAPP) ================= */}
               <div className="mt-5 p-4 md:p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border-2 border-emerald-200/90 space-y-4 shadow-sm">
                 <div className="flex items-center gap-2 border-b border-emerald-200/60 pb-2.5">
                   <MessageSquare className="w-4 h-4 text-emerald-800" />
@@ -1356,13 +1385,13 @@ export default function GestaoHoteis() {
               </div>
             </div>
 
-            {/* 3. FOTOS GERAIS DO HOTEL COM LIGA/DESLIGA E DESTAQUE */}
+            {/* 3. FOTOS GERAIS DO HOTEL (MÁXIMO 18) COM LIGA/DESLIGA E COMPRESSOR */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
                   <div className="flex items-center gap-3">
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
-                      Fotos Gerais do Hotel / Lazer
+                      Fotos Gerais do Hotel / Lazer ({fotosGerais.length}/18)
                     </h3>
                     <div className="flex items-center gap-1.5">
                       <span className={`text-[11px] font-bold ${mostrarFotosGerais ? "text-emerald-700" : "text-slate-400"}`}>
@@ -1375,17 +1404,18 @@ export default function GestaoHoteis() {
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">Faça upload de fotos das piscinas do hotel, fachada, restaurante e área externa.</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Faça upload de até 18 fotos das piscinas, fachada e área externa.</p>
                 </div>
                 
-                <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral ? "opacity-50 pointer-events-none" : ""}`}>
+                <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral || fotosGerais.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
                   {enviandoFotoGeral ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                  <span>{enviandoFotoGeral ? "Enviando imagens..." : "Adicionar Fotos"}</span>
+                  <span>{enviandoFotoGeral ? "Enviando..." : fotosGerais.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosGerais.length}/18)`}</span>
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     onChange={handleUploadFotosGerais}
+                    disabled={fotosGerais.length >= 18}
                     className="hidden"
                   />
                 </label>
@@ -1439,7 +1469,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 4. TIPOS DE APARTAMENTOS COM LIGA/DESLIGA INDIVIDUAL POR QUARTO E DESTAQUE */}
+            {/* 4. TIPOS DE APARTAMENTOS (MÁXIMO 10 FOTOS) COM LIGA/DESLIGA E COMPRESSOR */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -1447,7 +1477,7 @@ export default function GestaoHoteis() {
                     Tipos de Apartamentos (Acomodações)
                   </h3>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Cadastre os quartos disponíveis e controle a visibilidade individual de cada um na vitrine.
+                    Cadastre os quartos disponíveis (máximo 10 fotos por quarto) e controle a visibilidade individual.
                   </p>
                 </div>
                 
@@ -1469,139 +1499,145 @@ export default function GestaoHoteis() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {tiposApto.map((apto, index) => (
-                    <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                        <span className="text-xs font-bold uppercase text-slate-600">
-                          Apartamento #{index + 1}
-                        </span>
+                  {tiposApto.map((apto, index) => {
+                    const qtdFotosApto = apto.fotos?.length || 0;
+                    const atingiuLimiteApto = qtdFotosApto >= 10;
 
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-[11px] font-bold ${apto.mostrarNoSite !== false ? "text-emerald-700" : "text-slate-400"}`}>
-                              {apto.mostrarNoSite !== false ? "Visível no site" : "Oculto no site"}
-                            </span>
-                            <ToggleSwitch
-                              ativo={apto.mostrarNoSite !== false}
-                              onToggle={() => alternarVisibilidadeApto(index)}
-                              label="Mostrar este quarto no site"
-                            />
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => removerTipoApto(index)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                            title="Remover categoria"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div>
-                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                            Nome da Categoria *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Ex: Suíte Master com Varanda"
-                            value={apto.nome}
-                            onChange={(e) => atualizarNomeApto(index, e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
-                            Descrição da Acomodação (Opcional)
-                          </label>
-                          <textarea
-                            rows={2}
-                            placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
-                            value={apto.descricao || ""}
-                            onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-slate-700">
-                            Fotos deste apartamento ({apto.fotos?.length || 0})
+                    return (
+                      <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                          <span className="text-xs font-bold uppercase text-slate-600">
+                            Apartamento #{index + 1}
                           </span>
 
-                          <label className={`cursor-pointer inline-flex items-center gap-1.5 text-brand-900 hover:text-brand-950 bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm ${enviandoFotoAptoIndex === index ? "opacity-50 pointer-events-none" : ""}`}>
-                            {enviandoFotoAptoIndex === index ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                            <span>{enviandoFotoAptoIndex === index ? "Enviando..." : "Fotos do Quarto"}</span>
-                            <input
-                              type="file"
-                              multiple
-                              accept="image/*"
-                              onChange={(e) => handleUploadFotosApto(index, e)}
-                              className="hidden"
-                            />
-                          </label>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[11px] font-bold ${apto.mostrarNoSite !== false ? "text-emerald-700" : "text-slate-400"}`}>
+                                {apto.mostrarNoSite !== false ? "Visível no site" : "Oculto no site"}
+                              </span>
+                              <ToggleSwitch
+                                ativo={apto.mostrarNoSite !== false}
+                                onToggle={() => alternarVisibilidadeApto(index)}
+                                label="Mostrar este quarto no site"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => removerTipoApto(index)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                              title="Remover categoria"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
 
-                        {apto.fotos?.length > 0 && (
-                          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
-                            {apto.fotos.map((fotoUrl, fIdx) => (
-                              <div 
-                                key={fIdx} 
-                                className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 transition ${
-                                  fIdx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-transparent"
-                                }`}
-                              >
-                                <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
-                                
-                                {fIdx === 0 ? (
-                                  <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
-                                    <Star className="w-2.5 h-2.5 fill-white" />
-                                    <span>Capa</span>
-                                  </div>
-                                ) : (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                              Nome da Categoria *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Ex: Suíte Master com Varanda"
+                              value={apto.nome}
+                              onChange={(e) => atualizarNomeApto(index, e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                              Descrição da Acomodação (Opcional)
+                            </label>
+                            <textarea
+                              rows={2}
+                              placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
+                              value={apto.descricao || ""}
+                              onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-slate-700">
+                              Fotos deste apartamento ({qtdFotosApto}/10)
+                            </span>
+
+                            <label className={`cursor-pointer inline-flex items-center gap-1.5 text-brand-900 hover:text-brand-950 bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm ${enviandoFotoAptoIndex === index || atingiuLimiteApto ? "opacity-50 pointer-events-none" : ""}`}>
+                              {enviandoFotoAptoIndex === index ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                              <span>{enviandoFotoAptoIndex === index ? "Enviando..." : atingiuLimiteApto ? "Limite Atingido (10)" : `Fotos do Quarto (${qtdFotosApto}/10)`}</span>
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={(e) => handleUploadFotosApto(index, e)}
+                                disabled={atingiuLimiteApto}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+
+                          {apto.fotos?.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
+                              {apto.fotos.map((fotoUrl, fIdx) => (
+                                <div 
+                                  key={fIdx} 
+                                  className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 transition ${
+                                    fIdx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-transparent"
+                                  }`}
+                                >
+                                  <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
+                                  
+                                  {fIdx === 0 ? (
+                                    <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                                      <Star className="w-2.5 h-2.5 fill-white" />
+                                      <span>Capa</span>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => definirFotoDestaqueApto(index, fIdx)}
+                                      className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                                      title="Definir como primeira foto do quarto"
+                                    >
+                                      <Star className="w-2.5 h-2.5" />
+                                      <span>Capa</span>
+                                    </button>
+                                  )}
+
                                   <button
                                     type="button"
-                                    onClick={() => definirFotoDestaqueApto(index, fIdx)}
-                                    className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                                    title="Definir como primeira foto do quarto"
+                                    onClick={() => removerFotoApto(index, fIdx)}
+                                    className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
+                                    title="Remover foto"
                                   >
-                                    <Star className="w-2.5 h-2.5" />
-                                    <span>Capa</span>
+                                    <X className="w-3.5 h-3.5" />
                                   </button>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => removerFotoApto(index, fIdx)}
-                                  className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                                  title="Remover foto"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* 5. PARQUES AQUÁTICOS COM LIGA/DESLIGA GERAL E NO VÍDEO DO PARQUE */}
+            {/* 5. PARQUES AQUÁTICOS (MÁXIMO 18 FOTOS) COM LIGA/DESLIGA E COMPRESSOR */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
                   <div className="flex items-center gap-3">
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
                       <Waves className="w-5 h-5 text-sky-600" />
-                      Parques Aquáticos / Lazer Adicional
+                      Parques Aquáticos / Lazer Adicional ({fotosParque.length}/18)
                     </h3>
                     <div className="flex items-center gap-1.5">
                       <span className={`text-[11px] font-bold ${mostrarParques ? "text-emerald-700" : "text-slate-400"}`}>
@@ -1615,18 +1651,19 @@ export default function GestaoHoteis() {
                     </div>
                   </div>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Fotos e vídeo dos parques aquáticos inclusos no pacote.
+                    Faça upload de até 18 fotos das atrações aquáticas.
                   </p>
                 </div>
                 
-                <label className={`cursor-pointer inline-flex items-center gap-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoParque ? "opacity-50 pointer-events-none" : ""}`}>
+                <label className={`cursor-pointer inline-flex items-center gap-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoParque || fotosParque.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
                   {enviandoFotoParque ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                  <span>{enviandoFotoParque ? "Enviando imagens..." : "Adicionar Fotos do Parque"}</span>
+                  <span>{enviandoFotoParque ? "Enviando..." : fotosParque.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosParque.length}/18)`}</span>
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     onChange={handleUploadFotosParque}
+                    disabled={fotosParque.length >= 18}
                     className="hidden"
                   />
                 </label>
@@ -1731,7 +1768,7 @@ export default function GestaoHoteis() {
                         placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
                         value={videoParqueUrl}
                         onChange={(e) => setVideoParqueUrl(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
                       />
                     </div>
                   </div>
