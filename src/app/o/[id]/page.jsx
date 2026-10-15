@@ -128,6 +128,9 @@ export default function VitrineOrcamento() {
                 if (dadosHotelAtual.mostrarParques !== undefined) {
                   dadosEncontrados.hotel.mostrarParques = dadosHotelAtual.mostrarParques;
                 }
+                if (dadosHotelAtual.mostrarVideoParque !== undefined) {
+                  dadosEncontrados.hotel.mostrarVideoParque = dadosHotelAtual.mostrarVideoParque;
+                }
 
                 // Sincroniza descrições e status dos tipos de apartamentos
                 if (dadosHotelAtual.tiposApto?.length > 0) {
@@ -281,6 +284,7 @@ export default function VitrineOrcamento() {
   const exibirVideoHospedagem = hotel?.mostrarVideo !== false && Boolean(videoInfo?.embedUrl);
   const exibirFotosGerais = hotel?.mostrarFotosGerais !== false && fotosGerais.length > 0;
   const exibirParques = hotel?.mostrarParques !== false;
+  const exibirVideoParque = hotel?.mostrarParques !== false && hotel?.mostrarVideoParque !== false && Boolean(videoParqueInfo?.embedUrl);
   const exibirObs = hotel?.mostrarObs !== false && Boolean(hotel?.observacoes);
 
   return (
@@ -528,7 +532,7 @@ export default function VitrineOrcamento() {
           </div>
         </div>
 
-        {/* ================= 2. SOBRE O HOTEL (OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {/* ================= 2. SOBRE O HOTEL ================= */}
         {exibirSobre && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6 space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -541,7 +545,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 3. VÍDEO PRINCIPAL DO HOTEL (ANTES DOS APARTAMENTOS - OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {/* ================= 3. VÍDEO PRINCIPAL DO HOTEL ================= */}
         {exibirVideoHospedagem && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -575,7 +579,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 4. FOTOS DOS APARTAMENTOS (FILTRADAS PELO BOTÃO LIGA/DESLIGA DE CADA QUARTO) ================= */}
+        {/* ================= 4. FOTOS DOS APARTAMENTOS ================= */}
         {categoriasAptoExibir.length > 0 && (
           <div className="space-y-4">
             {categoriasAptoExibir.map((aptoCat) => {
@@ -590,7 +594,6 @@ export default function VitrineOrcamento() {
                       <h3 className="text-sm font-bold text-slate-900">Fotos de: {aptoCat.nome}</h3>
                       <p className="text-[11px] text-slate-500">Imagens da acomodação incluída na sua proposta</p>
 
-                      {/* DESCRIÇÃO DA ACOMODAÇÃO ANTES DAS FOTOS */}
                       {aptoCat.descricao && (
                         <p className="text-xs text-slate-700 mt-2 bg-amber-50/70 border border-amber-200/80 p-2.5 rounded-xl leading-relaxed">
                           {aptoCat.descricao}
@@ -653,7 +656,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. FOTOS DO HOTEL & LAZER (OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {/* ================= 5. FOTOS DO HOTEL & LAZER ================= */}
         {exibirFotosGerais && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
@@ -706,10 +709,9 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. PARQUES AQUÁTICOS (FOTOS E VÍDEO - OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {/* ================= 6. PARQUES AQUÁTICOS (FOTOS E VÍDEO) ================= */}
         {exibirParques && (
           <>
-            {/* Fotos dos Parques */}
             {fotosParque.length > 0 && (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
                 <div className="flex items-center gap-2">
@@ -768,8 +770,8 @@ export default function VitrineOrcamento() {
               </div>
             )}
 
-            {/* Vídeo dos Parques */}
-            {videoParqueInfo?.embedUrl && (
+            {/* VÍDEO DO PARQUE (OBEDECE AO NOVO LIGA/DESLIGA) */}
+            {exibirVideoParque && (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Waves className="w-5 h-5 text-sky-600" />
@@ -804,7 +806,7 @@ export default function VitrineOrcamento() {
           </>
         )}
 
-        {/* ================= 7. OBSERVAÇÕES & POLÍTICAS (OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {/* ================= 7. OBSERVAÇÕES & POLÍTICAS ================= */}
         {exibirObs && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
