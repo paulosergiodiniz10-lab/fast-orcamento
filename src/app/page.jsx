@@ -814,6 +814,8 @@ function GeradorOrcamentoConteudo() {
         fotosParque: hotelSelecionado.fotosParque || [],
         tituloVideoParque: hotelSelecionado.tituloVideoParque || "Vídeo dos Parques Aquáticos",
         videoParqueUrl: hotelSelecionado.videoParqueUrl || "",
+        mostrarTituloValores: hotelSelecionado.mostrarTituloValores !== false,
+        tituloValoresCustomizado: hotelSelecionado.tituloValoresCustomizado || "Valor total do pacote:",
       },
       acomodacaoEscolhida: aptoSelecionado || null,
       agencia: {
