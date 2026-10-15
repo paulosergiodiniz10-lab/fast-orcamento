@@ -109,13 +109,34 @@ export default function VitrineOrcamento() {
                     dadosHotelAtual.tituloVideoParque || "Vídeo dos Parques Aquáticos";
                 }
 
-                // Sincroniza descrições dos tipos de apartamentos
+                // Sincroniza visibilidades e preferências
+                if (dadosHotelAtual.mostrarLocalizacao !== undefined) {
+                  dadosEncontrados.hotel.mostrarLocalizacao = dadosHotelAtual.mostrarLocalizacao;
+                }
+                if (dadosHotelAtual.mostrarSobre !== undefined) {
+                  dadosEncontrados.hotel.mostrarSobre = dadosHotelAtual.mostrarSobre;
+                }
+                if (dadosHotelAtual.mostrarVideo !== undefined) {
+                  dadosEncontrados.hotel.mostrarVideo = dadosHotelAtual.mostrarVideo;
+                }
+                if (dadosHotelAtual.mostrarObs !== undefined) {
+                  dadosEncontrados.hotel.mostrarObs = dadosHotelAtual.mostrarObs;
+                }
+                if (dadosHotelAtual.mostrarFotosGerais !== undefined) {
+                  dadosEncontrados.hotel.mostrarFotosGerais = dadosHotelAtual.mostrarFotosGerais;
+                }
+                if (dadosHotelAtual.mostrarParques !== undefined) {
+                  dadosEncontrados.hotel.mostrarParques = dadosHotelAtual.mostrarParques;
+                }
+
+                // Sincroniza descrições e status dos tipos de apartamentos
                 if (dadosHotelAtual.tiposApto?.length > 0) {
                   const tiposAtualizados = (dadosEncontrados.hotel.tiposApto || []).map((apto) => {
                     const correspondente = dadosHotelAtual.tiposApto.find((t) => t.nome === apto.nome);
                     return {
                       ...apto,
                       descricao: apto.descricao || correspondente?.descricao || "",
+                      mostrarNoSite: correspondente?.mostrarNoSite !== false && apto.mostrarNoSite !== false,
                     };
                   });
                   dadosEncontrados.hotel.tiposApto = tiposAtualizados;
@@ -203,7 +224,7 @@ export default function VitrineOrcamento() {
   const videoParqueInfo = obterDadosVideoYouTube(hotel?.videoParqueUrl);
   const tituloVideoParque = hotel?.tituloVideoParque || "Vídeo dos Parques Aquáticos";
 
-  // Mapeia todos os tipos de apartamentos ÚNICOS cotados
+  // Mapeia todos os tipos de apartamentos ÚNICOS cotados que estejam ATIVOS para o site
   const tiposAptoCadastrados = hotel?.tiposApto || [];
   let nomesAptosCotados = [];
 
@@ -221,7 +242,7 @@ export default function VitrineOrcamento() {
 
   const categoriasAptoExibir = nomesAptosCotados
     .map((nomeApto) => tiposAptoCadastrados.find((t) => t.nome === nomeApto))
-    .filter((obj) => Boolean(obj && obj.fotos && obj.fotos.length > 0));
+    .filter((obj) => Boolean(obj && obj.fotos && obj.fotos.length > 0 && obj.mostrarNoSite !== false));
 
   // Navegação no slider geral
   const proximaFotoGeral = () => {
@@ -253,6 +274,14 @@ export default function VitrineOrcamento() {
     const atual = indicesApto[nomeApto] || 0;
     mudarFotoApto(nomeApto, (atual - 1 + total) % total);
   };
+
+  // Flags de controle de exibição (default: true)
+  const exibirLocalizacao = hotel?.mostrarLocalizacao !== false && Boolean(hotel?.localizacao);
+  const exibirSobre = hotel?.mostrarSobre !== false && Boolean(hotel?.descricao);
+  const exibirVideoHospedagem = hotel?.mostrarVideo !== false && Boolean(videoInfo?.embedUrl);
+  const exibirFotosGerais = hotel?.mostrarFotosGerais !== false && fotosGerais.length > 0;
+  const exibirParques = hotel?.mostrarParques !== false;
+  const exibirObs = hotel?.mostrarObs !== false && Boolean(hotel?.observacoes);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 pb-28 font-sans">
@@ -292,8 +321,8 @@ export default function VitrineOrcamento() {
                   {hotel?.nome}
                 </h2>
                 
-                {/* LOCALIZAÇÃO: BOTÃO QUANDO FOR LINK OU TEXTO QUANDO FOR ENDEREÇO */}
-                {hotel?.localizacao && (
+                {/* LOCALIZAÇÃO (OBEDECE AO BOTÃO LIGA/DESLIGA) */}
+                {exibirLocalizacao && (
                   <div className="mt-2.5">
                     {hotel.localizacao.startsWith("http://") || hotel.localizacao.startsWith("https://") ? (
                       <a
@@ -409,7 +438,7 @@ export default function VitrineOrcamento() {
                       { id: "cafe_almoco", label: "Café + Almoço" },
                       { id: "cafe_jantar", label: "Café + Jantar" },
                       { id: "pensao_completa", label: "Pensão Completa" },
-                    ].filter((r) => apto.valores && apto.valores[r.id]);
+                    ].filter((r) => apto.valores && apto.valores[r.id] && apto.valores[r.id] !== "0,00" && apto.valores[r.id] !== "0");
 
                     return (
                       <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5 shadow-sm">
@@ -499,8 +528,8 @@ export default function VitrineOrcamento() {
           </div>
         </div>
 
-        {/* ================= 2. SOBRE O HOTEL ================= */}
-        {hotel?.descricao && (
+        {/* ================= 2. SOBRE O HOTEL (OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {exibirSobre && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 md:p-6 space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Sobre a Estrutura do Hotel
@@ -512,8 +541,8 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 3. VÍDEO PRINCIPAL DO HOTEL (ANTES DOS APARTAMENTOS) ================= */}
-        {videoInfo?.embedUrl && (
+        {/* ================= 3. VÍDEO PRINCIPAL DO HOTEL (ANTES DOS APARTAMENTOS - OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {exibirVideoHospedagem && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Video className="w-5 h-5 text-red-600" />
@@ -546,7 +575,7 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 4. FOTOS DOS APARTAMENTOS ================= */}
+        {/* ================= 4. FOTOS DOS APARTAMENTOS (FILTRADAS PELO BOTÃO LIGA/DESLIGA DE CADA QUARTO) ================= */}
         {categoriasAptoExibir.length > 0 && (
           <div className="space-y-4">
             {categoriasAptoExibir.map((aptoCat) => {
@@ -624,8 +653,8 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 5. FOTOS DO HOTEL & LAZER ================= */}
-        {fotosGerais.length > 0 && (
+        {/* ================= 5. FOTOS DO HOTEL & LAZER (OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {exibirFotosGerais && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">Fotos do Hotel & Lazer</h3>
 
@@ -677,101 +706,106 @@ export default function VitrineOrcamento() {
           </div>
         )}
 
-        {/* ================= 6. FOTOS DOS PARQUES AQUÁTICOS ================= */}
-        {fotosParque.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Waves className="w-5 h-5 text-sky-600" />
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">{tituloParque}</h3>
-                <p className="text-[11px] text-slate-500">Atrações e lazer inclusos no seu pacote</p>
-              </div>
-            </div>
-
-            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
-              <img
-                src={fotosParque[fotoParqueIndex]}
-                alt={tituloParque}
-                className="w-full h-full object-cover transition duration-300"
-              />
-
-              {fotosParque.length > 1 && (
-                <>
-                  <button
-                    onClick={fotoAnteriorParque}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Foto anterior"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={proximaFotoParque}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
-                    title="Próxima foto"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                    {fotoParqueIndex + 1} / {fotosParque.length} fotos
+        {/* ================= 6. PARQUES AQUÁTICOS (FOTOS E VÍDEO - OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {exibirParques && (
+          <>
+            {/* Fotos dos Parques */}
+            {fotosParque.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Waves className="w-5 h-5 text-sky-600" />
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">{tituloParque}</h3>
+                    <p className="text-[11px] text-slate-500">Atrações e lazer inclusos no seu pacote</p>
                   </div>
-                </>
-              )}
-            </div>
-
-            {fotosParque.length > 1 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-                {fotosParque.map((url, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setFotoParqueIndex(idx)}
-                    className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
-                      fotoParqueIndex === idx ? "border-sky-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
-                    }`}
-                  >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= 7. VÍDEO DO PARQUE AQUÁTICO ================= */}
-        {videoParqueInfo?.embedUrl && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Waves className="w-5 h-5 text-sky-600" />
-              {tituloVideoParque}
-            </h3>
-
-            {videoParqueInfo.isVertical ? (
-              <div className="flex justify-center py-2">
-                <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
-                  <iframe
-                    src={videoParqueInfo.embedUrl}
-                    title={tituloVideoParque}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
                 </div>
-              </div>
-            ) : (
-              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
-                <iframe
-                  src={videoParqueInfo.embedUrl}
-                  title={tituloVideoParque}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+
+                <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
+                  <img
+                    src={fotosParque[fotoParqueIndex]}
+                    alt={tituloParque}
+                    className="w-full h-full object-cover transition duration-300"
+                  />
+
+                  {fotosParque.length > 1 && (
+                    <>
+                      <button
+                        onClick={fotoAnteriorParque}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                        title="Foto anterior"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={proximaFotoParque}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition shadow"
+                        title="Próxima foto"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                      <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                        {fotoParqueIndex + 1} / {fotosParque.length} fotos
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {fotosParque.length > 1 && (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                    {fotosParque.map((url, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setFotoParqueIndex(idx)}
+                        className={`aspect-video rounded-lg overflow-hidden border-2 transition ${
+                          fotoParqueIndex === idx ? "border-sky-600 scale-105 shadow-sm" : "border-transparent opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+
+            {/* Vídeo dos Parques */}
+            {videoParqueInfo?.embedUrl && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Waves className="w-5 h-5 text-sky-600" />
+                  {tituloVideoParque}
+                </h3>
+
+                {videoParqueInfo.isVertical ? (
+                  <div className="flex justify-center py-2">
+                    <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-lg border-2 border-slate-200">
+                      <iframe
+                        src={videoParqueInfo.embedUrl}
+                        title={tituloVideoParque}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow">
+                    <iframe
+                      src={videoParqueInfo.embedUrl}
+                      title={tituloVideoParque}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        {/* ================= 8. OBSERVAÇÕES & POLÍTICAS ================= */}
-        {hotel?.observacoes && (
+        {/* ================= 7. OBSERVAÇÕES & POLÍTICAS (OBEDECE AO BOTÃO LIGA/DESLIGA) ================= */}
+        {exibirObs && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Observações & Políticas
