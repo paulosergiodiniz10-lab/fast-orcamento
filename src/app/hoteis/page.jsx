@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
-  HelpCircle, AlertCircle, Waves, Filter, Star
+  HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -35,7 +35,6 @@ function ToggleSwitch({ ativo, onToggle, label }) {
   );
 }
 
-// Formatação ortográfica padrão: Primeira letra Maiúscula e o resto minúsculo
 const formatarTituloOrtografico = (texto) => {
   if (!texto) return "Parques que inclui no pacote";
   const limpo = texto.trim();
@@ -43,7 +42,6 @@ const formatarTituloOrtografico = (texto) => {
   return limpo.charAt(0).toUpperCase() + limpo.slice(1).toLowerCase();
 };
 
-// Formatação para nomes de cidade (Ex: "caldas novas" -> "Caldas Novas")
 const formatarNomeCidade = (texto) => {
   if (!texto) return "";
   return texto
@@ -201,10 +199,9 @@ export default function GestaoHoteis() {
   const [modoVisualizacao, setModoVisualizacao] = useState("lista");
   const [hotelEditandoId, setHotelEditandoId] = useState(null);
 
-  // Filtro por cidade na lista de hotéis
   const [filtroCidadeLista, setFiltroCidadeLista] = useState("todas");
 
-  // Campos do Formulário
+  // Campos do Formulário - Informações Básicas
   const [cidade, setCidade] = useState("Caldas Novas");
   const [estado, setEstado] = useState("GO");
   const [nome, setNome] = useState("");
@@ -212,7 +209,12 @@ export default function GestaoHoteis() {
   const [localizacao, setLocalizacao] = useState("");
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
-  const [formaPagamentoPadrao, setFormaPagamentoPadrao] = useState("Cartão em até 10x sem juros ou PIX com desconto especial");
+
+  // Formas de Pagamento Estruturadas
+  const [pagamentoCartao, setPagamentoCartao] = useState("Em até 10x sem juros");
+  const [pagamentoPix, setPagamentoPix] = useState("Desconto especial");
+  const [pagamentoBoleto, setPagamentoBoleto] = useState("");
+
   const [tituloInclusoPacote, setTituloInclusoPacote] = useState("Parques que inclui no pacote");
   const [inclusoPacote, setInclusoPacote] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
@@ -225,6 +227,12 @@ export default function GestaoHoteis() {
   const [tituloVideoParque, setTituloVideoParque] = useState("Vídeo dos Parques Aquáticos");
   const [videoParqueUrl, setVideoParqueUrl] = useState("");
 
+  // Bloco: Configurações Específicas do Orçamento (WhatsApp)
+  const [mostrarTituloValores, setMostrarTituloValores] = useState(true);
+  const [tituloValoresCustomizado, setTituloValoresCustomizado] = useState("Valor total do pacote:");
+  const [opcoesCriancas, setOpcoesCriancas] = useState(["até 12 anos", "0 a 5 anos cortesia"]);
+  const [novaOpcaoCrianca, setNovaOpcaoCrianca] = useState("");
+
   // Flags Liga/Desliga no Site (Padrão: ativas / true)
   const [mostrarLocalizacao, setMostrarLocalizacao] = useState(true);
   const [mostrarSobre, setMostrarSobre] = useState(true);
@@ -234,7 +242,6 @@ export default function GestaoHoteis() {
   const [mostrarParques, setMostrarParques] = useState(true);
   const [mostrarVideoParque, setMostrarVideoParque] = useState(true);
 
-  // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
     tipo: "success",
@@ -352,7 +359,6 @@ export default function GestaoHoteis() {
     setFotosGerais((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Promove a foto clicada para Destaque (Posição 0 da lista)
   const definirFotoDestaqueGeral = (idx) => {
     if (idx === 0) return;
     setFotosGerais((prev) => {
@@ -483,6 +489,20 @@ export default function GestaoHoteis() {
     });
   };
 
+  // Gerenciamento de Opções Pré-cadastradas para Crianças
+  const adicionarOpcaoCrianca = () => {
+    const textoLimpo = novaOpcaoCrianca.trim();
+    if (!textoLimpo) return;
+    if (!opcoesCriancas.includes(textoLimpo)) {
+      setOpcoesCriancas((prev) => [...prev, textoLimpo]);
+    }
+    setNovaOpcaoCrianca("");
+  };
+
+  const removerOpcaoCrianca = (index) => {
+    setOpcoesCriancas((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const abrirNovoHotel = () => {
     setHotelEditandoId(null);
     setCidade("Caldas Novas");
@@ -492,7 +512,12 @@ export default function GestaoHoteis() {
     setLocalizacao("");
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
-    setFormaPagamentoPadrao("Cartão em até 10x sem juros ou PIX com desconto especial");
+    
+    // Pagamentos padrão
+    setPagamentoCartao("Em até 10x sem juros");
+    setPagamentoPix("Desconto especial");
+    setPagamentoBoleto("");
+
     setTituloInclusoPacote("Parques que inclui no pacote");
     setInclusoPacote("");
     setVideoUrl("");
@@ -502,6 +527,12 @@ export default function GestaoHoteis() {
     setFotosParque([]);
     setTituloVideoParque("Vídeo dos Parques Aquáticos");
     setVideoParqueUrl("");
+
+    // Configurações do Orçamento (WhatsApp)
+    setMostrarTituloValores(true);
+    setTituloValoresCustomizado("Valor total do pacote:");
+    setOpcoesCriancas(["até 12 anos", "0 a 5 anos cortesia"]);
+    setNovaOpcaoCrianca("");
 
     // Botões nascem ativos por padrão
     setMostrarLocalizacao(true);
@@ -530,7 +561,12 @@ export default function GestaoHoteis() {
     setLocalizacao(hotel.localizacao || "");
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
-    setFormaPagamentoPadrao(hotel.formaPagamento || "Cartão em até 10x sem juros ou PIX com desconto especial");
+
+    // Formas de Pagamento
+    setPagamentoCartao(hotel.pagamentoCartao !== undefined ? hotel.pagamentoCartao : "Em até 10x sem juros");
+    setPagamentoPix(hotel.pagamentoPix !== undefined ? hotel.pagamentoPix : "Desconto especial");
+    setPagamentoBoleto(hotel.pagamentoBoleto || "");
+
     setTituloInclusoPacote(hotel.tituloInclusoPacote || "Parques que inclui no pacote");
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
     setVideoUrl(hotel.videoUrl || "");
@@ -548,7 +584,13 @@ export default function GestaoHoteis() {
     setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
     setVideoParqueUrl(hotel.videoParqueUrl || "");
 
-    // Carrega preferências de visibilidade (default: true)
+    // Configurações do Orçamento WhatsApp
+    setMostrarTituloValores(hotel.mostrarTituloValores !== false);
+    setTituloValoresCustomizado(hotel.tituloValoresCustomizado || "Valor total do pacote:");
+    setOpcoesCriancas(hotel.opcoesCriancas || ["até 12 anos"]);
+    setNovaOpcaoCrianca("");
+
+    // Preferências de visibilidade (default: true)
     setMostrarLocalizacao(hotel.mostrarLocalizacao !== false);
     setMostrarSobre(hotel.mostrarSobre !== false);
     setMostrarVideo(hotel.mostrarVideo !== false);
@@ -582,6 +624,13 @@ export default function GestaoHoteis() {
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
+      // Constrói texto unificado de forma de pagamento para compatibilidade
+      const partesPagamento = [];
+      if (pagamentoCartao.trim()) partesPagamento.push(`Cartão: ${pagamentoCartao.trim()}`);
+      if (pagamentoPix.trim()) partesPagamento.push(`PIX: ${pagamentoPix.trim()}`);
+      if (pagamentoBoleto.trim()) partesPagamento.push(`Boleto: ${pagamentoBoleto.trim()}`);
+      const formaPagamentoUnificada = partesPagamento.join(" | ");
+
       const dados = {
         agenciaId: agencyIdSafe(agencia.id),
         cidade: formatarNomeCidade(cidade) || "Caldas Novas",
@@ -591,7 +640,13 @@ export default function GestaoHoteis() {
         localizacao: localizacao.trim(),
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
-        formaPagamento: formaPagamentoPadrao.trim(),
+
+        // Formas de Pagamento Estruturadas
+        pagamentoCartao: pagamentoCartao.trim(),
+        pagamentoPix: pagamentoPix.trim(),
+        pagamentoBoleto: pagamentoBoleto.trim(),
+        formaPagamento: formaPagamentoUnificada || "Cartão em até 10x sem juros ou PIX com desconto especial",
+
         descricao: descRef.current ? descRef.current.innerHTML : "",
         tituloInclusoPacote: formatarTituloOrtografico(tituloInclusoPacote),
         parquesDisponiveis: listaIncluso,
@@ -611,7 +666,12 @@ export default function GestaoHoteis() {
         tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
         videoParqueUrl: videoParqueUrl.trim(),
 
-        // Salva as chaves liga/desliga no documento do Firestore
+        // Configurações do Orçamento WhatsApp
+        mostrarTituloValores,
+        tituloValoresCustomizado: tituloValoresCustomizado.trim() || "Valor total do pacote:",
+        opcoesCriancas: opcoesCriancas.filter((op) => op && op.trim().length > 0),
+
+        // Chaves Liga/Desliga no Site
         mostrarLocalizacao,
         mostrarSobre,
         mostrarVideo,
@@ -665,12 +725,10 @@ export default function GestaoHoteis() {
     );
   };
 
-  // Lista de cidades únicas existentes para o filtro
   const cidadesDisponiveis = Array.from(
     new Set(hoteis.map((h) => h.cidade || "Caldas Novas").filter(Boolean))
   );
 
-  // Filtragem dos hotéis exibidos na listagem
   const hoteisFiltradosLista = hoteis.filter((h) => {
     if (filtroCidadeLista === "todas") return true;
     const cid = h.cidade || "Caldas Novas";
@@ -708,13 +766,11 @@ export default function GestaoHoteis() {
       <main className="max-w-5xl mx-auto p-4 md:p-6 mt-2">
         {modoVisualizacao === "lista" && (
           <div>
-            {/* TOPO DA LISTA + FILTRO POR CIDADE */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-base font-bold text-slate-800">
                 Hotéis Cadastrados ({hoteisFiltradosLista.length})
               </h2>
 
-              {/* Filtro por Cidade */}
               {cidadesDisponiveis.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 border border-slate-200 p-1 rounded-xl">
                   <span className="text-[11px] font-bold text-slate-500 uppercase px-2 flex items-center gap-1">
@@ -814,7 +870,6 @@ export default function GestaoHoteis() {
                       )}
 
                       <div className="p-4 space-y-2">
-                        {/* Tag de Cidade / Estado */}
                         <div className="flex items-center gap-1.5">
                           <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-emerald-600" />
@@ -902,7 +957,6 @@ export default function GestaoHoteis() {
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Informações Básicas</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                {/* CIDADE E ESTADO NO TOPO */}
                 <div className="md:col-span-8">
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                     Cidade *
@@ -1035,17 +1089,45 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                <div className="md:col-span-12">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Forma de Pagamento Padrão
+                {/* FORMAS DE PAGAMENTO DIVIDIDAS (CARTÃO, PIX, BOLETO) */}
+                <div className="md:col-span-12 space-y-2 pt-1 border-t border-slate-100">
+                  <label className="text-xs font-bold text-slate-700 uppercase block flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5 text-brand-700" />
+                    Formas de Pagamento Padrão
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Cartão em até 10x sem juros ou PIX com desconto especial"
-                    value={formaPagamentoPadrao}
-                    onChange={(e) => setFormaPagamentoPadrao(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                  />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Cartão de Crédito</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: Em até 10x sem juros"
+                        value={pagamentoCartao}
+                        onChange={(e) => setPagamentoCartao(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">PIX</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: Com desconto especial"
+                        value={pagamentoPix}
+                        onChange={(e) => setPagamentoPix(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Boleto Bancário (Opcional)</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: Parcelado até a data da viagem"
+                        value={pagamentoBoleto}
+                        onChange={(e) => setPagamentoBoleto(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* SOBRE O HOTEL COM BOTÃO LIGA/DESLIGA */}
@@ -1084,7 +1166,6 @@ export default function GestaoHoteis() {
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Inclusões, Mídia & Observações</h3>
 
-              {/* TÍTULO EDITÁVEL DAS INCLUSÕES */}
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                   Título das Inclusões (Orçamento WhatsApp e Vitrine)
@@ -1172,6 +1253,107 @@ export default function GestaoHoteis() {
                   placeholder="Ex: Taxa de turismo inclusa. Proibido entrada com alimentos na área de piscinas."
                 />
               </div>
+
+              {/* ================= NOVO BLOCO DESTACADO: CONFIGURAÇÕES DO ORÇAMENTO (WHATSAPP) ================= */}
+              <div className="mt-5 p-4 md:p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border-2 border-emerald-200/90 space-y-4 shadow-sm">
+                <div className="flex items-center gap-2 border-b border-emerald-200/60 pb-2.5">
+                  <MessageSquare className="w-4 h-4 text-emerald-800" />
+                  <div>
+                    <h4 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">
+                      Configurações do Orçamento (WhatsApp)
+                    </h4>
+                    <p className="text-[11px] text-emerald-800">
+                      Personalize títulos e textos automáticos que serão sugeridos no momento de gerar o orçamento.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 1. TÍTULO ANTES DOS VALORES (LIGA / DESLIGA) */}
+                <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 uppercase block">
+                      Título dos Valores no WhatsApp
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold ${mostrarTituloValores ? "text-emerald-700" : "text-slate-400"}`}>
+                        {mostrarTituloValores ? "Ativo no WhatsApp" : "Oculto no WhatsApp"}
+                      </span>
+                      <ToggleSwitch
+                        ativo={mostrarTituloValores}
+                        onToggle={() => setMostrarTituloValores((v) => !v)}
+                        label="Mostrar título antes dos valores no WhatsApp"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    disabled={!mostrarTituloValores}
+                    placeholder="Ex: Valor total do pacote: (ou 'Investimento da estadia:')"
+                    value={tituloValoresCustomizado}
+                    onChange={(e) => setTituloValoresCustomizado(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold disabled:opacity-50"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Se desativado, o orçamento no WhatsApp não exibirá este título e irá direto aos valores.
+                  </p>
+                </div>
+
+                {/* 2. OPÇÕES RÁPIDAS PARA O CAMPO DE CRIANÇAS */}
+                <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2.5">
+                  <label className="text-xs font-bold text-slate-800 uppercase block flex items-center gap-1.5">
+                    <Baby className="w-3.5 h-3.5 text-brand-700" />
+                    Opções Rápidas de Texto para Crianças
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Cadastre os textos que mais utiliza para não precisar digitá-los manualmente em cada orçamento.
+                  </p>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ex: até 12 anos, 0 a 5 anos cortesia"
+                      value={novaOpcaoCrianca}
+                      onChange={(e) => setNovaOpcaoCrianca(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          adicionarOpcaoCrianca();
+                        }
+                      }}
+                      className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={adicionarOpcaoCrianca}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar Opção
+                    </button>
+                  </div>
+
+                  {opcoesCriancas.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {opcoesCriancas.map((op, opIdx) => (
+                        <span
+                          key={opIdx}
+                          className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs px-2.5 py-1 rounded-lg font-medium shadow-xs"
+                        >
+                          <span>{op}</span>
+                          <button
+                            type="button"
+                            onClick={() => removerOpcaoCrianca(opIdx)}
+                            className="text-emerald-700 hover:text-red-600 transition"
+                            title="Remover opção"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* 3. FOTOS GERAIS DO HOTEL COM LIGA/DESLIGA E DESTAQUE */}
@@ -1226,7 +1408,6 @@ export default function GestaoHoteis() {
                     >
                       <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
                       
-                      {/* Botão / Badge de Destaque */}
                       {idx === 0 ? (
                         <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
                           <Star className="w-3 h-3 fill-white" />
@@ -1244,7 +1425,6 @@ export default function GestaoHoteis() {
                         </button>
                       )}
 
-                      {/* Botão Remover */}
                       <button
                         type="button"
                         onClick={() => removerFotoGeral(idx)}
@@ -1291,8 +1471,6 @@ export default function GestaoHoteis() {
                 <div className="space-y-4">
                   {tiposApto.map((apto, index) => (
                     <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                      
-                      {/* Topo do Quarto: Título + Chave Liga/Desliga individual + Remover */}
                       <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
                         <span className="text-xs font-bold uppercase text-slate-600">
                           Apartamento #{index + 1}
@@ -1321,7 +1499,6 @@ export default function GestaoHoteis() {
                         </div>
                       </div>
 
-                      {/* Campos Nome e Descrição */}
                       <div className="space-y-2">
                         <div>
                           <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
@@ -1351,7 +1528,6 @@ export default function GestaoHoteis() {
                         </div>
                       </div>
 
-                      {/* Fotos do Quarto com Destaque */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-slate-700">
@@ -1456,7 +1632,6 @@ export default function GestaoHoteis() {
                 </label>
               </div>
 
-              {/* Título Editável do Bloco de Fotos */}
               <div>
                 <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                   Título da Seção de Parques (Aparecerá como cabeçalho do slide na vitrine)
@@ -1470,7 +1645,6 @@ export default function GestaoHoteis() {
                 />
               </div>
 
-              {/* Grid com as fotos do Parque */}
               {fotosParque.length === 0 ? (
                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
                   <Waves className="w-8 h-8 text-slate-400 mx-auto mb-2" />
