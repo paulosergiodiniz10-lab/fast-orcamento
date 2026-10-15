@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
-  HelpCircle, AlertCircle, Waves, Filter
+  HelpCircle, AlertCircle, Waves, Filter, Star
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -14,6 +14,26 @@ import {
 
 const CLOUD_NAME = "qi6dleli";
 const UPLOAD_PRESET = "fast_orcamento";
+
+// Componente Toggle Switch Liga/Desliga moderno
+function ToggleSwitch({ ativo, onToggle, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+        ativo ? "bg-emerald-600" : "bg-slate-300"
+      }`}
+      title={label || (ativo ? "Ativo no site" : "Oculto no site")}
+    >
+      <span
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+          ativo ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </button>
+  );
+}
 
 // Formatação ortográfica padrão: Primeira letra Maiúscula e o resto minúsculo
 const formatarTituloOrtografico = (texto) => {
@@ -205,6 +225,14 @@ export default function GestaoHoteis() {
   const [tituloVideoParque, setTituloVideoParque] = useState("Vídeo dos Parques Aquáticos");
   const [videoParqueUrl, setVideoParqueUrl] = useState("");
 
+  // Flags Liga/Desliga no Site (Padrão: ativas / true)
+  const [mostrarLocalizacao, setMostrarLocalizacao] = useState(true);
+  const [mostrarSobre, setMostrarSobre] = useState(true);
+  const [mostrarVideo, setMostrarVideo] = useState(true);
+  const [mostrarObs, setMostrarObs] = useState(true);
+  const [mostrarFotosGerais, setMostrarFotosGerais] = useState(true);
+  const [mostrarParques, setMostrarParques] = useState(true);
+
   // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
@@ -323,6 +351,17 @@ export default function GestaoHoteis() {
     setFotosGerais((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Promove a foto clicada para Destaque (Posição 0 da lista)
+  const definirFotoDestaqueGeral = (idx) => {
+    if (idx === 0) return;
+    setFotosGerais((prev) => {
+      const nova = [...prev];
+      const [item] = nova.splice(idx, 1);
+      nova.unshift(item);
+      return nova;
+    });
+  };
+
   const handleUploadFotosParque = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -348,8 +387,18 @@ export default function GestaoHoteis() {
     setFotosParque((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const definirFotoDestaqueParque = (idx) => {
+    if (idx === 0) return;
+    setFotosParque((prev) => {
+      const nova = [...prev];
+      const [item] = nova.splice(idx, 1);
+      nova.unshift(item);
+      return nova;
+    });
+  };
+
   const adicionarTipoApto = () => {
-    setTiposApto((prev) => [...prev, { nome: "", descricao: "", fotos: [] }]);
+    setTiposApto((prev) => [...prev, { nome: "", descricao: "", fotos: [], mostrarNoSite: true }]);
   };
 
   const atualizarNomeApto = (index, novoNome) => {
@@ -364,6 +413,15 @@ export default function GestaoHoteis() {
     setTiposApto((prev) => {
       const lista = [...prev];
       lista[index] = { ...lista[index], descricao: novaDescricao };
+      return lista;
+    });
+  };
+
+  const alternarVisibilidadeApto = (index) => {
+    setTiposApto((prev) => {
+      const lista = [...prev];
+      const statusAtual = lista[index].mostrarNoSite !== false;
+      lista[index] = { ...lista[index], mostrarNoSite: !statusAtual };
       return lista;
     });
   };
@@ -412,6 +470,18 @@ export default function GestaoHoteis() {
     });
   };
 
+  const definirFotoDestaqueApto = (aptoIndex, fotoIndex) => {
+    if (fotoIndex === 0) return;
+    setTiposApto((prev) => {
+      const lista = [...prev];
+      const fotos = [...(lista[aptoIndex].fotos || [])];
+      const [item] = fotos.splice(fotoIndex, 1);
+      fotos.unshift(item);
+      lista[aptoIndex] = { ...lista[aptoIndex], fotos };
+      return lista;
+    });
+  };
+
   const abrirNovoHotel = () => {
     setHotelEditandoId(null);
     setCidade("Caldas Novas");
@@ -431,6 +501,14 @@ export default function GestaoHoteis() {
     setFotosParque([]);
     setTituloVideoParque("Vídeo dos Parques Aquáticos");
     setVideoParqueUrl("");
+
+    // Botões nascem ativos por padrão
+    setMostrarLocalizacao(true);
+    setMostrarSobre(true);
+    setMostrarVideo(true);
+    setMostrarObs(true);
+    setMostrarFotosGerais(true);
+    setMostrarParques(true);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
@@ -460,12 +538,21 @@ export default function GestaoHoteis() {
         nome: ap.nome || "",
         descricao: ap.descricao || "",
         fotos: ap.fotos || [],
+        mostrarNoSite: ap.mostrarNoSite !== false,
       }))
     );
     setTituloFotosParque(hotel.tituloFotosParque || "Fotos dos Parques Aquáticos");
     setFotosParque(hotel.fotosParque || []);
     setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
     setVideoParqueUrl(hotel.videoParqueUrl || "");
+
+    // Carrega preferências de visibilidade (default: true)
+    setMostrarLocalizacao(hotel.mostrarLocalizacao !== false);
+    setMostrarSobre(hotel.mostrarSobre !== false);
+    setMostrarVideo(hotel.mostrarVideo !== false);
+    setMostrarObs(hotel.mostrarObs !== false);
+    setMostrarFotosGerais(hotel.mostrarFotosGerais !== false);
+    setMostrarParques(hotel.mostrarParques !== false);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
@@ -514,11 +601,20 @@ export default function GestaoHoteis() {
             nome: a.nome.trim(),
             descricao: (a.descricao || "").trim(),
             fotos: a.fotos || [],
+            mostrarNoSite: a.mostrarNoSite !== false,
           })),
         tituloFotosParque: tituloFotosParque.trim() || "Fotos dos Parques Aquáticos",
         fotosParque: fotosParque,
         tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
         videoParqueUrl: videoParqueUrl.trim(),
+
+        // Salva as chaves liga/desliga no documento do Firestore
+        mostrarLocalizacao,
+        mostrarSobre,
+        mostrarVideo,
+        mostrarObs,
+        mostrarFotosGerais,
+        mostrarParques,
       };
 
       if (hotelEditandoId) {
@@ -883,10 +979,23 @@ export default function GestaoHoteis() {
                   </div>
                 </div>
 
+                {/* LOCALIZAÇÃO COM BOTÃO LIGA/DESLIGA */}
                 <div className="md:col-span-12">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Localização / Endereço <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase block">
+                      Localização / Endereço
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold ${mostrarLocalizacao ? "text-emerald-700" : "text-slate-400"}`}>
+                        {mostrarLocalizacao ? "Visível no site" : "Oculto no site"}
+                      </span>
+                      <ToggleSwitch
+                        ativo={mostrarLocalizacao}
+                        onToggle={() => setMostrarLocalizacao((v) => !v)}
+                        label="Mostrar localização no site"
+                      />
+                    </div>
+                  </div>
                   <input
                     type="text"
                     placeholder="Ex: Av. Santo Amaro, Bairro Turista 1 - Caldas Novas, GO"
@@ -935,12 +1044,25 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
+                {/* SOBRE O HOTEL COM BOTÃO LIGA/DESLIGA */}
                 <div className="md:col-span-12">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                     <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Sobre o Hotel <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
+                      Sobre o Hotel
                     </label>
-                    <EditorToolbar editorRef={descRef} />
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold ${mostrarSobre ? "text-emerald-700" : "text-slate-400"}`}>
+                          {mostrarSobre ? "Visível no site" : "Oculto no site"}
+                        </span>
+                        <ToggleSwitch
+                          ativo={mostrarSobre}
+                          onToggle={() => setMostrarSobre((v) => !v)}
+                          label="Mostrar sobre no site"
+                        />
+                      </div>
+                      <EditorToolbar editorRef={descRef} />
+                    </div>
                   </div>
                   <div
                     ref={descRef}
@@ -989,10 +1111,23 @@ export default function GestaoHoteis() {
                 />
               </div>
 
+              {/* LINK DE VÍDEO PRINCIPAL COM BOTÃO LIGA/DESLIGA */}
               <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Link de Vídeo Principal do Hotel (YouTube normal ou Shorts vertical) <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase block">
+                    Link de Vídeo Principal do Hotel (YouTube ou Shorts)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-bold ${mostrarVideo ? "text-emerald-700" : "text-slate-400"}`}>
+                      {mostrarVideo ? "Visível no site" : "Oculto no site"}
+                    </span>
+                    <ToggleSwitch
+                      ativo={mostrarVideo}
+                      onToggle={() => setMostrarVideo((v) => !v)}
+                      label="Mostrar vídeo no site"
+                    />
+                  </div>
+                </div>
                 <div className="relative">
                   <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                   <input
@@ -1005,12 +1140,25 @@ export default function GestaoHoteis() {
                 </div>
               </div>
 
+              {/* OBSERVAÇÕES GERAIS COM BOTÃO LIGA/DESLIGA */}
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <label className="text-xs font-bold text-slate-700 uppercase block">
-                    Observações Gerais (Políticas de toalhas, pulseiras, cancelamento) <span className="text-emerald-700 font-semibold">[Mostrar somente no site]</span>
+                    Observações Gerais (Políticas de toalhas, pulseiras, cancelamento)
                   </label>
-                  <EditorToolbar editorRef={obsRef} />
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold ${mostrarObs ? "text-emerald-700" : "text-slate-400"}`}>
+                        {mostrarObs ? "Visível no site" : "Oculto no site"}
+                      </span>
+                      <ToggleSwitch
+                        ativo={mostrarObs}
+                        onToggle={() => setMostrarObs((v) => !v)}
+                        label="Mostrar observações no site"
+                      />
+                    </div>
+                    <EditorToolbar editorRef={obsRef} />
+                  </div>
                 </div>
                 <div
                   ref={obsRef}
@@ -1022,13 +1170,25 @@ export default function GestaoHoteis() {
               </div>
             </div>
 
-            {/* 3. FOTOS GERAIS DO HOTEL */}
+            {/* 3. FOTOS GERAIS DO HOTEL COM LIGA/DESLIGA E DESTAQUE */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                    Fotos Gerais do Hotel / Lazer <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
+                      Fotos Gerais do Hotel / Lazer
+                    </h3>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[11px] font-bold ${mostrarFotosGerais ? "text-emerald-700" : "text-slate-400"}`}>
+                        {mostrarFotosGerais ? "Visível no site" : "Oculto no site"}
+                      </span>
+                      <ToggleSwitch
+                        ativo={mostrarFotosGerais}
+                        onToggle={() => setMostrarFotosGerais((v) => !v)}
+                        label="Mostrar fotos gerais no site"
+                      />
+                    </div>
+                  </div>
                   <p className="text-xs text-slate-600 mt-0.5">Faça upload de fotos das piscinas do hotel, fachada, restaurante e área externa.</p>
                 </div>
                 
@@ -1054,8 +1214,33 @@ export default function GestaoHoteis() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {fotosGerais.map((url, idx) => (
-                    <div key={idx} className="relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border border-slate-200">
+                    <div 
+                      key={idx} 
+                      className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
+                        idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
+                      }`}
+                    >
                       <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                      
+                      {/* Botão / Badge de Destaque */}
+                      {idx === 0 ? (
+                        <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-white" />
+                          <span>Destaque</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => definirFotoDestaqueGeral(idx)}
+                          className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                          title="Definir como primeira foto / capa"
+                        >
+                          <Star className="w-3 h-3" />
+                          <span>Destaque</span>
+                        </button>
+                      )}
+
+                      {/* Botão Remover */}
                       <button
                         type="button"
                         onClick={() => removerFotoGeral(idx)}
@@ -1070,15 +1255,15 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 4. TIPOS DE APARTAMENTOS */}
+            {/* 4. TIPOS DE APARTAMENTOS COM LIGA/DESLIGA INDIVIDUAL POR QUARTO E DESTAQUE */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                    Tipos de Apartamentos (Acomodações) <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
+                    Tipos de Apartamentos (Acomodações)
                   </h3>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Cadastre os quartos disponíveis e adicione fotos de cada categoria.
+                    Cadastre os quartos disponíveis e controle a visibilidade individual de cada um na vitrine.
                   </p>
                 </div>
                 
@@ -1102,47 +1287,67 @@ export default function GestaoHoteis() {
                 <div className="space-y-4">
                   {tiposApto.map((apto, index) => (
                     <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 space-y-2">
-                          <div>
-                            <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                              Nome da Categoria #{index + 1}
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Ex: Suíte Master com Varanda"
-                              value={apto.nome}
-                              onChange={(e) => atualizarNomeApto(index, e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                      
+                      {/* Topo do Quarto: Título + Chave Liga/Desliga individual + Remover */}
+                      <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-xs font-bold uppercase text-slate-600">
+                          Apartamento #{index + 1}
+                        </span>
+
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[11px] font-bold ${apto.mostrarNoSite !== false ? "text-emerald-700" : "text-slate-400"}`}>
+                              {apto.mostrarNoSite !== false ? "Visível no site" : "Oculto no site"}
+                            </span>
+                            <ToggleSwitch
+                              ativo={apto.mostrarNoSite !== false}
+                              onToggle={() => alternarVisibilidadeApto(index)}
+                              label="Mostrar este quarto no site"
                             />
                           </div>
 
-                          {/* CAMPO DE DESCRIÇÃO DO QUARTO */}
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
-                              Descrição da Acomodação (Opcional)
-                            </label>
-                            <textarea
-                              rows={2}
-                              placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
-                              value={apto.descricao || ""}
-                              onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removerTipoApto(index)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                            title="Remover categoria"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => removerTipoApto(index)}
-                          className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition mt-6"
-                          title="Remover categoria"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
 
+                      {/* Campos Nome e Descrição */}
+                      <div className="space-y-2">
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                            Nome da Categoria *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ex: Suíte Master com Varanda"
+                            value={apto.nome}
+                            onChange={(e) => atualizarNomeApto(index, e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                            Descrição da Acomodação (Opcional)
+                          </label>
+                          <textarea
+                            rows={2}
+                            placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
+                            value={apto.descricao || ""}
+                            onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Fotos do Quarto com Destaque */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-slate-700">
@@ -1165,8 +1370,31 @@ export default function GestaoHoteis() {
                         {apto.fotos?.length > 0 && (
                           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
                             {apto.fotos.map((fotoUrl, fIdx) => (
-                              <div key={fIdx} className="relative group rounded-lg overflow-hidden aspect-video bg-slate-200">
+                              <div 
+                                key={fIdx} 
+                                className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 transition ${
+                                  fIdx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-transparent"
+                                }`}
+                              >
                                 <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
+                                
+                                {fIdx === 0 ? (
+                                  <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                                    <Star className="w-2.5 h-2.5 fill-white" />
+                                    <span>Capa</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => definirFotoDestaqueApto(index, fIdx)}
+                                    className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                                    title="Definir como primeira foto do quarto"
+                                  >
+                                    <Star className="w-2.5 h-2.5" />
+                                    <span>Capa</span>
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={() => removerFotoApto(index, fIdx)}
@@ -1186,16 +1414,28 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 5. PARQUES AQUÁTICOS / LAZER ADICIONAL */}
+            {/* 5. PARQUES AQUÁTICOS COM LIGA/DESLIGA E DESTAQUE */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                    <Waves className="w-5 h-5 text-sky-600" />
-                    Parques Aquáticos / Lazer Adicional <span className="text-emerald-700 text-xs font-semibold">[Mostrar somente no site]</span>
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                      <Waves className="w-5 h-5 text-sky-600" />
+                      Parques Aquáticos / Lazer Adicional
+                    </h3>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[11px] font-bold ${mostrarParques ? "text-emerald-700" : "text-slate-400"}`}>
+                        {mostrarParques ? "Visível no site" : "Oculto no site"}
+                      </span>
+                      <ToggleSwitch
+                        ativo={mostrarParques}
+                        onToggle={() => setMostrarParques((v) => !v)}
+                        label="Mostrar parques no site"
+                      />
+                    </div>
+                  </div>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Fotos e vídeo dos parques aquáticos inclusos no pacote. Se vazios, os blocos não aparecerão na vitrine.
+                    Fotos e vídeo dos parques aquáticos inclusos no pacote.
                   </p>
                 </div>
                 
@@ -1236,8 +1476,31 @@ export default function GestaoHoteis() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {fotosParque.map((url, idx) => (
-                    <div key={idx} className="relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border border-slate-200">
+                    <div 
+                      key={idx} 
+                      className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
+                        idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
+                      }`}
+                    >
                       <img src={url} alt={`Foto Parque ${idx + 1}`} className="w-full h-full object-cover" />
+                      
+                      {idx === 0 ? (
+                        <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-white" />
+                          <span>Destaque</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => definirFotoDestaqueParque(idx)}
+                          className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                          title="Definir como primeira foto do parque"
+                        >
+                          <Star className="w-3 h-3" />
+                          <span>Destaque</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => removerFotoParque(idx)}
@@ -1269,7 +1532,7 @@ export default function GestaoHoteis() {
 
                   <div>
                     <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                      Link do Vídeo do Parque (YouTube normal ou Shorts vertical)
+                      Link do Vídeo do Parque (YouTube normal ou Shorts)
                     </label>
                     <div className="relative">
                       <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
@@ -1284,7 +1547,7 @@ export default function GestaoHoteis() {
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Se preenchido, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos na proposta.
+                  Se preenchido e a seção estiver ativa, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos.
                 </p>
               </div>
             </div>
