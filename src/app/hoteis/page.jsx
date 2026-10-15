@@ -232,6 +232,7 @@ export default function GestaoHoteis() {
   const [mostrarObs, setMostrarObs] = useState(true);
   const [mostrarFotosGerais, setMostrarFotosGerais] = useState(true);
   const [mostrarParques, setMostrarParques] = useState(true);
+  const [mostrarVideoParque, setMostrarVideoParque] = useState(true);
 
   // Modal Customizado
   const [modalConfig, setModalConfig] = useState({
@@ -509,6 +510,7 @@ export default function GestaoHoteis() {
     setMostrarObs(true);
     setMostrarFotosGerais(true);
     setMostrarParques(true);
+    setMostrarVideoParque(true);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
@@ -553,6 +555,7 @@ export default function GestaoHoteis() {
     setMostrarObs(hotel.mostrarObs !== false);
     setMostrarFotosGerais(hotel.mostrarFotosGerais !== false);
     setMostrarParques(hotel.mostrarParques !== false);
+    setMostrarVideoParque(hotel.mostrarVideoParque !== false);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
@@ -615,6 +618,7 @@ export default function GestaoHoteis() {
         mostrarObs,
         mostrarFotosGerais,
         mostrarParques,
+        mostrarVideoParque,
       };
 
       if (hotelEditandoId) {
@@ -1414,7 +1418,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* 5. PARQUES AQUÁTICOS COM LIGA/DESLIGA E DESTAQUE */}
+            {/* 5. PARQUES AQUÁTICOS COM LIGA/DESLIGA GERAL E NO VÍDEO DO PARQUE */}
             <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -1514,7 +1518,7 @@ export default function GestaoHoteis() {
                 </div>
               )}
 
-              {/* Bloco de Vídeo dos Parques Aquáticos */}
+              {/* Bloco de Vídeo dos Parques Aquáticos COM LIGA/DESLIGA NO VÍDEO DO PARQUE */}
               <div className="pt-4 border-t border-slate-200 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
@@ -1531,9 +1535,21 @@ export default function GestaoHoteis() {
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                      Link do Vídeo do Parque (YouTube normal ou Shorts)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 uppercase block">
+                        Link do Vídeo do Parque (YouTube ou Shorts)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold ${mostrarVideoParque ? "text-emerald-700" : "text-slate-400"}`}>
+                          {mostrarVideoParque ? "Visível no site" : "Oculto no site"}
+                        </span>
+                        <ToggleSwitch
+                          ativo={mostrarVideoParque}
+                          onToggle={() => setMostrarVideoParque((v) => !v)}
+                          label="Mostrar vídeo do parque no site"
+                        />
+                      </div>
+                    </div>
                     <div className="relative">
                       <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                       <input
@@ -1547,7 +1563,7 @@ export default function GestaoHoteis() {
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Se preenchido e a seção estiver ativa, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos.
+                  Se preenchido e ativo, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos.
                 </p>
               </div>
             </div>
