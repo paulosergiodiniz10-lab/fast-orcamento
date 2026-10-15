@@ -461,7 +461,6 @@ function GeradorOrcamentoConteudo() {
     if (partesPagamento.length > 0) {
       setFormaPagamento(partesPagamento.join("\n"));
     } else if (hotel.formaPagamento && hotel.formaPagamento.trim() !== "") {
-      // Caso venha formato legado com barras | converte para tópicos
       const linhasConvertidas = hotel.formaPagamento
         .split("|")
         .map((item) => item.trim())
@@ -1081,7 +1080,7 @@ function GeradorOrcamentoConteudo() {
               </select>
             </div>
 
-            {/* 2. SELETOR DE HOSPEDAGEM */}
+            {/* 2. SELETOR DE HOSPEDAGEM (APENAS O NOME DO HOTEL) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1112,7 +1111,7 @@ function GeradorOrcamentoConteudo() {
                   <option value="">-- Selecione uma hospedagem --</option>
                   {hoteisFiltradosPorCidade.map((h) => (
                     <option key={h.id} value={h.id}>
-                      {h.nome} {h.cidade ? `(${h.cidade})` : ""}
+                      {h.nome}
                     </option>
                   ))}
                 </select>
