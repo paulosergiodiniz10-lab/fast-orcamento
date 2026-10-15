@@ -446,19 +446,31 @@ function GeradorOrcamentoConteudo() {
     setAptoSelecionado(hotel.tiposApto?.[0]?.nome || "");
     setRegimesValores({});
 
-    if (hotel.formaPagamento && hotel.formaPagamento.trim() !== "") {
+    // Monta forma de pagamento estruturada se preenchida
+    const partesPagamento = [];
+    if (hotel.pagamentoCartao?.trim()) {
+      partesPagamento.push(`Cartão: ${hotel.pagamentoCartao.trim()}`);
+    }
+    if (hotel.pagamentoPix?.trim()) {
+      partesPagamento.push(`PIX: ${hotel.pagamentoPix.trim()}`);
+    }
+    if (hotel.pagamentoBoleto?.trim()) {
+      partesPagamento.push(`Boleto: ${hotel.pagamentoBoleto.trim()}`);
+    }
+
+    if (partesPagamento.length > 0) {
+      setFormaPagamento(partesPagamento.join(" | "));
+    } else if (hotel.formaPagamento && hotel.formaPagamento.trim() !== "") {
       setFormaPagamento(hotel.formaPagamento);
     } else {
       setFormaPagamento("Cartão em até 10x sem juros ou PIX com desconto especial");
     }
   };
 
-  // Cidades únicas extraídas dinamicamente dos hotéis cadastrados
   const cidadesDisponiveis = Array.from(
     new Set(hoteis.map((h) => h.cidade || "Caldas Novas").filter(Boolean))
   );
 
-  // Lista de hotéis filtrada pela cidade selecionada
   const hoteisFiltradosPorCidade = hoteis.filter((h) => {
     if (cidadeSelecionada === "todas") return true;
     const cid = h.cidade || "Caldas Novas";
@@ -469,7 +481,6 @@ function GeradorOrcamentoConteudo() {
     const novaCidade = e.target.value;
     setCidadeSelecionada(novaCidade);
 
-    // Se o hotel já selecionado não pertencer à nova cidade escolhida, limpa a seleção
     if (hotelSelecionado && novaCidade !== "todas") {
       const cidHotel = hotelSelecionado.cidade || "Caldas Novas";
       if (cidHotel.toLowerCase() !== novaCidade.toLowerCase()) {
@@ -506,7 +517,6 @@ function GeradorOrcamentoConteudo() {
     );
   };
 
-  // Permite apagar totalmente o valor sem travar em '0,00'
   const formatarMoeda = (valorDigitado) => {
     const apenasNumeros = valorDigitado.replace(/\D/g, "");
     if (!apenasNumeros || parseInt(apenasNumeros, 10) === 0) return "";
@@ -644,7 +654,7 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem limpa e condicional: ignora regimes vazios ou zerados (0,00)
+  // Montagem limpa e condicional com título dinâmico das inclusões e dos valores
   const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
@@ -674,7 +684,12 @@ function GeradorOrcamentoConteudo() {
       texto += `\n`;
     }
 
-    texto += `*Valor total do pacote:*\n\n`;
+    // Título dos Valores (Opcional & Editável pelo cadastro do hotel)
+    const mostrarTituloValores = hotelSelecionado.mostrarTituloValores !== false;
+    const tituloValores = hotelSelecionado.tituloValoresCustomizado?.trim() || "Valor total do pacote:";
+    if (mostrarTituloValores && tituloValores.length > 0) {
+      texto += `*${tituloValores}*\n\n`;
+    }
 
     if (abaAtiva === "individual") {
       let textoHospedes = `${adultos} adulto(s)`;
@@ -691,7 +706,6 @@ function GeradorOrcamentoConteudo() {
         texto += `\n`;
       }
 
-      // Filtra apenas regimes preenchidos e diferentes de 0,00
       const regimesComValor = REGIMES_OPCOES.filter((r) => {
         const val = regimesValores[r.id];
         return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
@@ -710,7 +724,6 @@ function GeradorOrcamentoConteudo() {
           texto += `\n`;
         }
 
-        // Filtra apenas regimes preenchidos e diferentes de 0,00
         const regimesComValor = REGIMES_OPCOES.filter((r) => {
           const val = ap.valores[r.id];
           return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
@@ -769,7 +782,6 @@ function GeradorOrcamentoConteudo() {
       titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
     }));
 
-    // Grava no banco apenas regimes com valor real válido (> 0)
     const regimesFiltradosGravar = REGIMES_OPCOES.filter((r) => {
       const val = regimesValores[r.id];
       return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
@@ -891,6 +903,11 @@ function GeradorOrcamentoConteudo() {
     clienteNome.trim().length > 0 &&
     clienteWhatsapp.replace(/\D/g, "").length >= 10 &&
     hotelSelecionado
+  );
+
+  // Lista de opções rápidas de crianças configuradas no hotel selecionado
+  const opcoesCriancasHotel = (hotelSelecionado?.opcoesCriancas || []).filter(
+    (op) => Boolean(op && op.trim().length > 0)
   );
 
   return (
@@ -1131,7 +1148,7 @@ function GeradorOrcamentoConteudo() {
             )}
           </div>
 
-          {/* ================= DATAS (CALENDÁRIO MODERNO ESTILO AIRBNB / BOOKING) ================= */}
+          {/* ================= DATAS ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
               <CalendarIcon className="w-4 h-4 text-brand-700" />
@@ -1173,7 +1190,7 @@ function GeradorOrcamentoConteudo() {
                 </div>
 
                 {numCriancas > 0 && (
-                  <div className="pt-2 border-t border-slate-100">
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5 mb-1">
                       <Baby className="w-3.5 h-3.5 text-brand-700" />
                       Idades / Detalhes das Crianças
@@ -1183,8 +1200,29 @@ function GeradorOrcamentoConteudo() {
                       placeholder="Ex: até 12 anos (ou '5 e 9 anos')"
                       value={idadesCriancas}
                       onChange={(e) => setIdadesCriancas(e.target.value)}
-                      className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                      className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
                     />
+
+                    {/* Chips rápidos pré-cadastrados do Hotel */}
+                    {opcoesCriancasHotel.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Opções rápidas:</span>
+                        {opcoesCriancasHotel.map((opcaoTexto, opIdx) => (
+                          <button
+                            key={opIdx}
+                            type="button"
+                            onClick={() => setIdadesCriancas(opcaoTexto)}
+                            className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border transition ${
+                              idadesCriancas === opcaoTexto
+                                ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                : "bg-white text-slate-700 border-slate-300 hover:bg-amber-50 hover:border-amber-400"
+                            }`}
+                          >
+                            {opcaoTexto}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1314,7 +1352,7 @@ function GeradorOrcamentoConteudo() {
                         </div>
 
                         {numCrApto > 0 && (
-                          <div>
+                          <div className="space-y-1">
                             <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 mb-0.5">
                               <Baby className="w-3.5 h-3.5 text-brand-700" />
                               Idades / Detalhes das Crianças
@@ -1326,6 +1364,25 @@ function GeradorOrcamentoConteudo() {
                               onChange={(e) => atualizarApartamentoGrupo(index, "idadesCriancas", e.target.value)}
                               className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
                             />
+
+                            {opcoesCriancasHotel.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 pt-1">
+                                {opcoesCriancasHotel.map((opTexto, opIdx) => (
+                                  <button
+                                    key={opIdx}
+                                    type="button"
+                                    onClick={() => atualizarApartamentoGrupo(index, "idadesCriancas", opTexto)}
+                                    className={`text-[10px] px-2 py-0.5 rounded font-semibold border transition ${
+                                      apto.idadesCriancas === opTexto
+                                        ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                        : "bg-white text-slate-700 border-slate-300 hover:bg-amber-50"
+                                    }`}
+                                  >
+                                    {opTexto}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1445,7 +1502,7 @@ function GeradorOrcamentoConteudo() {
                 type="text"
                 value={formaPagamento}
                 onChange={(e) => setFormaPagamento(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm font-medium"
               />
             </div>
           </div>
