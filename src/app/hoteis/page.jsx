@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
-  HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare
+  HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare,
+  FileText, Image as ImageIcon
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -199,6 +200,9 @@ export default function GestaoHoteis() {
   const [modoVisualizacao, setModoVisualizacao] = useState("lista");
   const [hotelEditandoId, setHotelEditandoId] = useState(null);
 
+  // Controle da Aba Ativa do Formulário
+  const [abaAtiva, setAbaAtiva] = useState("sobre"); // 'sobre', 'videos', 'fotos', 'apartamentos'
+
   const [filtroCidadeLista, setFiltroCidadeLista] = useState("todas");
 
   // Campos do Formulário - Informações Básicas
@@ -242,6 +246,10 @@ export default function GestaoHoteis() {
   const [mostrarParques, setMostrarParques] = useState(true);
   const [mostrarVideoParque, setMostrarVideoParque] = useState(true);
 
+  // Mantemos em memória os conteúdos ricos para não perder ao trocar de aba
+  const [descricaoHtml, setDescricaoHtml] = useState("");
+  const [observacoesHtml, setObservacoesHtml] = useState("");
+
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
     tipo: "success",
@@ -267,10 +275,34 @@ export default function GestaoHoteis() {
   const descRef = useRef(null);
   const obsRef = useRef(null);
 
+  // Sincroniza os editores quando a aba "sobre" estiver visível
+  useEffect(() => {
+    if (abaAtiva === "sobre" && modoVisualizacao === "formulario") {
+      if (descRef.current && descRef.current.innerHTML !== descricaoHtml) {
+        descRef.current.innerHTML = descricaoHtml || "";
+      }
+      if (obsRef.current && obsRef.current.innerHTML !== observacoesHtml) {
+        obsRef.current.innerHTML = observacoesHtml || "";
+      }
+    }
+  }, [abaAtiva, modoVisualizacao]);
+
   const handlePasteLimpo = (e) => {
     e.preventDefault();
     const textoLimpo = (e.clipboardData || window.clipboardData).getData("text/plain");
     document.execCommand("insertText", false, textoLimpo);
+  };
+
+  const sincronizarTextosRicos = () => {
+    if (descRef.current) setDescricaoHtml(descRef.current.innerHTML);
+    if (obsRef.current) setObservacoesHtml(obsRef.current.innerHTML);
+  };
+
+  const mudarAba = (novaAba) => {
+    if (abaAtiva === "sobre") {
+      sincronizarTextosRicos();
+    }
+    setAbaAtiva(novaAba);
   };
 
   useEffect(() => {
@@ -544,6 +576,7 @@ export default function GestaoHoteis() {
 
   const abrirNovoHotel = () => {
     setHotelEditandoId(null);
+    setAbaAtiva("sobre");
     setCidade("Caldas Novas");
     setEstado("GO");
     setNome("");
@@ -582,6 +615,9 @@ export default function GestaoHoteis() {
     setMostrarParques(true);
     setMostrarVideoParque(true);
 
+    setDescricaoHtml("");
+    setObservacoesHtml("");
+
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
       if (obsRef.current) obsRef.current.innerHTML = "";
@@ -593,6 +629,7 @@ export default function GestaoHoteis() {
 
   const iniciarEdicao = (hotel) => {
     setHotelEditandoId(hotel.id);
+    setAbaAtiva("sobre");
     setCidade(hotel.cidade || "Caldas Novas");
     setEstado(hotel.estado || "GO");
     setNome(hotel.nome || "");
@@ -638,6 +675,9 @@ export default function GestaoHoteis() {
     setMostrarParques(hotel.mostrarParques !== false);
     setMostrarVideoParque(hotel.mostrarVideoParque !== false);
 
+    setDescricaoHtml(hotel.descricao || "");
+    setObservacoesHtml(hotel.observacoes || "");
+
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
       if (obsRef.current) obsRef.current.innerHTML = hotel.observacoes || "";
@@ -658,6 +698,10 @@ export default function GestaoHoteis() {
 
     setSalvando(true);
     try {
+      // Captura o HTML dos editores se a aba ativa for 'sobre', senão usa o estado em memória
+      const descFinal = (abaAtiva === "sobre" && descRef.current) ? descRef.current.innerHTML : descricaoHtml;
+      const obsFinal = (abaAtiva === "sobre" && obsRef.current) ? obsRef.current.innerHTML : observacoesHtml;
+
       const listaIncluso = inclusoPacote
         .split(",")
         .map((p) => p.trim())
@@ -686,10 +730,10 @@ export default function GestaoHoteis() {
         pagamentoBoleto: pagamentoBoleto.trim(),
         formaPagamento: formaPagamentoUnificada || "Em até 10x sem juros | Desconto especial no PIX",
 
-        descricao: descRef.current ? descRef.current.innerHTML : "",
+        descricao: descFinal || "",
         tituloInclusoPacote: formatarTituloOrtografico(tituloInclusoPacote),
         parquesDisponiveis: listaIncluso,
-        observacoes: obsRef.current ? obsRef.current.innerHTML : "",
+        observacoes: obsFinal || "",
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
         tiposApto: tiposApto
@@ -976,7 +1020,7 @@ export default function GestaoHoteis() {
 
         {modoVisualizacao === "formulario" && (
           <form onSubmit={salvarHotel} className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-brand-700" />
                 {hotelEditandoId ? "Editar Informações do Hotel" : "Cadastrar Novo Hotel / Resort"}
@@ -984,831 +1028,956 @@ export default function GestaoHoteis() {
               <button
                 type="button"
                 onClick={cancelarEdicao}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white"
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white w-fit"
               >
                 <X className="w-4 h-4" />
                 Voltar à Lista
               </button>
             </div>
 
-            {/* 1. INFORMAÇÕES BÁSICAS */}
-            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Informações Básicas</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                <div className="md:col-span-8">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Cidade *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Caldas Novas, Rio Quente, Olímpia, Gramado"
-                    value={cidade}
-                    onChange={(e) => setCidade(e.target.value)}
-                    onBlur={(e) => setCidade(formatarNomeCidade(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-brand-900"
-                  />
+            {/* BARRA DE NAVEGAÇÃO POR ABAS (TABS) */}
+            <div className="bg-slate-100 p-1.5 rounded-2xl border border-slate-200 flex flex-wrap gap-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => mudarAba("sobre")}
+                className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                  abaAtiva === "sobre"
+                    ? "bg-brand-900 text-white shadow"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>1. Sobre o Hotel & Regras</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => mudarAba("videos")}
+                className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                  abaAtiva === "videos"
+                    ? "bg-brand-900 text-white shadow"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                }`}
+              >
+                <Video className="w-4 h-4" />
+                <span>2. Vídeos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => mudarAba("fotos")}
+                className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                  abaAtiva === "fotos"
+                    ? "bg-brand-900 text-white shadow"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>3. Fotos (Hotel & Parques)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => mudarAba("apartamentos")}
+                className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                  abaAtiva === "apartamentos"
+                    ? "bg-brand-900 text-white shadow"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                }`}
+              >
+                <BedDouble className="w-4 h-4" />
+                <span>4. Apartamentos</span>
+                {tiposApto.length > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${abaAtiva === "apartamentos" ? "bg-brand-800 text-white" : "bg-slate-200 text-slate-700"}`}>
+                    {tiposApto.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* ============================================================== */}
+            {/* ABA 1: SOBRE O HOTEL, INFORMAÇÕES BÁSICAS, REGRAS & WHATSAPP  */}
+            {/* ============================================================== */}
+            {abaAtiva === "sobre" && (
+              <div className="space-y-5">
+                {/* 1.1 INFORMAÇÕES BÁSICAS */}
+                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Informações Básicas</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="md:col-span-8">
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Cidade *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Caldas Novas, Rio Quente, Olímpia, Gramado"
+                        value={cidade}
+                        onChange={(e) => setCidade(e.target.value)}
+                        onBlur={(e) => setCidade(formatarNomeCidade(e.target.value))}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-4">
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Estado (UF) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={2}
+                        placeholder="Ex: GO"
+                        value={estado}
+                        onChange={(e) => setEstado(e.target.value.toUpperCase())}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-12">
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Nome do Hotel / Resort / Flat *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: HOTEL DIROMA FIORI"
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-12 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase block">
+                          Logotipo do Hotel / Resort (PNG transparente ou JPG)
+                        </label>
+                        <p className="text-[11px] text-slate-500">Aparecerá no banner principal da proposta.</p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {logoUrl && (
+                          <div className="h-12 w-20 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center relative group">
+                            <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                            <button
+                              type="button"
+                              onClick={() => setLogoUrl("")}
+                              className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 shadow"
+                              title="Remover logo"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        <label className={`cursor-pointer inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:border-slate-400 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition shadow-sm ${enviandoLogo ? "opacity-50 pointer-events-none" : ""}`}>
+                          {enviandoLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4 text-brand-700" />}
+                          <span>{enviandoLogo ? "Enviando..." : logoUrl ? "Trocar Logo" : "Upload Logo"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleUploadLogo}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* LOCALIZAÇÃO COM BOTÃO LIGA/DESLIGA */}
+                    <div className="md:col-span-12">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-slate-700 uppercase block">
+                          Localização / Endereço
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold ${mostrarLocalizacao ? "text-emerald-700" : "text-slate-400"}`}>
+                            {mostrarLocalizacao ? "Visível no site" : "Oculto no site"}
+                          </span>
+                          <ToggleSwitch
+                            ativo={mostrarLocalizacao}
+                            onToggle={() => setMostrarLocalizacao((v) => !v)}
+                            label="Mostrar localização no site"
+                          />
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Ex: Av. Santo Amaro, Bairro Turista 1 - Caldas Novas, GO"
+                        value={localizacao}
+                        onChange={(e) => setLocalizacao(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-6">
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Horário Padrão de Check-in
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 14:00"
+                        value={checkinHora}
+                        onChange={(e) => setCheckinHora(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-6">
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Horário Padrão de Check-out
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 11:00"
+                        value={checkoutHora}
+                        onChange={(e) => setCheckoutHora(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                      />
+                    </div>
+
+                    {/* FORMAS DE PAGAMENTO COM TEXTOS LIVRES */}
+                    <div className="md:col-span-12 space-y-2 pt-1 border-t border-slate-100">
+                      <label className="text-xs font-bold text-slate-700 uppercase block flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-brand-700" />
+                        Formas de Pagamento Padrão (Linhas 1, 2 e 3)
+                      </label>
+                      <p className="text-[11px] text-slate-500">
+                        Digite apenas as condições desejadas. Nenhum prefixo fixo será forçado no texto do orçamento.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 1</span>
+                          <input
+                            type="text"
+                            placeholder="Ex: Em até 10x sem juros"
+                            value={pagamentoCartao}
+                            onChange={(e) => setPagamentoCartao(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 2</span>
+                          <input
+                            type="text"
+                            placeholder="Ex: Desconto especial no PIX"
+                            value={pagamentoPix}
+                            onChange={(e) => setPagamentoPix(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 3 (Opcional)</span>
+                          <input
+                            type="text"
+                            placeholder="Ex: Entrada + boleto até o check-in"
+                            value={pagamentoBoleto}
+                            onChange={(e) => setPagamentoBoleto(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SOBRE O HOTEL COM BOTÃO LIGA/DESLIGA */}
+                    <div className="md:col-span-12">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                        <label className="text-xs font-bold text-slate-700 uppercase block">
+                          Sobre o Hotel
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[11px] font-bold ${mostrarSobre ? "text-emerald-700" : "text-slate-400"}`}>
+                              {mostrarSobre ? "Visível no site" : "Oculto no site"}
+                            </span>
+                            <ToggleSwitch
+                              ativo={mostrarSobre}
+                              onToggle={() => setMostrarSobre((v) => !v)}
+                              label="Mostrar sobre no site"
+                            />
+                          </div>
+                          <EditorToolbar editorRef={descRef} />
+                        </div>
+                      </div>
+                      <div
+                        ref={descRef}
+                        contentEditable
+                        onPaste={handlePasteLimpo}
+                        onBlur={sincronizarTextosRicos}
+                        className="w-full min-h-[170px] max-h-[320px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
+                        placeholder="Cole ou digite a descrição do hotel. Títulos podem ser selecionados e destacados em negrito."
+                      />
+                      <p className="text-[11px] text-slate-500 mt-1">Ao colar, formatações externas são higienizadas para garantir alinhamento limpo.</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="md:col-span-4">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Estado (UF) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={2}
-                    placeholder="Ex: GO"
-                    value={estado}
-                    onChange={(e) => setEstado(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-brand-900"
-                  />
-                </div>
+                {/* 1.2 INCLUSÕES & OBSERVAÇÕES */}
+                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Inclusões & Observações</h3>
 
-                <div className="md:col-span-12">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Nome do Hotel / Resort / Flat *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: HOTEL DIROMA FIORI"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                  />
-                </div>
-
-                <div className="md:col-span-12 bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Logotipo do Hotel / Resort (PNG transparente ou JPG)
+                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                      Título das Inclusões (Orçamento WhatsApp e Vitrine)
                     </label>
-                    <p className="text-[11px] text-slate-500">Aparecerá no banner principal da proposta.</p>
+                    <input
+                      type="text"
+                      placeholder="Ex: Parques que inclui no pacote (ou 'Inclui no pacote', 'Benefícios inclusos')"
+                      value={tituloInclusoPacote}
+                      onChange={(e) => setTituloInclusoPacote(e.target.value)}
+                      onBlur={(e) => setTituloInclusoPacote(formatarTituloOrtografico(e.target.value))}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Ajustado automaticamente com a primeira letra maiúscula e as demais minúsculas.
+                    </p>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    {logoUrl && (
-                      <div className="h-12 w-20 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center relative group">
-                        <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                      Itens Inclusos no Pacote (Separados por vírgula)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Clube Privê, Water Park, Náutico Praia Clube, Wi-Fi grátis"
+                      value={inclusoPacote}
+                      onChange={(e) => setInclusoPacote(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                    />
+                  </div>
+
+                  {/* OBSERVAÇÕES GERAIS COM BOTÃO LIGA/DESLIGA */}
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <label className="text-xs font-bold text-slate-700 uppercase block">
+                        Observações Gerais (Políticas de toalhas, pulseiras, cancelamento)
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold ${mostrarObs ? "text-emerald-700" : "text-slate-400"}`}>
+                            {mostrarObs ? "Visível no site" : "Oculto no site"}
+                          </span>
+                          <ToggleSwitch
+                            ativo={mostrarObs}
+                            onToggle={() => setMostrarObs((v) => !v)}
+                            label="Mostrar observações no site"
+                          />
+                        </div>
+                        <EditorToolbar editorRef={obsRef} />
+                      </div>
+                    </div>
+                    <div
+                      ref={obsRef}
+                      contentEditable
+                      onPaste={handlePasteLimpo}
+                      onBlur={sincronizarTextosRicos}
+                      className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
+                      placeholder="Ex: Taxa de turismo inclusa. Proibido entrada com alimentos na área de piscinas."
+                    />
+                  </div>
+
+                  {/* CONFIGURAÇÕES DO ORÇAMENTO (WHATSAPP) */}
+                  <div className="mt-5 p-4 md:p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border-2 border-emerald-200/90 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-emerald-200/60 pb-2.5">
+                      <MessageSquare className="w-4 h-4 text-emerald-800" />
+                      <div>
+                        <h4 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">
+                          Configurações do Orçamento (WhatsApp)
+                        </h4>
+                        <p className="text-[11px] text-emerald-800">
+                          Personalize títulos e textos automáticos que serão sugeridos no momento de gerar o orçamento.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* TÍTULO ANTES DOS VALORES (LIGA / DESLIGA) */}
+                    <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 uppercase block">
+                          Título dos Valores no WhatsApp
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold ${mostrarTituloValores ? "text-emerald-700" : "text-slate-400"}`}>
+                            {mostrarTituloValores ? "Ativo no WhatsApp" : "Oculto no WhatsApp"}
+                          </span>
+                          <ToggleSwitch
+                            ativo={mostrarTituloValores}
+                            onToggle={() => setMostrarTituloValores((v) => !v)}
+                            label="Mostrar título antes dos valores no WhatsApp"
+                          />
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        disabled={!mostrarTituloValores}
+                        placeholder="Ex: Valor total do pacote: (ou 'Investimento da estadia:')"
+                        value={tituloValoresCustomizado}
+                        onChange={(e) => setTituloValoresCustomizado(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold disabled:opacity-50"
+                      />
+                    </div>
+
+                    {/* OPÇÕES RÁPIDAS PARA O CAMPO DE CRIANÇAS */}
+                    <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2.5">
+                      <label className="text-xs font-bold text-slate-800 uppercase block flex items-center gap-1.5">
+                        <Baby className="w-3.5 h-3.5 text-brand-700" />
+                        Opções Rápidas de Texto para Crianças
+                      </label>
+                      <p className="text-[11px] text-slate-500">
+                        Cadastre os textos que mais utiliza para não precisar digitá-los manualmente em cada orçamento.
+                      </p>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Ex: até 12 anos, 0 a 5 anos cortesia"
+                          value={novaOpcaoCrianca}
+                          onChange={(e) => setNovaOpcaoCrianca(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              adicionarOpcaoCrianca();
+                            }
+                          }}
+                          className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                        />
                         <button
                           type="button"
-                          onClick={() => setLogoUrl("")}
-                          className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 shadow"
-                          title="Remover logo"
+                          onClick={adicionarOpcaoCrianca}
+                          className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1 shrink-0"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <Plus className="w-3.5 h-3.5" />
+                          Adicionar Opção
                         </button>
                       </div>
-                    )}
 
-                    <label className={`cursor-pointer inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:border-slate-400 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition shadow-sm ${enviandoLogo ? "opacity-50 pointer-events-none" : ""}`}>
-                      {enviandoLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4 text-brand-700" />}
-                      <span>{enviandoLogo ? "Enviando..." : logoUrl ? "Trocar Logo" : "Upload Logo"}</span>
+                      {opcoesCriancas.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {opcoesCriancas.map((op, opIdx) => (
+                            <span
+                              key={opIdx}
+                              className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs px-2.5 py-1 rounded-lg font-medium shadow-xs"
+                            >
+                              <span>{op}</span>
+                              <button
+                                type="button"
+                                onClick={() => removerOpcaoCrianca(opIdx)}
+                                className="text-emerald-700 hover:text-red-600 transition"
+                                title="Remover opção"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* ABA 2: VÍDEOS                                                  */}
+            {/* ============================================================== */}
+            {abaAtiva === "videos" && (
+              <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <Video className="w-5 h-5 text-red-600" />
+                    Links de Vídeos (Hotel & Parques)
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Configure os links de vídeos do YouTube ou Shorts e controle a exibição individual no site.
+                  </p>
+                </div>
+
+                {/* 2.1 LINK DE VÍDEO PRINCIPAL DO HOTEL */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase block">
+                      Link de Vídeo Principal do Hotel (YouTube ou Shorts)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold ${mostrarVideo ? "text-emerald-700" : "text-slate-400"}`}>
+                        {mostrarVideo ? "Visível no site" : "Oculto no site"}
+                      </span>
+                      <ToggleSwitch
+                        ativo={mostrarVideo}
+                        onToggle={() => setMostrarVideo((v) => !v)}
+                        label="Mostrar vídeo no site"
+                      />
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                    />
+                  </div>
+                </div>
+
+                {/* 2.2 VÍDEO DOS PARQUES AQUÁTICOS */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Título do Vídeo do Parque (Editável)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Conheça as atrações do Water Park"
+                        value={tituloVideoParque}
+                        onChange={(e) => setTituloVideoParque(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-slate-700 uppercase block">
+                          Link do Vídeo do Parque (YouTube ou Shorts)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold ${mostrarVideoParque ? "text-emerald-700" : "text-slate-400"}`}>
+                            {mostrarVideoParque ? "Visível no site" : "Oculto no site"}
+                          </span>
+                          <ToggleSwitch
+                            ativo={mostrarVideoParque}
+                            onToggle={() => setMostrarVideoParque((v) => !v)}
+                            label="Mostrar vídeo do parque no site"
+                          />
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                        <input
+                          type="text"
+                          placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
+                          value={videoParqueUrl}
+                          onChange={(e) => setVideoParqueUrl(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Se preenchido e ativo, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* ABA 3: FOTOS (HOTEL & PARQUES)                                 */}
+            {/* ============================================================== */}
+            {abaAtiva === "fotos" && (
+              <div className="space-y-6">
+                {/* 3.1 FOTOS GERAIS DO HOTEL */}
+                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
+                          Fotos Gerais do Hotel / Lazer ({fotosGerais.length}/18)
+                        </h3>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[11px] font-bold ${mostrarFotosGerais ? "text-emerald-700" : "text-slate-400"}`}>
+                            {mostrarFotosGerais ? "Visível no site" : "Oculto no site"}
+                          </span>
+                          <ToggleSwitch
+                            ativo={mostrarFotosGerais}
+                            onToggle={() => setMostrarFotosGerais((v) => !v)}
+                            label="Mostrar fotos gerais no site"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5">Faça upload de até 18 fotos das piscinas, fachada e área externa.</p>
+                    </div>
+                    
+                    <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral || fotosGerais.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
+                      {enviandoFotoGeral ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                      <span>{enviandoFotoGeral ? "Enviando..." : fotosGerais.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosGerais.length}/18)`}</span>
                       <input
                         type="file"
+                        multiple
                         accept="image/*"
-                        onChange={handleUploadLogo}
+                        onChange={handleUploadFotosGerais}
+                        disabled={fotosGerais.length >= 18}
                         className="hidden"
                       />
                     </label>
                   </div>
-                </div>
 
-                {/* LOCALIZAÇÃO COM BOTÃO LIGA/DESLIGA */}
-                <div className="md:col-span-12">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Localização / Endereço
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-bold ${mostrarLocalizacao ? "text-emerald-700" : "text-slate-400"}`}>
-                        {mostrarLocalizacao ? "Visível no site" : "Oculto no site"}
-                      </span>
-                      <ToggleSwitch
-                        ativo={mostrarLocalizacao}
-                        onToggle={() => setMostrarLocalizacao((v) => !v)}
-                        label="Mostrar localização no site"
-                      />
+                  {fotosGerais.length === 0 ? (
+                    <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
+                      <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-700">Nenhuma foto geral adicionada.</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Selecione fotos direto do seu celular ou computador.</p>
                     </div>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Ex: Av. Santo Amaro, Bairro Turista 1 - Caldas Novas, GO"
-                    value={localizacao}
-                    onChange={(e) => setLocalizacao(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                  />
-                </div>
-
-                <div className="md:col-span-6">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Horário Padrão de Check-in
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 14:00"
-                    value={checkinHora}
-                    onChange={(e) => setCheckinHora(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                  />
-                </div>
-
-                <div className="md:col-span-6">
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                    Horário Padrão de Check-out
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 11:00"
-                    value={checkoutHora}
-                    onChange={(e) => setCheckoutHora(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                  />
-                </div>
-
-                {/* FORMAS DE PAGAMENTO COM TEXTOS LIVRES */}
-                <div className="md:col-span-12 space-y-2 pt-1 border-t border-slate-100">
-                  <label className="text-xs font-bold text-slate-700 uppercase block flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-brand-700" />
-                    Formas de Pagamento Padrão (Linhas 1, 2 e 3)
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    Digite apenas as condições desejadas. Nenhum prefixo fixo será forçado no texto do orçamento.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 1</span>
-                      <input
-                        type="text"
-                        placeholder="Ex: Em até 10x sem juros"
-                        value={pagamentoCartao}
-                        onChange={(e) => setPagamentoCartao(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 2</span>
-                      <input
-                        type="text"
-                        placeholder="Ex: Desconto especial no PIX"
-                        value={pagamentoPix}
-                        onChange={(e) => setPagamentoPix(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 3 (Opcional)</span>
-                      <input
-                        type="text"
-                        placeholder="Ex: Entrada + boleto até o check-in"
-                        value={pagamentoBoleto}
-                        onChange={(e) => setPagamentoBoleto(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* SOBRE O HOTEL COM BOTÃO LIGA/DESLIGA */}
-                <div className="md:col-span-12">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                    <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Sobre o Hotel
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[11px] font-bold ${mostrarSobre ? "text-emerald-700" : "text-slate-400"}`}>
-                          {mostrarSobre ? "Visível no site" : "Oculto no site"}
-                        </span>
-                        <ToggleSwitch
-                          ativo={mostrarSobre}
-                          onToggle={() => setMostrarSobre((v) => !v)}
-                          label="Mostrar sobre no site"
-                        />
-                      </div>
-                      <EditorToolbar editorRef={descRef} />
-                    </div>
-                  </div>
-                  <div
-                    ref={descRef}
-                    contentEditable
-                    onPaste={handlePasteLimpo}
-                    className="w-full min-h-[170px] max-h-[320px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
-                    placeholder="Cole ou digite a descrição do hotel. Títulos podem ser selecionados e destacados em negrito."
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">Ao colar, formatações externas são higienizadas para garantir alinhamento limpo.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. INCLUSÕES & MÍDIA */}
-            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Inclusões, Mídia & Observações</h3>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Título das Inclusões (Orçamento WhatsApp e Vitrine)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Parques que inclui no pacote (ou 'Inclui no pacote', 'Benefícios inclusos')"
-                  value={tituloInclusoPacote}
-                  onChange={(e) => setTituloInclusoPacote(e.target.value)}
-                  onBlur={(e) => setTituloInclusoPacote(formatarTituloOrtografico(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Ajustado automaticamente com a primeira letra maiúscula e as demais minúsculas.
-                </p>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Itens Inclusos no Pacote (Separados por vírgula)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Clube Privê, Water Park, Náutico Praia Clube, Wi-Fi grátis"
-                  value={inclusoPacote}
-                  onChange={(e) => setInclusoPacote(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                />
-              </div>
-
-              {/* LINK DE VÍDEO PRINCIPAL COM BOTÃO LIGA/DESLIGA */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase block">
-                    Link de Vídeo Principal do Hotel (YouTube ou Shorts)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[11px] font-bold ${mostrarVideo ? "text-emerald-700" : "text-slate-400"}`}>
-                      {mostrarVideo ? "Visível no site" : "Oculto no site"}
-                    </span>
-                    <ToggleSwitch
-                      ativo={mostrarVideo}
-                      onToggle={() => setMostrarVideo((v) => !v)}
-                      label="Mostrar vídeo no site"
-                    />
-                  </div>
-                </div>
-                <div className="relative">
-                  <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                  <input
-                    type="text"
-                    placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                  />
-                </div>
-              </div>
-
-              {/* OBSERVAÇÕES GERAIS COM BOTÃO LIGA/DESLIGA */}
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase block">
-                    Observações Gerais (Políticas de toalhas, pulseiras, cancelamento)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-bold ${mostrarObs ? "text-emerald-700" : "text-slate-400"}`}>
-                        {mostrarObs ? "Visível no site" : "Oculto no site"}
-                      </span>
-                      <ToggleSwitch
-                        ativo={mostrarObs}
-                        onToggle={() => setMostrarObs((v) => !v)}
-                        label="Mostrar observações no site"
-                      />
-                    </div>
-                    <EditorToolbar editorRef={obsRef} />
-                  </div>
-                </div>
-                <div
-                  ref={obsRef}
-                  contentEditable
-                  onPaste={handlePasteLimpo}
-                  className="w-full min-h-[160px] max-h-[300px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
-                  placeholder="Ex: Taxa de turismo inclusa. Proibido entrada com alimentos na área de piscinas."
-                />
-              </div>
-
-              {/* ================= BLOCO DESTACADO: CONFIGURAÇÕES DO ORÇAMENTO (WHATSAPP) ================= */}
-              <div className="mt-5 p-4 md:p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border-2 border-emerald-200/90 space-y-4 shadow-sm">
-                <div className="flex items-center gap-2 border-b border-emerald-200/60 pb-2.5">
-                  <MessageSquare className="w-4 h-4 text-emerald-800" />
-                  <div>
-                    <h4 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">
-                      Configurações do Orçamento (WhatsApp)
-                    </h4>
-                    <p className="text-[11px] text-emerald-800">
-                      Personalize títulos e textos automáticos que serão sugeridos no momento de gerar o orçamento.
-                    </p>
-                  </div>
-                </div>
-
-                {/* 1. TÍTULO ANTES DOS VALORES (LIGA / DESLIGA) */}
-                <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 uppercase block">
-                      Título dos Valores no WhatsApp
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-bold ${mostrarTituloValores ? "text-emerald-700" : "text-slate-400"}`}>
-                        {mostrarTituloValores ? "Ativo no WhatsApp" : "Oculto no WhatsApp"}
-                      </span>
-                      <ToggleSwitch
-                        ativo={mostrarTituloValores}
-                        onToggle={() => setMostrarTituloValores((v) => !v)}
-                        label="Mostrar título antes dos valores no WhatsApp"
-                      />
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    disabled={!mostrarTituloValores}
-                    placeholder="Ex: Valor total do pacote: (ou 'Investimento da estadia:')"
-                    value={tituloValoresCustomizado}
-                    onChange={(e) => setTituloValoresCustomizado(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold disabled:opacity-50"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    Se desativado, o orçamento no WhatsApp não exibirá este título e irá direto aos valores.
-                  </p>
-                </div>
-
-                {/* 2. OPÇÕES RÁPIDAS PARA O CAMPO DE CRIANÇAS */}
-                <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2.5">
-                  <label className="text-xs font-bold text-slate-800 uppercase block flex items-center gap-1.5">
-                    <Baby className="w-3.5 h-3.5 text-brand-700" />
-                    Opções Rápidas de Texto para Crianças
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    Cadastre os textos que mais utiliza para não precisar digitá-los manualmente em cada orçamento.
-                  </p>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ex: até 12 anos, 0 a 5 anos cortesia"
-                      value={novaOpcaoCrianca}
-                      onChange={(e) => setNovaOpcaoCrianca(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          adicionarOpcaoCrianca();
-                        }
-                      }}
-                      className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
-                    />
-                    <button
-                      type="button"
-                      onClick={adicionarOpcaoCrianca}
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1 shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Adicionar Opção
-                    </button>
-                  </div>
-
-                  {opcoesCriancas.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {opcoesCriancas.map((op, opIdx) => (
-                        <span
-                          key={opIdx}
-                          className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs px-2.5 py-1 rounded-lg font-medium shadow-xs"
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                      {fotosGerais.map((url, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
+                            idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
+                          }`}
                         >
-                          <span>{op}</span>
+                          <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                          
+                          {idx === 0 ? (
+                            <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-white" />
+                              <span>Destaque</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => definirFotoDestaqueGeral(idx)}
+                              className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                              title="Definir como primeira foto / capa"
+                            >
+                              <Star className="w-3 h-3" />
+                              <span>Destaque</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
-                            onClick={() => removerOpcaoCrianca(opIdx)}
-                            className="text-emerald-700 hover:text-red-600 transition"
-                            title="Remover opção"
+                            onClick={() => removerFotoGeral(idx)}
+                            className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
+                            title="Remover foto"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
-                        </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3.2 FOTOS DOS PARQUES AQUÁTICOS */}
+                <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                          <Waves className="w-5 h-5 text-sky-600" />
+                          Parques Aquáticos / Lazer Adicional ({fotosParque.length}/18)
+                        </h3>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[11px] font-bold ${mostrarParques ? "text-emerald-700" : "text-slate-400"}`}>
+                            {mostrarParques ? "Visível no site" : "Oculto no site"}
+                          </span>
+                          <ToggleSwitch
+                            ativo={mostrarParques}
+                            onToggle={() => setMostrarParques((v) => !v)}
+                            label="Mostrar parques no site"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Faça upload de até 18 fotos das atrações aquáticas.
+                      </p>
+                    </div>
+                    
+                    <label className={`cursor-pointer inline-flex items-center gap-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoParque || fotosParque.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
+                      {enviandoFotoParque ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                      <span>{enviandoFotoParque ? "Enviando..." : fotosParque.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosParque.length}/18)`}</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleUploadFotosParque}
+                        disabled={fotosParque.length >= 18}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                      Título da Seção de Parques (Aparecerá como cabeçalho do slide na vitrine)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Fotos do Water Park & Clube Privê (ou 'Fotos do Hot Park')"
+                      value={tituloFotosParque}
+                      onChange={(e) => setTituloFotosParque(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  {fotosParque.length === 0 ? (
+                    <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
+                      <Waves className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-700">Nenhuma foto de parque adicionada.</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Se este produto inclui parque aquático, adicione fotos das atrações aqui.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                      {fotosParque.map((url, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
+                            idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
+                          }`}
+                        >
+                          <img src={url} alt={`Foto Parque ${idx + 1}`} className="w-full h-full object-cover" />
+                          
+                          {idx === 0 ? (
+                            <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-white" />
+                              <span>Destaque</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => definirFotoDestaqueParque(idx)}
+                              className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                              title="Definir como primeira foto do parque"
+                            >
+                              <Star className="w-3 h-3" />
+                              <span>Destaque</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => removerFotoParque(idx)}
+                            className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
+                            title="Remover foto"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* 3. FOTOS GERAIS DO HOTEL (MÁXIMO 18) COM LIGA/DESLIGA E COMPRESSOR */}
-            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
-                      Fotos Gerais do Hotel / Lazer ({fotosGerais.length}/18)
+            {/* ============================================================== */}
+            {/* ABA 4: APARTAMENTOS (ACOMODAÇÕES)                              */}
+            {/* ============================================================== */}
+            {abaAtiva === "apartamentos" && (
+              <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                      Tipos de Apartamentos (Acomodações)
                     </h3>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[11px] font-bold ${mostrarFotosGerais ? "text-emerald-700" : "text-slate-400"}`}>
-                        {mostrarFotosGerais ? "Visível no site" : "Oculto no site"}
-                      </span>
-                      <ToggleSwitch
-                        ativo={mostrarFotosGerais}
-                        onToggle={() => setMostrarFotosGerais((v) => !v)}
-                        label="Mostrar fotos gerais no site"
-                      />
-                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Cadastre os quartos disponíveis (máximo 10 fotos por quarto) e controle a visibilidade individual.
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">Faça upload de até 18 fotos das piscinas, fachada e área externa.</p>
+                  
+                  <button
+                    type="button"
+                    onClick={adicionarTipoApto}
+                    className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Adicionar Tipo de Apto
+                  </button>
                 </div>
-                
-                <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral || fotosGerais.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
-                  {enviandoFotoGeral ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                  <span>{enviandoFotoGeral ? "Enviando..." : fotosGerais.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosGerais.length}/18)`}</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleUploadFotosGerais}
-                    disabled={fotosGerais.length >= 18}
-                    className="hidden"
-                  />
-                </label>
-              </div>
 
-              {fotosGerais.length === 0 ? (
-                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
-                  <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-slate-700">Nenhuma foto geral adicionada.</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Selecione fotos direto do seu celular ou computador.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                  {fotosGerais.map((url, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
-                        idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
-                      }`}
-                    >
-                      <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
-                      
-                      {idx === 0 ? (
-                        <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
-                          <Star className="w-3 h-3 fill-white" />
-                          <span>Destaque</span>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => definirFotoDestaqueGeral(idx)}
-                          className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                          title="Definir como primeira foto / capa"
-                        >
-                          <Star className="w-3 h-3" />
-                          <span>Destaque</span>
-                        </button>
-                      )}
+                {tiposApto.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
+                    <BedDouble className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <p className="text-xs font-semibold text-slate-700">Nenhum tipo de apartamento cadastrado.</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Ex: Suíte Luxo Casal, Flat 1 Quarto, Apartamento Standard.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tiposApto.map((apto, index) => {
+                      const qtdFotosApto = apto.fotos?.length || 0;
+                      const atingiuLimiteApto = qtdFotosApto >= 10;
 
-                      <button
-                        type="button"
-                        onClick={() => removerFotoGeral(idx)}
-                        className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                        title="Remover foto"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 4. TIPOS DE APARTAMENTOS (MÁXIMO 10 FOTOS) COM LIGA/DESLIGA E COMPRESSOR */}
-            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                    Tipos de Apartamentos (Acomodações)
-                  </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Cadastre os quartos disponíveis (máximo 10 fotos por quarto) e controle a visibilidade individual.
-                  </p>
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={adicionarTipoApto}
-                  className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  Adicionar Tipo de Apto
-                </button>
-              </div>
-
-              {tiposApto.length === 0 ? (
-                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
-                  <BedDouble className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-slate-700">Nenhum tipo de apartamento cadastrado.</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Ex: Suíte Luxo Casal, Flat 1 Quarto, Apartamento Standard.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {tiposApto.map((apto, index) => {
-                    const qtdFotosApto = apto.fotos?.length || 0;
-                    const atingiuLimiteApto = qtdFotosApto >= 10;
-
-                    return (
-                      <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                          <span className="text-xs font-bold uppercase text-slate-600">
-                            Apartamento #{index + 1}
-                          </span>
-
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[11px] font-bold ${apto.mostrarNoSite !== false ? "text-emerald-700" : "text-slate-400"}`}>
-                                {apto.mostrarNoSite !== false ? "Visível no site" : "Oculto no site"}
-                              </span>
-                              <ToggleSwitch
-                                ativo={apto.mostrarNoSite !== false}
-                                onToggle={() => alternarVisibilidadeApto(index)}
-                                label="Mostrar este quarto no site"
-                              />
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => removerTipoApto(index)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                              title="Remover categoria"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                              Nome da Categoria *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Ex: Suíte Master com Varanda"
-                              value={apto.nome}
-                              onChange={(e) => atualizarNomeApto(index, e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
-                              Descrição da Acomodação (Opcional)
-                            </label>
-                            <textarea
-                              rows={2}
-                              placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
-                              value={apto.descricao || ""}
-                              onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold text-slate-700">
-                              Fotos deste apartamento ({qtdFotosApto}/10)
+                      return (
+                        <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                          <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                            <span className="text-xs font-bold uppercase text-slate-600">
+                              Apartamento #{index + 1}
                             </span>
 
-                            <label className={`cursor-pointer inline-flex items-center gap-1.5 text-brand-900 hover:text-brand-950 bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm ${enviandoFotoAptoIndex === index || atingiuLimiteApto ? "opacity-50 pointer-events-none" : ""}`}>
-                              {enviandoFotoAptoIndex === index ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                              <span>{enviandoFotoAptoIndex === index ? "Enviando..." : atingiuLimiteApto ? "Limite Atingido (10)" : `Fotos do Quarto (${qtdFotosApto}/10)`}</span>
-                              <input
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={(e) => handleUploadFotosApto(index, e)}
-                                disabled={atingiuLimiteApto}
-                                className="hidden"
-                              />
-                            </label>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[11px] font-bold ${apto.mostrarNoSite !== false ? "text-emerald-700" : "text-slate-400"}`}>
+                                  {apto.mostrarNoSite !== false ? "Visível no site" : "Oculto no site"}
+                                </span>
+                                <ToggleSwitch
+                                  ativo={apto.mostrarNoSite !== false}
+                                  onToggle={() => alternarVisibilidadeApto(index)}
+                                  label="Mostrar este quarto no site"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => removerTipoApto(index)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                                title="Remover categoria"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
 
-                          {apto.fotos?.length > 0 && (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
-                              {apto.fotos.map((fotoUrl, fIdx) => (
-                                <div 
-                                  key={fIdx} 
-                                  className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 transition ${
-                                    fIdx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-transparent"
-                                  }`}
-                                >
-                                  <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
-                                  
-                                  {fIdx === 0 ? (
-                                    <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
-                                      <Star className="w-2.5 h-2.5 fill-white" />
-                                      <span>Capa</span>
-                                    </div>
-                                  ) : (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                                Nome da Categoria *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Ex: Suíte Master com Varanda"
+                                value={apto.nome}
+                                onChange={(e) => atualizarNomeApto(index, e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                                Descrição da Acomodação (Opcional)
+                              </label>
+                              <textarea
+                                rows={2}
+                                placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
+                                value={apto.descricao || ""}
+                                onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold text-slate-700">
+                                Fotos deste apartamento ({qtdFotosApto}/10)
+                              </span>
+
+                              <label className={`cursor-pointer inline-flex items-center gap-1.5 text-brand-900 hover:text-brand-950 bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm ${enviandoFotoAptoIndex === index || atingiuLimiteApto ? "opacity-50 pointer-events-none" : ""}`}>
+                                {enviandoFotoAptoIndex === index ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                                <span>{enviandoFotoAptoIndex === index ? "Enviando..." : atingiuLimiteApto ? "Limite Atingido (10)" : `Fotos do Quarto (${qtdFotosApto}/10)`}</span>
+                                <input
+                                  type="file"
+                                  multiple
+                                  accept="image/*"
+                                  onChange={(e) => handleUploadFotosApto(index, e)}
+                                  disabled={atingiuLimiteApto}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+
+                            {apto.fotos?.length > 0 && (
+                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
+                                {apto.fotos.map((fotoUrl, fIdx) => (
+                                  <div 
+                                    key={fIdx} 
+                                    className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 transition ${
+                                      fIdx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-transparent"
+                                    }`}
+                                  >
+                                    <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
+                                    
+                                    {fIdx === 0 ? (
+                                      <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                                        <Star className="w-2.5 h-2.5 fill-white" />
+                                        <span>Capa</span>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => definirFotoDestaqueApto(index, fIdx)}
+                                        className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
+                                        title="Definir como primeira foto do quarto"
+                                      >
+                                        <Star className="w-2.5 h-2.5" />
+                                        <span>Capa</span>
+                                      </button>
+                                    )}
+
                                     <button
                                       type="button"
-                                      onClick={() => definirFotoDestaqueApto(index, fIdx)}
-                                      className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                                      title="Definir como primeira foto do quarto"
+                                      onClick={() => removerFotoApto(index, fIdx)}
+                                      className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
+                                      title="Remover foto"
                                     >
-                                      <Star className="w-2.5 h-2.5" />
-                                      <span>Capa</span>
+                                      <X className="w-3.5 h-3.5" />
                                     </button>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    onClick={() => removerFotoApto(index, fIdx)}
-                                    className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                                    title="Remover foto"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 5. PARQUES AQUÁTICOS (MÁXIMO 18 FOTOS) COM LIGA/DESLIGA E COMPRESSOR */}
-            <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                      <Waves className="w-5 h-5 text-sky-600" />
-                      Parques Aquáticos / Lazer Adicional ({fotosParque.length}/18)
-                    </h3>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[11px] font-bold ${mostrarParques ? "text-emerald-700" : "text-slate-400"}`}>
-                        {mostrarParques ? "Visível no site" : "Oculto no site"}
-                      </span>
-                      <ToggleSwitch
-                        ativo={mostrarParques}
-                        onToggle={() => setMostrarParques((v) => !v)}
-                        label="Mostrar parques no site"
-                      />
-                    </div>
+                      );
+                    })}
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Faça upload de até 18 fotos das atrações aquáticas.
-                  </p>
-                </div>
-                
-                <label className={`cursor-pointer inline-flex items-center gap-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoParque || fotosParque.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
-                  {enviandoFotoParque ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                  <span>{enviandoFotoParque ? "Enviando..." : fotosParque.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosParque.length}/18)`}</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleUploadFotosParque}
-                    disabled={fotosParque.length >= 18}
-                    className="hidden"
-                  />
-                </label>
+                )}
+              </div>
+            )}
+
+            {/* AÇÕES FINAIS (SEMPRE FIXAS NO RODAPÉ DO FORMULÁRIO EM QUALQUER ABA) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {abaAtiva !== "sobre" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (abaAtiva === "videos") mudarAba("sobre");
+                      if (abaAtiva === "fotos") mudarAba("videos");
+                      if (abaAtiva === "apartamentos") mudarAba("fotos");
+                    }}
+                    className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
+                  >
+                    ← Aba Anterior
+                  </button>
+                )}
+                {abaAtiva !== "apartamentos" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (abaAtiva === "sobre") mudarAba("videos");
+                      if (abaAtiva === "videos") mudarAba("fotos");
+                      if (abaAtiva === "fotos") mudarAba("apartamentos");
+                    }}
+                    className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
+                  >
+                    Próxima Aba →
+                  </button>
+                )}
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Título da Seção de Parques (Aparecerá como cabeçalho do slide na vitrine)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Fotos do Water Park & Clube Privê (ou 'Fotos do Hot Park')"
-                  value={tituloFotosParque}
-                  onChange={(e) => setTituloFotosParque(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
-                />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={cancelarEdicao}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-5 py-2.5 rounded-xl text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvando}
+                  className="bg-brand-900 hover:bg-brand-950 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm transition shadow flex items-center gap-2 disabled:opacity-50"
+                >
+                  {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>{salvando ? "Salvando Hotel..." : hotelEditandoId ? "Atualizar Hotel" : "Gravar Hotel Completo"}</span>
+                </button>
               </div>
-
-              {fotosParque.length === 0 ? (
-                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
-                  <Waves className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-slate-700">Nenhuma foto de parque adicionada.</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Se este produto inclui parque aquático, adicione fotos das atrações aqui.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                  {fotosParque.map((url, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
-                        idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
-                      }`}
-                    >
-                      <img src={url} alt={`Foto Parque ${idx + 1}`} className="w-full h-full object-cover" />
-                      
-                      {idx === 0 ? (
-                        <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
-                          <Star className="w-3 h-3 fill-white" />
-                          <span>Destaque</span>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => definirFotoDestaqueParque(idx)}
-                          className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                          title="Definir como primeira foto do parque"
-                        >
-                          <Star className="w-3 h-3" />
-                          <span>Destaque</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => removerFotoParque(idx)}
-                        className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                        title="Remover foto"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Bloco de Vídeo dos Parques Aquáticos COM LIGA/DESLIGA NO VÍDEO DO PARQUE */}
-              <div className="pt-4 border-t border-slate-200 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                      Título do Vídeo do Parque (Editável)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Conheça as atrações do Water Park"
-                      value={tituloVideoParque}
-                      onChange={(e) => setTituloVideoParque(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 uppercase block">
-                        Link do Vídeo do Parque (YouTube ou Shorts)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[11px] font-bold ${mostrarVideoParque ? "text-emerald-700" : "text-slate-400"}`}>
-                          {mostrarVideoParque ? "Visível no site" : "Oculto no site"}
-                        </span>
-                        <ToggleSwitch
-                          ativo={mostrarVideoParque}
-                          onToggle={() => setMostrarVideoParque((v) => !v)}
-                          label="Mostrar vídeo do parque no site"
-                        />
-                      </div>
-                    </div>
-                    <div className="relative">
-                      <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                      <input
-                        type="text"
-                        placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
-                        value={videoParqueUrl}
-                        onChange={(e) => setVideoParqueUrl(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Se preenchido e ativo, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos.
-                </p>
-              </div>
-            </div>
-
-            {/* Ações Finais */}
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={cancelarEdicao}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-6 py-3 rounded-xl text-sm transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={salvando}
-                className="bg-brand-900 hover:bg-brand-950 text-white font-bold px-8 py-3 rounded-xl text-sm transition shadow flex items-center gap-2 disabled:opacity-50"
-              >
-                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                <span>{salvando ? "Salvando Hotel..." : hotelEditandoId ? "Atualizar Hotel" : "Gravar Hotel Completo"}</span>
-              </button>
             </div>
           </form>
         )}
