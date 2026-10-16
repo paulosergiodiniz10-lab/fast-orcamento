@@ -210,7 +210,7 @@ export default function GestaoHoteis() {
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
 
-  // Formas de Pagamento Estruturadas
+  // Formas de Pagamento Estruturadas (Textos Livres)
   const [pagamentoCartao, setPagamentoCartao] = useState("Em até 10x sem juros");
   const [pagamentoPix, setPagamentoPix] = useState("Desconto especial");
   const [pagamentoBoleto, setPagamentoBoleto] = useState("");
@@ -552,6 +552,7 @@ export default function GestaoHoteis() {
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
     
+    // Pagamentos livres (sem prefixos forçados)
     setPagamentoCartao("Em até 10x sem juros");
     setPagamentoPix("Desconto especial");
     setPagamentoBoleto("");
@@ -566,11 +567,13 @@ export default function GestaoHoteis() {
     setTituloVideoParque("Vídeo dos Parques Aquáticos");
     setVideoParqueUrl("");
 
+    // Configurações do Orçamento (WhatsApp)
     setMostrarTituloValores(true);
     setTituloValoresCustomizado("Valor total do pacote:");
     setOpcoesCriancas(["até 12 anos", "0 a 5 anos cortesia"]);
     setNovaOpcaoCrianca("");
 
+    // Botões nascem ativos por padrão
     setMostrarLocalizacao(true);
     setMostrarSobre(true);
     setMostrarVideo(true);
@@ -598,6 +601,7 @@ export default function GestaoHoteis() {
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
 
+    // Formas de Pagamento
     setPagamentoCartao(hotel.pagamentoCartao !== undefined ? hotel.pagamentoCartao : "Em até 10x sem juros");
     setPagamentoPix(hotel.pagamentoPix !== undefined ? hotel.pagamentoPix : "Desconto especial");
     setPagamentoBoleto(hotel.pagamentoBoleto || "");
@@ -619,11 +623,13 @@ export default function GestaoHoteis() {
     setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
     setVideoParqueUrl(hotel.videoParqueUrl || "");
 
+    // Configurações do Orçamento WhatsApp
     setMostrarTituloValores(hotel.mostrarTituloValores !== false);
     setTituloValoresCustomizado(hotel.tituloValoresCustomizado || "Valor total do pacote:");
     setOpcoesCriancas(hotel.opcoesCriancas || ["até 12 anos"]);
     setNovaOpcaoCrianca("");
 
+    // Preferências de visibilidade (default: true)
     setMostrarLocalizacao(hotel.mostrarLocalizacao !== false);
     setMostrarSobre(hotel.mostrarSobre !== false);
     setMostrarVideo(hotel.mostrarVideo !== false);
@@ -657,10 +663,11 @@ export default function GestaoHoteis() {
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
+      // Constrói texto unificado sem prefixos forçados (grava apenas o que a agência digitar)
       const partesPagamento = [];
-      if (pagamentoCartao.trim()) partesPagamento.push(`Cartão: ${pagamentoCartao.trim()}`);
-      if (pagamentoPix.trim()) partesPagamento.push(`PIX: ${pagamentoPix.trim()}`);
-      if (pagamentoBoleto.trim()) partesPagamento.push(`Boleto: ${pagamentoBoleto.trim()}`);
+      if (pagamentoCartao.trim()) partesPagamento.push(pagamentoCartao.trim());
+      if (pagamentoPix.trim()) partesPagamento.push(pagamentoPix.trim());
+      if (pagamentoBoleto.trim()) partesPagamento.push(pagamentoBoleto.trim());
       const formaPagamentoUnificada = partesPagamento.join(" | ");
 
       const dados = {
@@ -673,10 +680,11 @@ export default function GestaoHoteis() {
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
 
+        // Formas de Pagamento Estruturadas (Textos Livres)
         pagamentoCartao: pagamentoCartao.trim(),
         pagamentoPix: pagamentoPix.trim(),
         pagamentoBoleto: pagamentoBoleto.trim(),
-        formaPagamento: formaPagamentoUnificada || "Cartão em até 10x sem juros ou PIX com desconto especial",
+        formaPagamento: formaPagamentoUnificada || "Em até 10x sem juros | Desconto especial no PIX",
 
         descricao: descRef.current ? descRef.current.innerHTML : "",
         tituloInclusoPacote: formatarTituloOrtografico(tituloInclusoPacote),
@@ -697,10 +705,12 @@ export default function GestaoHoteis() {
         tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
         videoParqueUrl: videoParqueUrl.trim(),
 
+        // Configurações do Orçamento WhatsApp
         mostrarTituloValores,
         tituloValoresCustomizado: tituloValoresCustomizado.trim() || "Valor total do pacote:",
         opcoesCriancas: opcoesCriancas.filter((op) => op && op.trim().length > 0),
 
+        // Chaves Liga/Desliga no Site
         mostrarLocalizacao,
         mostrarSobre,
         mostrarVideo,
@@ -1118,16 +1128,19 @@ export default function GestaoHoteis() {
                   />
                 </div>
 
-                {/* FORMAS DE PAGAMENTO DIVIDIDAS (CARTÃO, PIX, BOLETO) */}
+                {/* FORMAS DE PAGAMENTO COM TEXTOS LIVRES */}
                 <div className="md:col-span-12 space-y-2 pt-1 border-t border-slate-100">
                   <label className="text-xs font-bold text-slate-700 uppercase block flex items-center gap-1.5">
                     <CreditCard className="w-3.5 h-3.5 text-brand-700" />
-                    Formas de Pagamento Padrão
+                    Formas de Pagamento Padrão (Linhas 1, 2 e 3)
                   </label>
+                  <p className="text-[11px] text-slate-500">
+                    Digite apenas as condições desejadas. Nenhum prefixo fixo será forçado no texto do orçamento.
+                  </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Cartão de Crédito</span>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 1 (Ex: Cartão)</span>
                       <input
                         type="text"
                         placeholder="Ex: Em até 10x sem juros"
@@ -1137,20 +1150,20 @@ export default function GestaoHoteis() {
                       />
                     </div>
                     <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">PIX</span>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 2 (Ex: PIX)</span>
                       <input
                         type="text"
-                        placeholder="Ex: Com desconto especial"
+                        placeholder="Ex: Desconto especial no PIX"
                         value={pagamentoPix}
                         onChange={(e) => setPagamentoPix(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
                       />
                     </div>
                     <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Boleto Bancário (Opcional)</span>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 3 (Opcional)</span>
                       <input
                         type="text"
-                        placeholder="Ex: Parcelado até a data da viagem"
+                        placeholder="Ex: Entrada + boleto até o check-in"
                         value={pagamentoBoleto}
                         onChange={(e) => setPagamentoBoleto(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 font-medium"
@@ -1768,7 +1781,7 @@ export default function GestaoHoteis() {
                         placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
                         value={videoParqueUrl}
                         onChange={(e) => setVideoParqueUrl(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
                       />
                     </div>
                   </div>
