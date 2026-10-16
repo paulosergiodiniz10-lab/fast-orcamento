@@ -425,7 +425,7 @@ function GeradorOrcamentoConteudo() {
 
     setHotelSelecionado(hotel);
     setParquesMarcados(hotel.parquesDisponiveis || []);
-    setAptoSelecionado(hotel.tiposApto?.[0]?.nome || "");
+    setAptoSelecionado("");
     setRegimesValores({});
 
     // Pega exatamente o que foi digitado em cada campo, sem forçar prefixos fixos como "Cartão de Crédito:", "PIX:" ou "Boleto:"
