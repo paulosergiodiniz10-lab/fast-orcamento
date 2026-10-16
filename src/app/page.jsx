@@ -428,16 +428,16 @@ function GeradorOrcamentoConteudo() {
     setAptoSelecionado(hotel.tiposApto?.[0]?.nome || "");
     setRegimesValores({});
 
-    // Monta forma de pagamento estruturada em tópicos com quebra de linha
+    // Pega exatamente o que foi digitado em cada campo, sem forçar prefixos fixos como "Cartão de Crédito:", "PIX:" ou "Boleto:"
     const partesPagamento = [];
     if (hotel.pagamentoCartao?.trim()) {
-      partesPagamento.push(`• Cartão de Crédito: ${hotel.pagamentoCartao.trim()}`);
+      partesPagamento.push(`• ${hotel.pagamentoCartao.trim()}`);
     }
     if (hotel.pagamentoPix?.trim()) {
-      partesPagamento.push(`• PIX: ${hotel.pagamentoPix.trim()}`);
+      partesPagamento.push(`• ${hotel.pagamentoPix.trim()}`);
     }
     if (hotel.pagamentoBoleto?.trim()) {
-      partesPagamento.push(`• Boleto: ${hotel.pagamentoBoleto.trim()}`);
+      partesPagamento.push(`• ${hotel.pagamentoBoleto.trim()}`);
     }
 
     if (partesPagamento.length > 0) {
@@ -452,7 +452,7 @@ function GeradorOrcamentoConteudo() {
 
       setFormaPagamento(linhasConvertidas);
     } else {
-      setFormaPagamento("• Cartão de Crédito: em até 10 X sem juros\n• PIX: com desconto especial");
+      setFormaPagamento("• Em até 10x sem juros\n• Com desconto especial no PIX");
     }
   };
 
@@ -1489,7 +1489,7 @@ function GeradorOrcamentoConteudo() {
                 value={formaPagamento}
                 onChange={(e) => setFormaPagamento(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium resize-y leading-relaxed"
-                placeholder={"• Cartão de Crédito: em até 10 X sem juros\n• PIX: com desconto especial"}
+                placeholder={"• Em até 10x sem juros\n• Com desconto especial no PIX"}
               />
             </div>
           </div>
