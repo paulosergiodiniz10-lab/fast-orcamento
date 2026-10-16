@@ -153,6 +153,28 @@ export default function GestaoOrcamentos() {
     return `${dia}/${mes}/${ano} às ${hora}:${min}`;
   };
 
+  // Formata os hóspedes de forma limpa na listagem interna
+  const formatarHospedesLimpo = (orc) => {
+    if (!orc) return "";
+    const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
+    if (isGrupo) {
+      return orc.hospedes || `Grupo (${orc.apartamentosGrupo?.length || 0} aptos)`;
+    }
+
+    if (orc.adultos !== undefined) {
+      const ad = parseInt(orc.adultos, 10) || 0;
+      const cr = parseInt(orc.criancas, 10) || 0;
+      return cr > 0 ? `${ad} Adulto(s) e ${cr} Criança(s)` : `${ad} Adulto(s)`;
+    }
+
+    if (orc.hospedes) {
+      // Remove textos complementares entre parênteses que não sejam o indicador plural (s)
+      return orc.hospedes.replace(/\s*\((?![sS]\)).*$/, "").trim();
+    }
+
+    return "Não informado";
+  };
+
   // Formata o número visualmente: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
   const formatarNumeroTelefone = (tel) => {
     if (!tel) return "";
@@ -505,7 +527,7 @@ export default function GestaoOrcamentos() {
                           </strong>
                           <span className="flex items-center gap-1">
                             <Users className="w-3.5 h-3.5 text-brand-700" />
-                            {orc.hospedes}
+                            {formatarHospedesLimpo(orc)}
                           </span>
                         </div>
                       </div>
@@ -553,6 +575,7 @@ export default function GestaoOrcamentos() {
                       <Link
                         href={urlVitrine}
                         target="_blank"
+                        rel="noopener noreferrer"
                         className="flex items-center gap-1 text-slate-700 hover:text-brand-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold px-3 py-2 rounded-xl transition"
                         title="Abrir Vitrine"
                       >
