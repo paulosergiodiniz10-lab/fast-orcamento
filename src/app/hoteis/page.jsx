@@ -1140,7 +1140,7 @@ export default function GestaoHoteis() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 1 (Ex: Cartão)</span>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 1</span>
                       <input
                         type="text"
                         placeholder="Ex: Em até 10x sem juros"
@@ -1150,7 +1150,7 @@ export default function GestaoHoteis() {
                       />
                     </div>
                     <div>
-                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 2 (Ex: PIX)</span>
+                      <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 2</span>
                       <input
                         type="text"
                         placeholder="Ex: Desconto especial no PIX"
@@ -1388,7 +1388,7 @@ export default function GestaoHoteis() {
                             className="text-emerald-700 hover:text-red-600 transition"
                             title="Remover opção"
                           >
-                            <X className="w-3 h-3" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </span>
                       ))}
