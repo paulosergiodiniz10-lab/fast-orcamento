@@ -72,9 +72,10 @@ const gerarSlug = (texto) => {
     .replace(/-+/g, "-");
 };
 
-// Componente do Calendário Moderno sincronizado com o mês da data selecionada ou do dia atual
-function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }) {
+// Componente do Calendário com seleção separada de Check-in e Check-out
+function DateRangePickerModerno({ checkin, checkout, onSelectCheckin, onSelectCheckout, dataMinima }) {
   const [aberto, setAberto] = useState(false);
+  const [campoAtivo, setCampoAtivo] = useState("checkin"); // "checkin" ou "checkout"
   const containerRef = useRef(null);
 
   const hoje = dataMinima || obterDataHojeLocal();
@@ -83,20 +84,10 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
   const [anoVisivel, setAnoVisivel] = useState(anoHoje);
   const [mesVisivel, setMesVisivel] = useState(mesHoje - 1);
 
-  const [dataInicioTemp, setDataInicioTemp] = useState(null);
-
-  useEffect(() => {
-    const dataRef = checkin || hoje;
-    const [ano, mes] = dataRef.split("-").map(Number);
-    setAnoVisivel(ano);
-    setMesVisivel(mes - 1);
-  }, [checkin, hoje]);
-
   useEffect(() => {
     function handleClickFora(event) {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setAberto(false);
-        setDataInicioTemp(null);
       }
     }
     if (aberto) {
@@ -107,12 +98,12 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
     };
   }, [aberto]);
 
-  const abrirCalendario = () => {
-    const dataReferencia = checkin || hoje;
-    const [ano, mes] = dataReferencia.split("-").map(Number);
+  const abrirParaCampo = (campo) => {
+    setCampoAtivo(campo);
+    const dataRef = campo === "checkin" ? (checkin || hoje) : (checkout || somarDias(checkin || hoje, 1));
+    const [ano, mes] = dataRef.split("-").map(Number);
     setAnoVisivel(ano);
     setMesVisivel(mes - 1);
-    setDataInicioTemp(null);
     setAberto(true);
   };
 
@@ -135,10 +126,11 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
   };
 
   const limparParaHoje = () => {
-    setDataInicioTemp(null);
     setAnoVisivel(anoHoje);
     setMesVisivel(mesHoje - 1);
-    onSelectDates(hoje, somarDias(hoje, 1));
+    onSelectCheckin(hoje);
+    onSelectCheckout(somarDias(hoje, 1));
+    setAberto(false);
   };
 
   const primeiroDiaSemana = new Date(anoVisivel, mesVisivel, 1).getDay();
@@ -149,30 +141,26 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
     const diaFormatado = String(dia).padStart(2, "0");
     const dataClicada = `${anoVisivel}-${mesFormatado}-${diaFormatado}`;
 
-    if (!dataInicioTemp) {
-      setDataInicioTemp(dataClicada);
+    if (campoAtivo === "checkin") {
+      onSelectCheckin(dataClicada);
+      onSelectCheckout(somarDias(dataClicada, 1));
+      setAberto(false);
     } else {
-      if (dataClicada <= dataInicioTemp) {
-        setDataInicioTemp(dataClicada);
-      } else {
-        onSelectDates(dataInicioTemp, dataClicada);
-        setDataInicioTemp(null);
-        setAberto(false);
-      }
+      onSelectCheckout(dataClicada);
+      setAberto(false);
     }
   };
 
-  const dataInicioEfetiva = dataInicioTemp || checkin;
-  const dataFimEfetiva = dataInicioTemp ? null : checkout;
+  const dataMinimaPermitida = campoAtivo === "checkin" ? hoje : somarDias(checkin || hoje, 1);
 
   return (
     <div className="relative" ref={containerRef}>
       <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
-          onClick={abrirCalendario}
+          onClick={() => abrirParaCampo("checkin")}
           className={`text-left p-3 rounded-xl border transition flex items-center gap-3 ${
-            aberto && !dataInicioTemp
+            aberto && campoAtivo === "checkin"
               ? "bg-white border-brand-900 ring-2 ring-brand-900/20 shadow-sm"
               : "bg-slate-50 border-slate-300 hover:bg-slate-100"
           }`}
@@ -190,9 +178,9 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
 
         <button
           type="button"
-          onClick={abrirCalendario}
+          onClick={() => abrirParaCampo("checkout")}
           className={`text-left p-3 rounded-xl border transition flex items-center gap-3 ${
-            aberto && dataInicioTemp
+            aberto && campoAtivo === "checkout"
               ? "bg-white border-brand-900 ring-2 ring-brand-900/20 shadow-sm"
               : "bg-slate-50 border-slate-300 hover:bg-slate-100"
           }`}
@@ -227,6 +215,7 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
               type="button"
               onClick={irProximoMes}
               className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition"
+              title="Próximo mês"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -251,14 +240,10 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
               const diaFormatado = String(diaNum).padStart(2, "0");
               const dataAtualStr = `${anoVisivel}-${mesFormatado}-${diaFormatado}`;
 
-              const desabilitado = dataAtualStr < hoje;
-              const isInicio = dataInicioEfetiva === dataAtualStr;
-              const isFim = dataFimEfetiva === dataAtualStr;
-              const noIntervalo =
-                dataInicioEfetiva &&
-                dataFimEfetiva &&
-                dataAtualStr > dataInicioEfetiva &&
-                dataAtualStr < dataFimEfetiva;
+              const desabilitado = dataAtualStr < dataMinimaPermitida;
+              const isInicio = checkin === dataAtualStr;
+              const isFim = checkout === dataAtualStr;
+              const noIntervalo = checkin && checkout && dataAtualStr > checkin && dataAtualStr < checkout;
 
               let classeEstilo = "text-slate-800 hover:bg-slate-100";
               if (desabilitado) {
@@ -284,8 +269,8 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
           </div>
 
           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-[11px] text-slate-500 font-medium">
-              {dataInicioTemp ? "Selecione a data de saída" : "Selecione o check-in"}
+            <span className="text-[11px] text-slate-600 font-semibold">
+              {campoAtivo === "checkin" ? "Escolha a data de Check-in" : "Escolha a data de Check-out"}
             </span>
 
             <div className="flex items-center gap-2">
@@ -298,10 +283,7 @@ function DateRangePickerModerno({ checkin, checkout, onSelectDates, dataMinima }
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setAberto(false);
-                  setDataInicioTemp(null);
-                }}
+                onClick={() => setAberto(false)}
                 className="bg-brand-900 hover:bg-brand-950 text-white font-bold text-[11px] px-3 py-1 rounded-lg transition shadow-sm"
               >
                 Fechar
@@ -506,11 +488,6 @@ function GeradorOrcamentoConteudo() {
     if (hotel) {
       selecionarHotel(hotel);
     }
-  };
-
-  const handleSelecaoIntervaloDatas = (novaEntrada, novaSaida) => {
-    setCheckin(novaEntrada);
-    setCheckout(novaSaida);
   };
 
   const handleLogout = () => {
@@ -1156,7 +1133,7 @@ function GeradorOrcamentoConteudo() {
             )}
           </div>
 
-          {/* ================= DATAS ================= */}
+          {/* ================= DATAS (CHECK-IN E CHECK-OUT SEPARADOS) ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
               <CalendarIcon className="w-4 h-4 text-brand-700" />
@@ -1165,7 +1142,8 @@ function GeradorOrcamentoConteudo() {
             <DateRangePickerModerno
               checkin={checkin}
               checkout={checkout}
-              onSelectDates={handleSelecaoIntervaloDatas}
+              onSelectCheckin={setCheckin}
+              onSelectCheckout={setCheckout}
               dataMinima={hojeStr}
             />
           </div>
