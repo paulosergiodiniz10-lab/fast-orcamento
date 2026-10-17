@@ -1,7 +1,7 @@
 /**
  * Motor de Cálculo Tarifário - Fast Orçamento
  * Módulo inteligente: responsável pelo cálculo de diárias/noites, travas de pacote,
- * hierarquia de prioridades, regras de crianças/hóspedes extras e descontos.
+ * regras de crianças/hóspedes extras e aplicação de descontos.
  */
 
 export const REGIMES_SUPORTADOS = [
@@ -63,39 +63,43 @@ export function validarRegrasDePacote(noitesEstadia, tarifas) {
     return { valido: false, mensagem: "Período inválido de hospedagem." };
   }
 
-  const checkinData = noitesEstadia[0];
-  const checkoutData = noitesEstadia[noitesEstadia.length - 1];
-
   for (const tarifa of tarifas) {
     if (!tarifa.ativo) continue;
 
     const { dataInicio, dataFim, minimoNoites, pacoteFechado, nome } = tarifa;
+    if (!dataInicio || !dataFim) continue;
 
-    // Verifica se a estadia cruza com o período da tarifa
+    // As noites que compõem o período cadastrado da tarifa/pacote
+    const noitesDoPacote = obterNoitesEstadia(dataInicio, dataFim);
+
+    // Verifica se a estadia do cliente toca em qualquer noite deste período
     const tocaPeriodo = noitesEstadia.some(
-      (noite) => noite >= dataInicio && noite <= dataFim
+      (noite) => noite >= dataInicio && noite < dataFim
     );
 
     if (tocaPeriodo) {
-      // 1. Validação de Mínimo de Noites
+      // 1. Regra de Mínimo de Noites geral
       if (minimoNoites && noitesEstadia.length < minimoNoites) {
         return {
           valido: false,
-          mensagem: `A tarifa "${nome || "Especial"}" exige no mínimo ${minimoNoites} noites. Seu período possui apenas ${noitesEstadia.length} noite(s).`,
+          mensagem: `O período de "${nome || "Tarifa"}" exige no mínimo ${minimoNoites} noites. Seu período possui ${noitesEstadia.length} noite(s).`,
         };
       }
 
-      // 2. Validação de Pacote Fechado (Ex: Feriado obrigatório de 23 a 25/10)
-      if (pacoteFechado && dataInicio && dataFim) {
-        const pacoteIniciouDepois = checkinData > dataInicio;
-        const pacoteTerminouAntes = checkoutData < dataFim;
+      // 2. Regra de Pacote Fechado:
+      // Não permite quebrar o pacote saindo antes ou pulando noites.
+      // O cliente deve cobrir todas as noites pertencentes ao pacote fechado.
+      if (pacoteFechado && noitesDoPacote.length > 0) {
+        const cobriuTodasNoites = noitesDoPacote.every((noitePacote) =>
+          noitesEstadia.includes(noitePacote)
+        );
 
-        if (pacoteIniciouDepois || pacoteTerminouAntes) {
+        if (!cobriuTodasNoites) {
           const inicioBr = dataInicio.split("-").reverse().join("/");
           const fimBr = dataFim.split("-").reverse().join("/");
           return {
             valido: false,
-            mensagem: `Existe um pacote fechado (${nome || "Feriado/Evento"}) de ${inicioBr} a ${fimBr}. Não é permitido quebrar o período do pacote.`,
+            mensagem: `O período de ${inicioBr} a ${fimBr} (${nome || "Pacote Fechado"}) exige a reserva completa de todas as noites do pacote.`,
           };
         }
       }
@@ -186,7 +190,7 @@ export function calcularTarifasEstadia({
     };
   }
 
-  // 1. Validação de bloqueios e mínimos de noites
+  // 1. Validação de bloqueios, mínimos de noites e pacotes fechados
   const validacao = validarRegrasDePacote(noites, tarifasHotel);
   if (!validacao.valido) {
     return {
@@ -202,7 +206,7 @@ export function calcularTarifasEstadia({
     acumuladoRegimes[r.id] = { total: 0, noitesCalculadas: 0, existeTarifa: false };
   });
 
-  // 2. Loop Noite a Noite com resolução por Prioridade e Acomodação
+  // 2. Loop Noite a Noite
   for (const noiteStr of noites) {
     const dataObj = converterParaDataLocal(noiteStr);
     const diaDaSemana = dataObj.getDay();
@@ -213,22 +217,25 @@ export function calcularTarifasEstadia({
       const dentroDaData = noiteStr >= t.dataInicio && noiteStr <= t.dataFim;
       const diaPermitido = !t.diasSemana || t.diasSemana.includes(diaDaSemana);
       
-      // Filtro de acomodação (se especificada)
-      const aptoCompravel =
+      const aptoCompativel =
         !acomodacaoEscolhida ||
         !t.aptoVinculado ||
         t.aptoVinculado === "todos" ||
         t.aptoVinculado === acomodacaoEscolhida;
 
-      return dentroDaData && diaPermitido && aptoCompravel;
+      return dentroDaData && diaPermitido && aptoCompativel;
     });
 
     if (tarifasCompativeis.length > 0) {
-      // Ordena pela maior prioridade (e quartos específicos têm peso maior que 'todos')
+      // Critério inteligente de desempate:
+      // 1º Quarto específico ganha de "todos"
+      // 2º Pacote fechado ganha de tarifa comum
       tarifasCompativeis.sort((a, b) => {
-        const prioA = (a.prioridade || 1) + (a.aptoVinculado && a.aptoVinculado !== "todos" ? 1 : 0);
-        const prioB = (b.prioridade || 1) + (b.aptoVinculado && b.aptoVinculado !== "todos" ? 1 : 0);
-        return prioB - prioA;
+        const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 2 : 0;
+        const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 2 : 0;
+        const pesoFechadoA = a.pacoteFechado ? 1 : 0;
+        const pesoFechadoB = b.pacoteFechado ? 1 : 0;
+        return (pesoAptoB + pesoFechadoB) - (pesoAptoA + pesoFechadoA);
       });
 
       const tarifaVencedora = tarifasCompativeis[0];
@@ -251,7 +258,7 @@ export function calcularTarifasEstadia({
     }
   }
 
-  // 3. Aplicação de Desconto e formatação dos valores finais
+  // 3. Aplicação de Desconto e formatação final
   const totalNoitesEstadia = noites.length;
   const resultadoFormatado = {};
 
