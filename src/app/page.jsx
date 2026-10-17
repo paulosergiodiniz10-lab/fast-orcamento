@@ -7,13 +7,13 @@ import {
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
   Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin,
-  Percent, Sparkles, Tag, ShieldCheck, UserPlus, Lock, Eye, EyeOff, Ban, CheckCircle2
+  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
 import { 
   collection, addDoc, getDocs, query, where, serverTimestamp, 
-  doc, getDoc, updateDoc, setDoc 
+  doc, getDoc, updateDoc 
 } from "firebase/firestore";
 import { calcularTarifasEstadia } from "../lib/calculadoraTarifas";
 
@@ -331,12 +331,12 @@ function GeradorOrcamentoConteudo() {
   const [regimesValores, setRegimesValores] = useState({});
 
   // =========================================================================
-  // ESTADOS DO MÓDULO TARIFÁRIO & DESCONTO (Blindado por Feature Flag)
+  // ESTADOS DO MÓDULO TARIFÁRIO & DESCONTO
   // =========================================================================
   const [tarifasHotelAtivo, setTarifasHotelAtivo] = useState([]);
   const [regrasCriancasHotel, setRegrasCriancasHotel] = useState({});
   const [alertaTarifario, setAlertaTarifario] = useState("");
-  const [descontoTipo, setDescontoTipo] = useState("porcentagem"); // 'porcentagem' ou 'valor'
+  const [descontoTipo, setDescontoTipo] = useState("porcentagem");
   const [descontoValor, setDescontoValor] = useState("");
 
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
@@ -492,13 +492,11 @@ function GeradorOrcamentoConteudo() {
 
     const loginNormalizado = novoUsuario.login.trim().toLowerCase();
 
-    // Impede usar o mesmo login da conta principal da agência
     if (agencia?.usuario && agencia.usuario.toLowerCase() === loginNormalizado) {
       setErroUsuario("Este login já é utilizado pela agência principal.");
       return;
     }
 
-    // Verifica se já existe na equipe
     const jaExiste = usuariosEquipe.some((u) => u.login.toLowerCase() === loginNormalizado);
     if (jaExiste) {
       setErroUsuario("Já existe um utilizador com este login.");
@@ -548,7 +546,6 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
-  // Carrega tarifas e regras de crianças do hotel selecionado se a agência tiver permissão
   const carregarDadosTarifarioHotel = async (hotelId) => {
     if (!agencia?.permiteTarifario || !hotelId) {
       setTarifasHotelAtivo([]);
@@ -716,8 +713,10 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
+  // Logout com limpeza sincronizada do LocalStorage e do Cookie de Autenticação
   const handleLogout = () => {
     localStorage.removeItem("fast_agencia");
+    document.cookie = "fast_agencia_auth=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     window.location.href = "/login";
   };
 
@@ -1206,6 +1205,7 @@ function GeradorOrcamentoConteudo() {
           </button>
 
           <button
+            type="button"
             onClick={handleLogout}
             title="Sair da conta"
             className="p-2 text-brand-200 hover:text-white hover:bg-brand-800 rounded-lg transition"
@@ -1411,7 +1411,6 @@ function GeradorOrcamentoConteudo() {
               dataMinima={hojeStr}
             />
 
-            {/* AVISO DO MOTOR TARIFÁRIO (SE HOUVER BLOQUEIO OU PACOTE QUEBRADO) */}
             {alertaTarifario && (
               <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2 text-xs text-amber-800 animate-in fade-in">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -1484,14 +1483,13 @@ function GeradorOrcamentoConteudo() {
                 )}
               </div>
 
-              {/* REGIMES E VALORES COM MÓDULO DE DESCONTO RÁPIDO */}
+              {/* REGIMES E VALORES COM MÓDULO DE DESCONTO */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                     Regimes de Pensão e Valores (R$)
                   </label>
 
-                  {/* BLOCO DE DESCONTO EM TEMPO REAL (LIBERADO PARA PLANO TARIFÁRIO) */}
                   {agencia?.permiteTarifario && (
                     <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2 py-1 rounded-lg">
                       <Tag className="w-3.5 h-3.5 text-emerald-700" />
