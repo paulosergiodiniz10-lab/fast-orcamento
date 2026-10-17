@@ -5,18 +5,35 @@ import {
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
   HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare,
-  FileText, Image as ImageIcon
+  FileText, Image as ImageIcon, CalendarDays, Percent, ShieldCheck
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
 import { 
-  collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp 
+  collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc, getDoc 
 } from "firebase/firestore";
 
 const CLOUD_NAME = "qi6dleli";
 const UPLOAD_PRESET = "fast_orcamento";
 
-// Componente Toggle Switch Liga/Desliga moderno
+const DIAS_SEMANA_NOMES = [
+  { id: 0, label: "Dom" },
+  { id: 1, label: "Seg" },
+  { id: 2, label: "Ter" },
+  { id: 3, label: "Qua" },
+  { id: 4, label: "Qui" },
+  { id: 5, label: "Sex" },
+  { id: 6, label: "Sáb" },
+];
+
+const REGIMES_LISTA = [
+  { id: "cafe", label: "Café da Manhã" },
+  { id: "cafe_almoco", label: "Café + Almoço" },
+  { id: "cafe_jantar", label: "Café + Jantar" },
+  { id: "pensao_completa", label: "Pensão Completa" },
+  { id: "sem_refeicao", label: "Sem refeição" },
+];
+
 function ToggleSwitch({ ativo, onToggle, label }) {
   return (
     <button
@@ -25,7 +42,7 @@ function ToggleSwitch({ ativo, onToggle, label }) {
       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
         ativo ? "bg-emerald-600" : "bg-slate-300"
       }`}
-      title={label || (ativo ? "Ativo no site" : "Oculto no site")}
+      title={label || (ativo ? "Ativo" : "Inativo")}
     >
       <span
         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -52,6 +69,22 @@ const formatarNomeCidade = (texto) => {
     .filter(Boolean)
     .map((palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1))
     .join(" ");
+};
+
+const formatarMoedaInput = (valorDigitado) => {
+  const apenasNumeros = String(valorDigitado || "").replace(/\D/g, "");
+  if (!apenasNumeros || parseInt(apenasNumeros, 10) === 0) return "";
+  const valorFloat = parseFloat(apenasNumeros) / 100;
+  return valorFloat.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const converterMoedaParaFloat = (valorStr) => {
+  if (!valorStr) return 0;
+  const limpo = String(valorStr).replace(/\./g, "").replace(",", ".");
+  return parseFloat(limpo) || 0;
 };
 
 const comprimirImagem = (file, maxLargura = 1920, maxAltura = 1080, qualidade = 0.82) => {
@@ -179,7 +212,7 @@ function EditorToolbar({ editorRef }) {
         type="button"
         onClick={limparFormatacao}
         className="p-1 hover:bg-slate-200 rounded text-slate-600 text-xs flex items-center justify-center w-6 h-6 transition"
-        title="Limpar formatação suja"
+        title="Limpar formatação"
       >
         <Eraser className="w-3.5 h-3.5" />
       </button>
@@ -201,7 +234,7 @@ export default function GestaoHoteis() {
   const [hotelEditandoId, setHotelEditandoId] = useState(null);
 
   // Controle da Aba Ativa do Formulário
-  const [abaAtiva, setAbaAtiva] = useState("sobre"); // 'sobre', 'videos', 'fotos', 'apartamentos'
+  const [abaAtiva, setAbaAtiva] = useState("sobre"); // 'sobre', 'videos', 'fotos', 'apartamentos', 'tarifario'
 
   const [filtroCidadeLista, setFiltroCidadeLista] = useState("todas");
 
@@ -214,7 +247,7 @@ export default function GestaoHoteis() {
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
 
-  // Formas de Pagamento Estruturadas (Textos Livres)
+  // Formas de Pagamento Estruturadas
   const [pagamentoCartao, setPagamentoCartao] = useState("Em até 10x sem juros");
   const [pagamentoPix, setPagamentoPix] = useState("Desconto especial");
   const [pagamentoBoleto, setPagamentoBoleto] = useState("");
@@ -225,19 +258,19 @@ export default function GestaoHoteis() {
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
 
-  // Bloco: Parques Aquáticos / Lazer Adicional
+  // Parques Aquáticos / Lazer Adicional
   const [tituloFotosParque, setTituloFotosParque] = useState("Fotos dos Parques Aquáticos");
   const [fotosParque, setFotosParque] = useState([]);
   const [tituloVideoParque, setTituloVideoParque] = useState("Vídeo dos Parques Aquáticos");
   const [videoParqueUrl, setVideoParqueUrl] = useState("");
 
-  // Bloco: Configurações Específicas do Orçamento (WhatsApp)
+  // Configurações do Orçamento (WhatsApp)
   const [mostrarTituloValores, setMostrarTituloValores] = useState(true);
   const [tituloValoresCustomizado, setTituloValoresCustomizado] = useState("Valor total do pacote:");
   const [opcoesCriancas, setOpcoesCriancas] = useState(["até 12 anos", "0 a 5 anos cortesia"]);
   const [novaOpcaoCrianca, setNovaOpcaoCrianca] = useState("");
 
-  // Flags Liga/Desliga no Site (Padrão: ativas / true)
+  // Flags Liga/Desliga no Site
   const [mostrarLocalizacao, setMostrarLocalizacao] = useState(true);
   const [mostrarSobre, setMostrarSobre] = useState(true);
   const [mostrarVideo, setMostrarVideo] = useState(true);
@@ -246,9 +279,44 @@ export default function GestaoHoteis() {
   const [mostrarParques, setMostrarParques] = useState(true);
   const [mostrarVideoParque, setMostrarVideoParque] = useState(true);
 
-  // Mantemos em memória os conteúdos ricos para não perder ao trocar de aba
+  // Textos Ricos
   const [descricaoHtml, setDescricaoHtml] = useState("");
   const [observacoesHtml, setObservacoesHtml] = useState("");
+
+  // =========================================================================
+  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5 - Isolada por Feature Flag)
+  // =========================================================================
+  const [tarifasCadastradas, setTarifasCadastradas] = useState([]);
+  const [carregandoTarifas, setCarregandoTarifas] = useState(false);
+  const [salvandoTarifa, setSalvandoTarifa] = useState(false);
+
+  // Form Nova Tarifa
+  const [tarifaNome, setTarifaNome] = useState("");
+  const [tarifaDataInicio, setTarifaDataInicio] = useState("");
+  const [tarifaDataFim, setTarifaDataFim] = useState("");
+  const [tarifaDiasSemana, setTarifaDiasSemana] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [tarifaMinNoites, setTarifaMinNoites] = useState("1");
+  const [tarifaPacoteFechado, setTarifaPacoteFechado] = useState(false);
+  const [regimeAbaAtiva, setRegimeAbaAtiva] = useState("cafe");
+  
+  // Matriz de valores por regime { cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" } }
+  const [tarifaValores, setTarifaValores] = useState({
+    cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+    cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+    cafe_jantar: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+    pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+    sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+  });
+
+  // Regras de Crianças
+  const [regrasCriancas, setRegrasCriancas] = useState({
+    idadeMaximaCortesia: "12",
+    qtdMaximaCortesia: "2",
+    ativarFaixa2: false,
+    faixa2Min: "13",
+    faixa2Max: "17",
+    faixa2Percentual: "50",
+  });
 
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
@@ -275,7 +343,6 @@ export default function GestaoHoteis() {
   const descRef = useRef(null);
   const obsRef = useRef(null);
 
-  // Sincroniza os editores quando a aba "sobre" estiver visível
   useEffect(() => {
     if (abaAtiva === "sobre" && modoVisualizacao === "formulario") {
       if (descRef.current && descRef.current.innerHTML !== descricaoHtml) {
@@ -303,6 +370,10 @@ export default function GestaoHoteis() {
       sincronizarTextosRicos();
     }
     setAbaAtiva(novaAba);
+
+    if (novaAba === "tarifario" && hotelEditandoId) {
+      carregarTarifasERegras(hotelEditandoId);
+    }
   };
 
   useEffect(() => {
@@ -319,7 +390,7 @@ export default function GestaoHoteis() {
   const carregarHoteis = async (agenciaId) => {
     try {
       setCarregando(true);
-      const q = query(collection(db, "hoteis"), where("agenciaId", "==", agenciaId));
+      const q = query(collection(db, "hoteis"), where("agenciaId", "==", agencyIdSafe(agenciaId)));
       const snap = await getDocs(q);
       const lista = [];
       snap.forEach((d) => lista.push({ id: d.id, ...d.data() }));
@@ -331,9 +402,41 @@ export default function GestaoHoteis() {
     }
   };
 
+  // Carrega tarifas e regras de crianças do hotel selecionado
+  const carregarTarifasERegras = async (hotelId) => {
+    try {
+      setCarregandoTarifas(true);
+      
+      // 1. Carrega Tarifas
+      const colTarifas = collection(db, "hoteis", hotelId, "tarifas");
+      const snapTarifas = await getDocs(colTarifas);
+      const lista = [];
+      snapTarifas.forEach((d) => lista.push({ id: d.id, ...d.data() }));
+      setTarifasCadastradas(lista);
+
+      // 2. Carrega Regras de Crianças
+      const docRegrasRef = doc(db, "hoteis", hotelId, "configuracoes", "regras_criancas");
+      const snapRegras = await getDoc(docRegrasRef);
+      if (snapRegras.exists()) {
+        const dados = snapRegras.data();
+        setRegrasCriancas({
+          idadeMaximaCortesia: String(dados.idadeMaximaCortesia ?? 12),
+          qtdMaximaCortesia: String(dados.qtdMaximaCortesia ?? 2),
+          ativarFaixa2: Boolean(dados.faixaAdicional),
+          faixa2Min: String(dados.faixaAdicional?.idadeMin ?? 13),
+          faixa2Max: String(dados.faixaAdicional?.idadeMax ?? 17),
+          faixa2Percentual: String(dados.faixaAdicional?.percentual ?? 50),
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao carregar tarifário:", err);
+    } finally {
+      setCarregandoTarifas(false);
+    }
+  };
+
   const uploadParaCloudinary = async (fileOriginal) => {
     const arquivoComprimido = await comprimirImagem(fileOriginal);
-
     const formData = new FormData();
     formData.append("file", arquivoComprimido);
     formData.append("upload_preset", UPLOAD_PRESET);
@@ -366,7 +469,6 @@ export default function GestaoHoteis() {
     }
   };
 
-  // UPLOAD FOTOS GERAIS (MÁXIMO 18) COM TRAVA E COMPRESSOR
   const handleUploadFotosGerais = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -414,7 +516,6 @@ export default function GestaoHoteis() {
     });
   };
 
-  // UPLOAD FOTOS DOS PARQUES (MÁXIMO 18) COM TRAVA E COMPRESSOR
   const handleUploadFotosParque = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -495,7 +596,6 @@ export default function GestaoHoteis() {
     setTiposApto((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // UPLOAD FOTOS DE APARTAMENTOS (MÁXIMO 10) COM TRAVA E COMPRESSOR
   const handleUploadFotosApto = async (index, e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -584,12 +684,9 @@ export default function GestaoHoteis() {
     setLocalizacao("");
     setCheckinHora("14:00");
     setCheckoutHora("11:00");
-    
-    // Pagamentos livres (sem prefixos forçados)
     setPagamentoCartao("Em até 10x sem juros");
     setPagamentoPix("Desconto especial");
     setPagamentoBoleto("");
-
     setTituloInclusoPacote("Parques que inclui no pacote");
     setInclusoPacote("");
     setVideoUrl("");
@@ -599,14 +696,10 @@ export default function GestaoHoteis() {
     setFotosParque([]);
     setTituloVideoParque("Vídeo dos Parques Aquáticos");
     setVideoParqueUrl("");
-
-    // Configurações do Orçamento (WhatsApp)
     setMostrarTituloValores(true);
     setTituloValoresCustomizado("Valor total do pacote:");
     setOpcoesCriancas(["até 12 anos", "0 a 5 anos cortesia"]);
     setNovaOpcaoCrianca("");
-
-    // Botões nascem ativos por padrão
     setMostrarLocalizacao(true);
     setMostrarSobre(true);
     setMostrarVideo(true);
@@ -614,9 +707,9 @@ export default function GestaoHoteis() {
     setMostrarFotosGerais(true);
     setMostrarParques(true);
     setMostrarVideoParque(true);
-
     setDescricaoHtml("");
     setObservacoesHtml("");
+    setTarifasCadastradas([]);
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
@@ -637,12 +730,9 @@ export default function GestaoHoteis() {
     setLocalizacao(hotel.localizacao || "");
     setCheckinHora(hotel.checkinHora || "14:00");
     setCheckoutHora(hotel.checkoutHora || "11:00");
-
-    // Formas de Pagamento
     setPagamentoCartao(hotel.pagamentoCartao !== undefined ? hotel.pagamentoCartao : "Em até 10x sem juros");
     setPagamentoPix(hotel.pagamentoPix !== undefined ? hotel.pagamentoPix : "Desconto especial");
     setPagamentoBoleto(hotel.pagamentoBoleto || "");
-
     setTituloInclusoPacote(hotel.tituloInclusoPacote || "Parques que inclui no pacote");
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
     setVideoUrl(hotel.videoUrl || "");
@@ -659,14 +749,10 @@ export default function GestaoHoteis() {
     setFotosParque(hotel.fotosParque || []);
     setTituloVideoParque(hotel.tituloVideoParque || "Vídeo dos Parques Aquáticos");
     setVideoParqueUrl(hotel.videoParqueUrl || "");
-
-    // Configurações do Orçamento WhatsApp
     setMostrarTituloValores(hotel.mostrarTituloValores !== false);
     setTituloValoresCustomizado(hotel.tituloValoresCustomizado || "Valor total do pacote:");
     setOpcoesCriancas(hotel.opcoesCriancas || ["até 12 anos"]);
     setNovaOpcaoCrianca("");
-
-    // Preferências de visibilidade (default: true)
     setMostrarLocalizacao(hotel.mostrarLocalizacao !== false);
     setMostrarSobre(hotel.mostrarSobre !== false);
     setMostrarVideo(hotel.mostrarVideo !== false);
@@ -674,7 +760,6 @@ export default function GestaoHoteis() {
     setMostrarFotosGerais(hotel.mostrarFotosGerais !== false);
     setMostrarParques(hotel.mostrarParques !== false);
     setMostrarVideoParque(hotel.mostrarVideoParque !== false);
-
     setDescricaoHtml(hotel.descricao || "");
     setObservacoesHtml(hotel.observacoes || "");
 
@@ -698,7 +783,6 @@ export default function GestaoHoteis() {
 
     setSalvando(true);
     try {
-      // Captura o HTML dos editores se a aba ativa for 'sobre', senão usa o estado em memória
       const descFinal = (abaAtiva === "sobre" && descRef.current) ? descRef.current.innerHTML : descricaoHtml;
       const obsFinal = (abaAtiva === "sobre" && obsRef.current) ? obsRef.current.innerHTML : observacoesHtml;
 
@@ -707,7 +791,6 @@ export default function GestaoHoteis() {
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
-      // Constrói texto unificado sem prefixos forçados (grava apenas o que a agência digitar)
       const partesPagamento = [];
       if (pagamentoCartao.trim()) partesPagamento.push(pagamentoCartao.trim());
       if (pagamentoPix.trim()) partesPagamento.push(pagamentoPix.trim());
@@ -723,13 +806,10 @@ export default function GestaoHoteis() {
         localizacao: localizacao.trim(),
         checkinHora: checkinHora.trim(),
         checkoutHora: checkoutHora.trim(),
-
-        // Formas de Pagamento Estruturadas (Textos Livres)
         pagamentoCartao: pagamentoCartao.trim(),
         pagamentoPix: pagamentoPix.trim(),
         pagamentoBoleto: pagamentoBoleto.trim(),
         formaPagamento: formaPagamentoUnificada || "Em até 10x sem juros | Desconto especial no PIX",
-
         descricao: descFinal || "",
         tituloInclusoPacote: formatarTituloOrtografico(tituloInclusoPacote),
         parquesDisponiveis: listaIncluso,
@@ -748,13 +828,9 @@ export default function GestaoHoteis() {
         fotosParque: fotosParque,
         tituloVideoParque: tituloVideoParque.trim() || "Vídeo dos Parques Aquáticos",
         videoParqueUrl: videoParqueUrl.trim(),
-
-        // Configurações do Orçamento WhatsApp
         mostrarTituloValores,
         tituloValoresCustomizado: tituloValoresCustomizado.trim() || "Valor total do pacote:",
         opcoesCriancas: opcoesCriancas.filter((op) => op && op.trim().length > 0),
-
-        // Chaves Liga/Desliga no Site
         mostrarLocalizacao,
         mostrarSobre,
         mostrarVideo,
@@ -771,10 +847,11 @@ export default function GestaoHoteis() {
         });
         abrirModal("success", "Sucesso!", "Hotel atualizado com sucesso!");
       } else {
-        await addDoc(collection(db, "hoteis"), {
+        const novoDoc = await addDoc(collection(db, "hoteis"), {
           ...dados,
           criadoEm: serverTimestamp(),
         });
+        setHotelEditandoId(novoDoc.id);
         abrirModal("success", "Sucesso!", "Hotel cadastrado com sucesso!");
       }
 
@@ -808,6 +885,142 @@ export default function GestaoHoteis() {
     );
   };
 
+  // =========================================================================
+  // HANDLERS TARIFÁRIO (Aba 5)
+  // =========================================================================
+  const toggleDiaSemanaTarifa = (diaId) => {
+    setTarifaDiasSemana((prev) =>
+      prev.includes(diaId) ? prev.filter((d) => d !== diaId) : [...prev, diaId]
+    );
+  };
+
+  const handleValorTarifaChange = (regimeId, campo, valor) => {
+    const formatado = formatarMoedaInput(valor);
+    setTarifaValores((prev) => ({
+      ...prev,
+      [regimeId]: {
+        ...prev[regimeId],
+        [campo]: formatado,
+      },
+    }));
+  };
+
+  const salvarNovaTarifa = async () => {
+    if (!hotelEditandoId) {
+      abrirModal("error", "Atenção", "Salve o hotel primeiro antes de cadastrar tarifas.");
+      return;
+    }
+    if (!tarifaNome.trim() || !tarifaDataInicio || !tarifaDataFim) {
+      abrirModal("error", "Campos Obrigatórios", "Informe o nome da tarifa e as datas de início e término.");
+      return;
+    }
+
+    setSalvandoTarifa(true);
+    try {
+      // Converte valores para float para facilitar cálculos
+      const valoresNumericos = {};
+      REGIMES_LISTA.forEach((r) => {
+        const item = tarifaValores[r.id] || {};
+        valoresNumericos[r.id] = {
+          single: converterMoedaParaFloat(item.single),
+          duplo: converterMoedaParaFloat(item.duplo),
+          adicAdulto: converterMoedaParaFloat(item.adicAdulto),
+          adicCrianca: converterMoedaParaFloat(item.adicCrianca),
+        };
+      });
+
+      const dadosTarifa = {
+        nome: tarifaNome.trim(),
+        dataInicio: tarifaDataInicio,
+        dataFim: tarifaDataFim,
+        diasSemana: tarifaDiasSemana,
+        minimoNoites: parseInt(tarifaMinNoites, 10) || 1,
+        pacoteFechado: Boolean(tarifaPacoteFechado),
+        ativo: true,
+        valores: valoresNumericos,
+        criadoEm: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), dadosTarifa);
+      
+      // Limpa form de tarifa
+      setTarifaNome("");
+      setTarifaDataInicio("");
+      setTarifaDataFim("");
+      setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
+      setTarifaMinNoites("1");
+      setTarifaPacoteFechado(false);
+      setTarifaValores({
+        cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+        cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+        cafe_jantar: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+        pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+        sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+      });
+
+      abrirModal("success", "Tarifa Salva!", "Tarifa adicionada com sucesso.");
+      carregarTarifasERegras(hotelEditandoId);
+    } catch (err) {
+      console.error(err);
+      abrirModal("error", "Erro ao Salvar", "Não foi possível gravar a tarifa.");
+    } finally {
+      setSalvandoTarifa(false);
+    }
+  };
+
+  const alternarStatusTarifa = async (tarifaId, statusAtual) => {
+    try {
+      await updateDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaId), {
+        ativo: !statusAtual,
+      });
+      setTarifasCadastradas((prev) =>
+        prev.map((t) => (t.id === tarifaId ? { ...t, ativo: !statusAtual } : t))
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const excluirTarifa = (tarifaId) => {
+    abrirModal(
+      "confirm",
+      "Excluir Tarifa",
+      "Deseja realmente excluir este período tarifário?",
+      async () => {
+        try {
+          await deleteDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaId));
+          setTarifasCadastradas((prev) => prev.filter((t) => t.id !== tarifaId));
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    );
+  };
+
+  const salvarRegrasCriancas = async () => {
+    if (!hotelEditandoId) return;
+    try {
+      const docRef = doc(db, "hoteis", hotelEditandoId, "configuracoes", "regras_criancas");
+      const dados = {
+        idadeMaximaCortesia: parseInt(regrasCriancas.idadeMaximaCortesia, 10) || 12,
+        qtdMaximaCortesia: parseInt(regrasCriancas.qtdMaximaCortesia, 10) || 2,
+        faixaAdicional: regrasCriancas.ativarFaixa2
+          ? {
+              idadeMin: parseInt(regrasCriancas.faixa2Min, 10) || 13,
+              idadeMax: parseInt(regrasCriancas.faixa2Max, 10) || 17,
+              percentual: parseInt(regrasCriancas.faixa2Percentual, 10) || 50,
+            }
+          : null,
+        atualizadoEm: serverTimestamp(),
+      };
+      await setDoc(docRef, dados, { merge: true });
+      abrirModal("success", "Regras Salvas", "Regras de cortesias e adicionais de crianças atualizadas!");
+    } catch (err) {
+      console.error(err);
+      abrirModal("error", "Erro", "Não foi possível salvar as regras de crianças.");
+    }
+  };
+
   const cidadesDisponiveis = Array.from(
     new Set(hoteis.map((h) => h.cidade || "Caldas Novas").filter(Boolean))
   );
@@ -817,6 +1030,8 @@ export default function GestaoHoteis() {
     const cid = h.cidade || "Caldas Novas";
     return cid.toLowerCase() === filtroCidadeLista.toLowerCase();
   });
+
+  const temPermissaoTarifario = Boolean(agencia?.permiteTarifario);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans relative">
@@ -986,11 +1201,6 @@ export default function GestaoHoteis() {
                               <Video className="w-3 h-3" /> Vídeo ativo
                             </span>
                           )}
-                          {h.parquesDisponiveis?.length > 0 && (
-                            <span className="bg-brand-50 text-brand-900 border border-brand-200 text-[10px] font-semibold px-2 py-0.5 rounded-md">
-                              {h.parquesDisponiveis.length} item(ns) inclusos
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1040,20 +1250,20 @@ export default function GestaoHoteis() {
               <button
                 type="button"
                 onClick={() => mudarAba("sobre")}
-                className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
                   abaAtiva === "sobre"
                     ? "bg-brand-900 text-white shadow"
                     : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span>1. Sobre o Hotel & Regras</span>
+                <span>1. Sobre & Regras</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => mudarAba("videos")}
-                className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                className={`flex-1 min-w-[110px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
                   abaAtiva === "videos"
                     ? "bg-brand-900 text-white shadow"
                     : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
@@ -1066,14 +1276,14 @@ export default function GestaoHoteis() {
               <button
                 type="button"
                 onClick={() => mudarAba("fotos")}
-                className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
                   abaAtiva === "fotos"
                     ? "bg-brand-900 text-white shadow"
                     : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                 }`}
               >
                 <ImageIcon className="w-4 h-4" />
-                <span>3. Fotos (Hotel & Parques)</span>
+                <span>3. Fotos</span>
               </button>
 
               <button
@@ -1093,14 +1303,34 @@ export default function GestaoHoteis() {
                   </span>
                 )}
               </button>
+
+              {/* ABA 5: TARIFÁRIO (VISÍVEL APENAS COM A FEATURE FLAG ATIVA) */}
+              {temPermissaoTarifario && (
+                <button
+                  type="button"
+                  onClick={() => mudarAba("tarifario")}
+                  className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+                    abaAtiva === "tarifario"
+                      ? "bg-amber-600 text-white shadow"
+                      : "text-amber-800 bg-amber-50/70 hover:bg-amber-100 border border-amber-200"
+                  }`}
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  <span>5. Tarifário & Regras</span>
+                  {tarifasCadastradas.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-800 text-white">
+                      {tarifasCadastradas.length}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* ============================================================== */}
-            {/* ABA 1: SOBRE O HOTEL, INFORMAÇÕES BÁSICAS, REGRAS & WHATSAPP  */}
+            {/* ABA 1: SOBRE O HOTEL, INFORMAÇÕES BÁSICAS & WHATSAPP          */}
             {/* ============================================================== */}
             {abaAtiva === "sobre" && (
               <div className="space-y-5">
-                {/* 1.1 INFORMAÇÕES BÁSICAS */}
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Informações Básicas</h3>
                   
@@ -1185,7 +1415,6 @@ export default function GestaoHoteis() {
                       </div>
                     </div>
 
-                    {/* LOCALIZAÇÃO COM BOTÃO LIGA/DESLIGA */}
                     <div className="md:col-span-12">
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -1241,12 +1470,8 @@ export default function GestaoHoteis() {
                     <div className="md:col-span-12 space-y-2 pt-1 border-t border-slate-100">
                       <label className="text-xs font-bold text-slate-700 uppercase block flex items-center gap-1.5">
                         <CreditCard className="w-3.5 h-3.5 text-brand-700" />
-                        Formas de Pagamento Padrão (Linhas 1, 2 e 3)
+                        Formas de Pagamento Padrão
                       </label>
-                      <p className="text-[11px] text-slate-500">
-                        Digite apenas as condições desejadas. Nenhum prefixo fixo será forçado no texto do orçamento.
-                      </p>
-                      
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
                           <span className="text-[11px] font-semibold text-slate-600 block mb-1">Condição 1</span>
@@ -1281,7 +1506,6 @@ export default function GestaoHoteis() {
                       </div>
                     </div>
 
-                    {/* SOBRE O HOTEL COM BOTÃO LIGA/DESLIGA */}
                     <div className="md:col-span-12">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                         <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -1307,14 +1531,12 @@ export default function GestaoHoteis() {
                         onPaste={handlePasteLimpo}
                         onBlur={sincronizarTextosRicos}
                         className="w-full min-h-[170px] max-h-[320px] overflow-y-auto bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 leading-relaxed shadow-inner"
-                        placeholder="Cole ou digite a descrição do hotel. Títulos podem ser selecionados e destacados em negrito."
+                        placeholder="Cole ou digite a descrição do hotel."
                       />
-                      <p className="text-[11px] text-slate-500 mt-1">Ao colar, formatações externas são higienizadas para garantir alinhamento limpo.</p>
                     </div>
                   </div>
                 </div>
 
-                {/* 1.2 INCLUSÕES & OBSERVAÇÕES */}
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Inclusões & Observações</h3>
 
@@ -1324,15 +1546,12 @@ export default function GestaoHoteis() {
                     </label>
                     <input
                       type="text"
-                      placeholder="Ex: Parques que inclui no pacote (ou 'Inclui no pacote', 'Benefícios inclusos')"
+                      placeholder="Ex: Parques que inclui no pacote"
                       value={tituloInclusoPacote}
                       onChange={(e) => setTituloInclusoPacote(e.target.value)}
                       onBlur={(e) => setTituloInclusoPacote(formatarTituloOrtografico(e.target.value))}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
                     />
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Ajustado automaticamente com a primeira letra maiúscula e as demais minúsculas.
-                    </p>
                   </div>
 
                   <div>
@@ -1341,18 +1560,17 @@ export default function GestaoHoteis() {
                     </label>
                     <input
                       type="text"
-                      placeholder="Ex: Clube Privê, Water Park, Náutico Praia Clube, Wi-Fi grátis"
+                      placeholder="Ex: Clube Privê, Water Park, Wi-Fi grátis"
                       value={inclusoPacote}
                       onChange={(e) => setInclusoPacote(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
                     />
                   </div>
 
-                  {/* OBSERVAÇÕES GERAIS COM BOTÃO LIGA/DESLIGA */}
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <label className="text-xs font-bold text-slate-700 uppercase block">
-                        Observações Gerais (Políticas de toalhas, pulseiras, cancelamento)
+                        Observações Gerais
                       </label>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
@@ -1378,21 +1596,15 @@ export default function GestaoHoteis() {
                     />
                   </div>
 
-                  {/* CONFIGURAÇÕES DO ORÇAMENTO (WHATSAPP) */}
+                  {/* CONFIGURAÇÕES DO WHATSAPP */}
                   <div className="mt-5 p-4 md:p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border-2 border-emerald-200/90 space-y-4 shadow-sm">
                     <div className="flex items-center gap-2 border-b border-emerald-200/60 pb-2.5">
                       <MessageSquare className="w-4 h-4 text-emerald-800" />
-                      <div>
-                        <h4 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">
-                          Configurações do Orçamento (WhatsApp)
-                        </h4>
-                        <p className="text-[11px] text-emerald-800">
-                          Personalize títulos e textos automáticos que serão sugeridos no momento de gerar o orçamento.
-                        </p>
-                      </div>
+                      <h4 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wide">
+                        Configurações do Orçamento (WhatsApp)
+                      </h4>
                     </div>
 
-                    {/* TÍTULO ANTES DOS VALORES (LIGA / DESLIGA) */}
                     <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-800 uppercase block">
@@ -1400,35 +1612,30 @@ export default function GestaoHoteis() {
                         </label>
                         <div className="flex items-center gap-2">
                           <span className={`text-[11px] font-bold ${mostrarTituloValores ? "text-emerald-700" : "text-slate-400"}`}>
-                            {mostrarTituloValores ? "Ativo no WhatsApp" : "Oculto no WhatsApp"}
+                            {mostrarTituloValores ? "Ativo" : "Oculto"}
                           </span>
                           <ToggleSwitch
                             ativo={mostrarTituloValores}
                             onToggle={() => setMostrarTituloValores((v) => !v)}
-                            label="Mostrar título antes dos valores no WhatsApp"
+                            label="Mostrar título antes dos valores"
                           />
                         </div>
                       </div>
                       <input
                         type="text"
                         disabled={!mostrarTituloValores}
-                        placeholder="Ex: Valor total do pacote: (ou 'Investimento da estadia:')"
+                        placeholder="Ex: Valor total do pacote:"
                         value={tituloValoresCustomizado}
                         onChange={(e) => setTituloValoresCustomizado(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold disabled:opacity-50"
                       />
                     </div>
 
-                    {/* OPÇÕES RÁPIDAS PARA O CAMPO DE CRIANÇAS */}
                     <div className="bg-white p-3.5 rounded-xl border border-emerald-200 space-y-2.5">
                       <label className="text-xs font-bold text-slate-800 uppercase block flex items-center gap-1.5">
                         <Baby className="w-3.5 h-3.5 text-brand-700" />
                         Opções Rápidas de Texto para Crianças
                       </label>
-                      <p className="text-[11px] text-slate-500">
-                        Cadastre os textos que mais utiliza para não precisar digitá-los manualmente em cada orçamento.
-                      </p>
-
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
@@ -1449,7 +1656,7 @@ export default function GestaoHoteis() {
                           className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm flex items-center gap-1 shrink-0"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          Adicionar Opção
+                          Adicionar
                         </button>
                       </div>
 
@@ -1465,7 +1672,6 @@ export default function GestaoHoteis() {
                                 type="button"
                                 onClick={() => removerOpcaoCrianca(opIdx)}
                                 className="text-emerald-700 hover:text-red-600 transition"
-                                title="Remover opção"
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -1489,20 +1695,16 @@ export default function GestaoHoteis() {
                     <Video className="w-5 h-5 text-red-600" />
                     Links de Vídeos (Hotel & Parques)
                   </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Configure os links de vídeos do YouTube ou Shorts e controle a exibição individual no site.
-                  </p>
                 </div>
 
-                {/* 2.1 LINK DE VÍDEO PRINCIPAL DO HOTEL */}
                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Link de Vídeo Principal do Hotel (YouTube ou Shorts)
+                      Vídeo Principal do Hotel (YouTube ou Shorts)
                     </label>
                     <div className="flex items-center gap-2">
                       <span className={`text-[11px] font-bold ${mostrarVideo ? "text-emerald-700" : "text-slate-400"}`}>
-                        {mostrarVideo ? "Visível no site" : "Oculto no site"}
+                        {mostrarVideo ? "Visível" : "Oculto"}
                       </span>
                       <ToggleSwitch
                         ativo={mostrarVideo}
@@ -1515,7 +1717,7 @@ export default function GestaoHoteis() {
                     <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                     <input
                       type="text"
-                      placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
+                      placeholder="Ex: https://www.youtube.com/watch?v=..."
                       value={videoUrl}
                       onChange={(e) => setVideoUrl(e.target.value)}
                       className="w-full bg-white border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-brand-900"
@@ -1523,35 +1725,34 @@ export default function GestaoHoteis() {
                   </div>
                 </div>
 
-                {/* 2.2 VÍDEO DOS PARQUES AQUÁTICOS */}
                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                        Título do Vídeo do Parque (Editável)
+                        Título do Vídeo do Parque
                       </label>
                       <input
                         type="text"
                         placeholder="Ex: Conheça as atrações do Water Park"
                         value={tituloVideoParque}
                         onChange={(e) => setTituloVideoParque(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
+                        className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold"
                       />
                     </div>
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-bold text-slate-700 uppercase block">
-                          Link do Vídeo do Parque (YouTube ou Shorts)
+                          Link do Vídeo do Parque
                         </label>
                         <div className="flex items-center gap-2">
                           <span className={`text-[11px] font-bold ${mostrarVideoParque ? "text-emerald-700" : "text-slate-400"}`}>
-                            {mostrarVideoParque ? "Visível no site" : "Oculto no site"}
+                            {mostrarVideoParque ? "Visível" : "Oculto"}
                           </span>
                           <ToggleSwitch
                             ativo={mostrarVideoParque}
                             onToggle={() => setMostrarVideoParque((v) => !v)}
-                            label="Mostrar vídeo do parque no site"
+                            label="Mostrar vídeo do parque"
                           />
                         </div>
                       </div>
@@ -1559,7 +1760,7 @@ export default function GestaoHoteis() {
                         <Video className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                         <input
                           type="text"
-                          placeholder="Ex: https://www.youtube.com/watch?v=... ou https://youtube.com/shorts/..."
+                          placeholder="Ex: https://www.youtube.com/watch?v=..."
                           value={videoParqueUrl}
                           onChange={(e) => setVideoParqueUrl(e.target.value)}
                           className="w-full bg-white border border-slate-300 rounded-xl py-3 pl-9 pr-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
@@ -1567,43 +1768,31 @@ export default function GestaoHoteis() {
                       </div>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    Se preenchido e ativo, esse vídeo será exibido imediatamente abaixo das fotos dos parques aquáticos.
-                  </p>
                 </div>
               </div>
             )}
 
             {/* ============================================================== */}
-            {/* ABA 3: FOTOS (HOTEL & PARQUES)                                 */}
+            {/* ABA 3: FOTOS                                                   */}
             {/* ============================================================== */}
             {abaAtiva === "fotos" && (
               <div className="space-y-6">
-                {/* 3.1 FOTOS GERAIS DO HOTEL */}
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
-                          Fotos Gerais do Hotel / Lazer ({fotosGerais.length}/18)
-                        </h3>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[11px] font-bold ${mostrarFotosGerais ? "text-emerald-700" : "text-slate-400"}`}>
-                            {mostrarFotosGerais ? "Visível no site" : "Oculto no site"}
-                          </span>
-                          <ToggleSwitch
-                            ativo={mostrarFotosGerais}
-                            onToggle={() => setMostrarFotosGerais((v) => !v)}
-                            label="Mostrar fotos gerais no site"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-0.5">Faça upload de até 18 fotos das piscinas, fachada e área externa.</p>
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
+                        Fotos Gerais ({fotosGerais.length}/18)
+                      </h3>
+                      <ToggleSwitch
+                        ativo={mostrarFotosGerais}
+                        onToggle={() => setMostrarFotosGerais((v) => !v)}
+                        label="Mostrar fotos gerais"
+                      />
                     </div>
                     
                     <label className={`cursor-pointer inline-flex items-center gap-2 bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoGeral || fotosGerais.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
                       {enviandoFotoGeral ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                      <span>{enviandoFotoGeral ? "Enviando..." : fotosGerais.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosGerais.length}/18)`}</span>
+                      <span>{enviandoFotoGeral ? "Enviando..." : `Adicionar Fotos (${fotosGerais.length}/18)`}</span>
                       <input
                         type="file"
                         multiple
@@ -1615,45 +1804,30 @@ export default function GestaoHoteis() {
                     </label>
                   </div>
 
-                  {fotosGerais.length === 0 ? (
-                    <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
-                      <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-slate-700">Nenhuma foto geral adicionada.</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Selecione fotos direto do seu celular ou computador.</p>
-                    </div>
-                  ) : (
+                  {fotosGerais.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                       {fotosGerais.map((url, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
-                            idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
-                          }`}
-                        >
-                          <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
-                          
+                        <div key={idx} className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 ${idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"}`}>
+                          <img src={url} alt="" className="w-full h-full object-cover" />
                           {idx === 0 ? (
                             <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
                               <Star className="w-3 h-3 fill-white" />
-                              <span>Destaque</span>
+                              <span>Capa</span>
                             </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => definirFotoDestaqueGeral(idx)}
                               className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                              title="Definir como primeira foto / capa"
                             >
                               <Star className="w-3 h-3" />
-                              <span>Destaque</span>
+                              <span>Capa</span>
                             </button>
                           )}
-
                           <button
                             type="button"
                             onClick={() => removerFotoGeral(idx)}
                             className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                            title="Remover foto"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -1663,34 +1837,23 @@ export default function GestaoHoteis() {
                   )}
                 </div>
 
-                {/* 3.2 FOTOS DOS PARQUES AQUÁTICOS */}
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                          <Waves className="w-5 h-5 text-sky-600" />
-                          Parques Aquáticos / Lazer Adicional ({fotosParque.length}/18)
-                        </h3>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[11px] font-bold ${mostrarParques ? "text-emerald-700" : "text-slate-400"}`}>
-                            {mostrarParques ? "Visível no site" : "Oculto no site"}
-                          </span>
-                          <ToggleSwitch
-                            ativo={mostrarParques}
-                            onToggle={() => setMostrarParques((v) => !v)}
-                            label="Mostrar parques no site"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-0.5">
-                        Faça upload de até 18 fotos das atrações aquáticas.
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                        <Waves className="w-5 h-5 text-sky-600" />
+                        Fotos dos Parques ({fotosParque.length}/18)
+                      </h3>
+                      <ToggleSwitch
+                        ativo={mostrarParques}
+                        onToggle={() => setMostrarParques((v) => !v)}
+                        label="Mostrar fotos dos parques"
+                      />
                     </div>
                     
                     <label className={`cursor-pointer inline-flex items-center gap-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow shrink-0 ${enviandoFotoParque || fotosParque.length >= 18 ? "opacity-50 pointer-events-none" : ""}`}>
                       {enviandoFotoParque ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                      <span>{enviandoFotoParque ? "Enviando..." : fotosParque.length >= 18 ? "Limite Atingido (18)" : `Adicionar Fotos (${fotosParque.length}/18)`}</span>
+                      <span>{enviandoFotoParque ? "Enviando..." : `Adicionar Fotos (${fotosParque.length}/18)`}</span>
                       <input
                         type="file"
                         multiple
@@ -1704,56 +1867,41 @@ export default function GestaoHoteis() {
 
                   <div>
                     <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                      Título da Seção de Parques (Aparecerá como cabeçalho do slide na vitrine)
+                      Título da Seção de Parques
                     </label>
                     <input
                       type="text"
-                      placeholder="Ex: Fotos do Water Park & Clube Privê (ou 'Fotos do Hot Park')"
+                      placeholder="Ex: Fotos do Water Park & Clube Privê"
                       value={tituloFotosParque}
                       onChange={(e) => setTituloFotosParque(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900 font-semibold text-slate-900"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs md:text-sm font-semibold"
                     />
                   </div>
 
-                  {fotosParque.length === 0 ? (
-                    <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
-                      <Waves className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-slate-700">Nenhuma foto de parque adicionada.</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Se este produto inclui parque aquático, adicione fotos das atrações aqui.</p>
-                    </div>
-                  ) : (
+                  {fotosParque.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                       {fotosParque.map((url, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 transition ${
-                            idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"
-                          }`}
-                        >
-                          <img src={url} alt={`Foto Parque ${idx + 1}`} className="w-full h-full object-cover" />
-                          
+                        <div key={idx} className={`relative group rounded-xl overflow-hidden aspect-video bg-slate-100 border-2 ${idx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-slate-200"}`}>
+                          <img src={url} alt="" className="w-full h-full object-cover" />
                           {idx === 0 ? (
                             <div className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
                               <Star className="w-3 h-3 fill-white" />
-                              <span>Destaque</span>
+                              <span>Capa</span>
                             </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => definirFotoDestaqueParque(idx)}
                               className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                              title="Definir como primeira foto do parque"
                             >
                               <Star className="w-3 h-3" />
-                              <span>Destaque</span>
+                              <span>Capa</span>
                             </button>
                           )}
-
                           <button
                             type="button"
                             onClick={() => removerFotoParque(idx)}
                             className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                            title="Remover foto"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -1766,19 +1914,14 @@ export default function GestaoHoteis() {
             )}
 
             {/* ============================================================== */}
-            {/* ABA 4: APARTAMENTOS (ACOMODAÇÕES)                              */}
+            {/* ABA 4: APARTAMENTOS                                            */}
             {/* ============================================================== */}
             {abaAtiva === "apartamentos" && (
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                      Tipos de Apartamentos (Acomodações)
-                    </h3>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      Cadastre os quartos disponíveis (máximo 10 fotos por quarto) e controle a visibilidade individual.
-                    </p>
-                  </div>
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Tipos de Apartamentos
+                  </h3>
                   
                   <button
                     type="button"
@@ -1790,147 +1933,477 @@ export default function GestaoHoteis() {
                   </button>
                 </div>
 
-                {tiposApto.length === 0 ? (
-                  <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center bg-slate-50">
-                    <BedDouble className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-700">Nenhum tipo de apartamento cadastrado.</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Ex: Suíte Luxo Casal, Flat 1 Quarto, Apartamento Standard.</p>
+                {tiposApto.map((apto, index) => {
+                  const qtdFotos = apto.fotos?.length || 0;
+                  const limiteAtingido = qtdFotos >= 10;
+
+                  return (
+                    <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-xs font-bold uppercase text-slate-600">
+                          Apartamento #{index + 1}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <ToggleSwitch
+                            ativo={apto.mostrarNoSite !== false}
+                            onToggle={() => alternarVisibilidadeApto(index)}
+                            label="Mostrar quarto"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removerTipoApto(index)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nome da categoria (ex: Suíte Master)"
+                          value={apto.nome}
+                          onChange={(e) => atualizarNomeApto(index, e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm font-semibold"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Descrição (ex: 1 cama de casal, TV, ar, frigobar)"
+                          value={apto.descricao || ""}
+                          onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-slate-700">Fotos do quarto ({qtdFotos}/10)</span>
+                          <label className={`cursor-pointer inline-flex items-center gap-1.5 bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm ${enviandoFotoAptoIndex === index || limiteAtingido ? "opacity-50 pointer-events-none" : ""}`}>
+                            {enviandoFotoAptoIndex === index ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                            <span>{enviandoFotoAptoIndex === index ? "Enviando..." : "Adicionar Fotos"}</span>
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              onChange={(e) => handleUploadFotosApto(index, e)}
+                              disabled={limiteAtingido}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+
+                        {apto.fotos?.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                            {apto.fotos.map((fotoUrl, fIdx) => (
+                              <div key={fIdx} className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 ${fIdx === 0 ? "border-amber-500" : "border-transparent"}`}>
+                                <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
+                                {fIdx !== 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => definirFotoDestaqueApto(index, fIdx)}
+                                    className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100"
+                                  >
+                                    Capa
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => removerFotoApto(index, fIdx)}
+                                  className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded opacity-90 group-hover:opacity-100"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* ABA 5: TARIFÁRIO & REGRAS (ISOLADA POR FEATURE FLAG)           */}
+            {/* ============================================================== */}
+            {abaAtiva === "tarifario" && temPermissaoTarifario && (
+              <div className="space-y-6">
+                {!hotelEditandoId ? (
+                  <div className="bg-amber-50 border border-amber-300 p-6 rounded-2xl text-center space-y-2">
+                    <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
+                    <h3 className="font-bold text-sm text-amber-900">Salve o hotel primeiro</h3>
+                    <p className="text-xs text-amber-700">
+                      Preencha o nome do hotel e clique em &quot;Gravar Hotel Completo&quot; no rodapé para liberar o cadastro de tarifas.
+                    </p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {tiposApto.map((apto, index) => {
-                      const qtdFotosApto = apto.fotos?.length || 0;
-                      const atingiuLimiteApto = qtdFotosApto >= 10;
+                  <>
+                    {/* 5.1 FORMULÁRIO DE CADASTRO/EDIÇÃO DE TARIFAS */}
+                    <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+                      <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                            <CalendarDays className="w-5 h-5 text-amber-600" />
+                            Cadastrar Nova Tarifa / Temporada
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Defina valores por noite, mínimo de estadias e regras de pacotes para este hotel.
+                          </p>
+                        </div>
+                      </div>
 
-                      return (
-                        <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
-                          <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-                            <span className="text-xs font-bold uppercase text-slate-600">
-                              Apartamento #{index + 1}
-                            </span>
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div className="md:col-span-6">
+                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                            Nome da Tarifa / Temporada *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Baixa Temporada, Feriado Finados, Alta Julho"
+                            value={tarifaNome}
+                            onChange={(e) => setTarifaNome(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                          />
+                        </div>
 
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[11px] font-bold ${apto.mostrarNoSite !== false ? "text-emerald-700" : "text-slate-400"}`}>
-                                  {apto.mostrarNoSite !== false ? "Visível no site" : "Oculto no site"}
-                                </span>
-                                <ToggleSwitch
-                                  ativo={apto.mostrarNoSite !== false}
-                                  onToggle={() => alternarVisibilidadeApto(index)}
-                                  label="Mostrar este quarto no site"
-                                />
-                              </div>
+                        <div className="md:col-span-3">
+                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                            Data Início *
+                          </label>
+                          <input
+                            type="date"
+                            value={tarifaDataInicio}
+                            onChange={(e) => setTarifaDataInicio(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                          />
+                        </div>
 
-                              <button
-                                type="button"
-                                onClick={() => removerTipoApto(index)}
-                                className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                                title="Remover categoria"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
+                        <div className="md:col-span-3">
+                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                            Data Fim *
+                          </label>
+                          <input
+                            type="date"
+                            value={tarifaDataFim}
+                            onChange={(e) => setTarifaDataFim(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                          />
+                        </div>
+
+                        <div className="md:col-span-12">
+                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1.5">
+                            Aplicar nestes dias da semana:
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {DIAS_SEMANA_NOMES.map((d) => {
+                              const ativo = tarifaDiasSemana.includes(d.id);
+                              return (
+                                <button
+                                  key={d.id}
+                                  type="button"
+                                  onClick={() => toggleDiaSemanaTarifa(d.id)}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
+                                    ativo
+                                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                      : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
+                                  }`}
+                                >
+                                  {d.label}
+                                </button>
+                              );
+                            })}
                           </div>
+                        </div>
 
-                          <div className="space-y-2">
-                            <div>
-                              <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                                Nome da Categoria *
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                placeholder="Ex: Suíte Master com Varanda"
-                                value={apto.nome}
-                                onChange={(e) => atualizarNomeApto(index, e.target.value)}
-                                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm outline-none focus:ring-2 focus:ring-brand-900"
-                              />
-                            </div>
+                        <div className="md:col-span-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 uppercase block">Mínimo de Noites</span>
+                            <span className="text-[11px] text-slate-500">Menos diárias que isso serão bloqueadas.</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="1"
+                            value={tarifaMinNoites}
+                            onChange={(e) => setTarifaMinNoites(e.target.value)}
+                            className="w-20 bg-white border border-slate-300 rounded-lg p-2 text-center text-sm font-bold"
+                          />
+                        </div>
 
-                            <div>
-                              <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
-                                Descrição da Acomodação (Opcional)
-                              </label>
-                              <textarea
-                                rows={2}
-                                placeholder="Ex: 1 cama de casal, sofá-cama, ar-condicionado, TV, frigobar, micro-ondas e varanda."
-                                value={apto.descricao || ""}
-                                onChange={(e) => atualizarDescricaoApto(index, e.target.value)}
-                                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-brand-900 resize-y"
-                              />
-                            </div>
+                        <div className="md:col-span-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 uppercase block">Trava de Pacote Fechado?</span>
+                            <span className="text-[11px] text-slate-500">Impede entrada fracionada (ex: feriado fechado).</span>
+                          </div>
+                          <ToggleSwitch
+                            ativo={tarifaPacoteFechado}
+                            onToggle={() => setTarifaPacoteFechado((v) => !v)}
+                            label="Trava de pacote fechado"
+                          />
+                        </div>
+                      </div>
+
+                      {/* MATRIZ DE PREÇOS POR REGIME */}
+                      <div className="pt-3 border-t border-slate-100 space-y-3">
+                        <label className="text-xs font-bold text-slate-800 uppercase block">
+                          Valores das Diárias por Regime de Pensão:
+                        </label>
+
+                        {/* Abas dos regimes */}
+                        <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
+                          {REGIMES_LISTA.map((reg) => (
+                            <button
+                              key={reg.id}
+                              type="button"
+                              onClick={() => setRegimeAbaAtiva(reg.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                                regimeAbaAtiva === reg.id
+                                  ? "bg-slate-900 text-white"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {reg.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Campos do regime ativo */}
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                              Single (1 pessoa)
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0,00"
+                              value={tarifaValores[regimeAbaAtiva]?.single || ""}
+                              onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "single", e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                            />
                           </div>
 
                           <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-semibold text-slate-700">
-                                Fotos deste apartamento ({qtdFotosApto}/10)
-                              </span>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                              Duplo (2 pessoas)
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0,00"
+                              value={tarifaValores[regimeAbaAtiva]?.duplo || ""}
+                              onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "duplo", e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                            />
+                          </div>
 
-                              <label className={`cursor-pointer inline-flex items-center gap-1.5 text-brand-900 hover:text-brand-950 bg-white border border-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm ${enviandoFotoAptoIndex === index || atingiuLimiteApto ? "opacity-50 pointer-events-none" : ""}`}>
-                                {enviandoFotoAptoIndex === index ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                                <span>{enviandoFotoAptoIndex === index ? "Enviando..." : atingiuLimiteApto ? "Limite Atingido (10)" : `Fotos do Quarto (${qtdFotosApto}/10)`}</span>
-                                <input
-                                  type="file"
-                                  multiple
-                                  accept="image/*"
-                                  onChange={(e) => handleUploadFotosApto(index, e)}
-                                  disabled={atingiuLimiteApto}
-                                  className="hidden"
-                                />
-                              </label>
-                            </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                              Adic. Adulto (3º+)
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0,00"
+                              value={tarifaValores[regimeAbaAtiva]?.adicAdulto || ""}
+                              onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "adicAdulto", e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                            />
+                          </div>
 
-                            {apto.fotos?.length > 0 && (
-                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
-                                {apto.fotos.map((fotoUrl, fIdx) => (
-                                  <div 
-                                    key={fIdx} 
-                                    className={`relative group rounded-lg overflow-hidden aspect-video bg-slate-200 border-2 transition ${
-                                      fIdx === 0 ? "border-amber-500 ring-2 ring-amber-400/30" : "border-transparent"
-                                    }`}
-                                  >
-                                    <img src={fotoUrl} alt="" className="w-full h-full object-cover" />
-                                    
-                                    {fIdx === 0 ? (
-                                      <div className="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1">
-                                        <Star className="w-2.5 h-2.5 fill-white" />
-                                        <span>Capa</span>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => definirFotoDestaqueApto(index, fIdx)}
-                                        className="absolute top-1 left-1 bg-black/60 hover:bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-90 group-hover:opacity-100 transition shadow flex items-center gap-1"
-                                        title="Definir como primeira foto do quarto"
-                                      >
-                                        <Star className="w-2.5 h-2.5" />
-                                        <span>Capa</span>
-                                      </button>
-                                    )}
-
-                                    <button
-                                      type="button"
-                                      onClick={() => removerFotoApto(index, fIdx)}
-                                      className="absolute top-1 right-1 bg-red-600/90 text-white p-1 rounded-md opacity-90 group-hover:opacity-100 transition shadow"
-                                      title="Remover foto"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
+                              Adic. Criança (extra)
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0,00"
+                              value={tarifaValores[regimeAbaAtiva]?.adicCrianca || ""}
+                              onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "adicCrianca", e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                            />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="button"
+                          onClick={salvarNovaTarifa}
+                          disabled={salvandoTarifa}
+                          className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {salvandoTarifa ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          <span>Adicionar Tarifa à Tabela</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 5.2 TABELA DE TARIFAS CADASTRADAS */}
+                    <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                        Tarifas Ativas no Hotel ({tarifasCadastradas.length})
+                      </h3>
+
+                      {carregandoTarifas ? (
+                        <div className="p-6 text-center text-slate-400 text-xs">
+                          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1 text-amber-600" />
+                          Carregando tarifas...
+                        </div>
+                      ) : tarifasCadastradas.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">
+                          Nenhuma tarifa cadastrada para este hotel ainda.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {tarifasCadastradas.map((t) => (
+                            <div
+                              key={t.id}
+                              className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-900">{t.nome}</span>
+                                  {t.pacoteFechado && (
+                                    <span className="bg-red-100 text-red-800 text-[10px] font-bold px-1.5 py-0.2 rounded">
+                                      Pacote Fechado
+                                    </span>
+                                  )}
+                                  <span className="bg-slate-200 text-slate-700 text-[10px] font-semibold px-1.5 py-0.2 rounded">
+                                    Mín: {t.minimoNoites} noite(s)
+                                  </span>
+                                </div>
+                                <p className="text-slate-500">
+                                  {t.dataInicio?.split("-").reverse().join("/")} até {t.dataFim?.split("-").reverse().join("/")}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <ToggleSwitch
+                                  ativo={t.ativo !== false}
+                                  onToggle={() => alternarStatusTarifa(t.id, t.ativo !== false)}
+                                  label="Ativar/Desativar tarifa"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => excluirTarifa(t.id)}
+                                  className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                                  title="Excluir tarifa"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5.3 REGRAS DE CORTESIAS E ADICIONAIS DE CRIANÇAS */}
+                    <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                            <Baby className="w-4 h-4 text-brand-700" />
+                            Regras Automáticas de Crianças
+                          </h3>
+                          <p className="text-[11px] text-slate-500">
+                            Aplicadas automaticamente pelo motor de cálculo conforme as idades informadas no orçamento.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={salvarRegrasCriancas}
+                          className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow"
+                        >
+                          Salvar Regras de Crianças
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <span className="text-xs font-bold text-slate-800 uppercase block">1. Cortesia Padrão</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
+                                Qtd Máxima de Cortesias
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={regrasCriancas.qtdMaximaCortesia}
+                                onChange={(e) => setRegrasCriancas((prev) => ({ ...prev, qtdMaximaCortesia: e.target.value }))}
+                                className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
+                                Idade Máxima Cortesia
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={regrasCriancas.idadeMaximaCortesia}
+                                onChange={(e) => setRegrasCriancas((prev) => ({ ...prev, idadeMaximaCortesia: e.target.value }))}
+                                className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-800 uppercase block">2. Faixa Escalonada (Opcional)</span>
+                            <ToggleSwitch
+                              ativo={regrasCriancas.ativarFaixa2}
+                              onToggle={() => setRegrasCriancas((prev) => ({ ...prev, ativarFaixa2: !prev.ativarFaixa2 }))}
+                              label="Ativar faixa escalonada"
+                            />
+                          </div>
+
+                          {regrasCriancas.ativarFaixa2 && (
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">De (anos)</label>
+                                <input
+                                  type="number"
+                                  value={regrasCriancas.faixa2Min}
+                                  onChange={(e) => setRegrasCriancas((prev) => ({ ...prev, faixa2Min: e.target.value }))}
+                                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Até (anos)</label>
+                                <input
+                                  type="number"
+                                  value={regrasCriancas.faixa2Max}
+                                  onChange={(e) => setRegrasCriancas((prev) => ({ ...prev, faixa2Max: e.target.value }))}
+                                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Cobrar % Adic.</label>
+                                <input
+                                  type="number"
+                                  value={regrasCriancas.faixa2Percentual}
+                                  onChange={(e) => setRegrasCriancas((prev) => ({ ...prev, faixa2Percentual: e.target.value }))}
+                                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             )}
 
-            {/* AÇÕES FINAIS (SEMPRE FIXAS NO RODAPÉ DO FORMULÁRIO EM QUALQUER ABA) */}
+            {/* AÇÕES FINAIS (RODAPÉ DO FORMULÁRIO) */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 {abaAtiva !== "sobre" && (
@@ -1940,19 +2413,21 @@ export default function GestaoHoteis() {
                       if (abaAtiva === "videos") mudarAba("sobre");
                       if (abaAtiva === "fotos") mudarAba("videos");
                       if (abaAtiva === "apartamentos") mudarAba("fotos");
+                      if (abaAtiva === "tarifario") mudarAba("apartamentos");
                     }}
                     className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
                   >
                     ← Aba Anterior
                   </button>
                 )}
-                {abaAtiva !== "apartamentos" && (
+                {abaAtiva !== (temPermissaoTarifario ? "tarifario" : "apartamentos") && (
                   <button
                     type="button"
                     onClick={() => {
                       if (abaAtiva === "sobre") mudarAba("videos");
                       if (abaAtiva === "videos") mudarAba("fotos");
                       if (abaAtiva === "fotos") mudarAba("apartamentos");
+                      if (abaAtiva === "apartamentos" && temPermissaoTarifario) mudarAba("tarifario");
                     }}
                     className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
                   >
@@ -1983,7 +2458,7 @@ export default function GestaoHoteis() {
         )}
       </main>
 
-      {/* ================= MODAL ESTILIZADO DE SUCESSO / CONFIRMAÇÃO / ERRO ================= */}
+      {/* MODAL DE ALERTA E CONFIRMAÇÃO */}
       {modalConfig.aberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
