@@ -1,13 +1,26 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, FileText, Pencil, X, CalendarDays, CheckCircle2 } from "lucide-react";
-import { db } from "../../lib/firebase";
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import React, { useState } from "react";
+import { 
+  Plus, 
+  Trash2, 
+  Key, 
+  ShieldCheck, 
+  Eye, 
+  EyeOff, 
+  Loader2, 
+  Building, 
+  Phone, 
+  FileText, 
+  Pencil, 
+  X, 
+  CalendarDays 
+} from "lucide-react";
 
 export default function AdminMaster() {
   const [autenticado, setAutenticado] = useState(false);
   const [senhaInput, setSenhaInput] = useState("");
+  const [senhaMasterSalva, setSenhaMasterSalva] = useState("");
   const [verSenhaMaster, setVerSenhaMaster] = useState(false);
   const [erroLogin, setErroLogin] = useState("");
   const [validandoLogin, setValidandoLogin] = useState(false);
@@ -29,7 +42,7 @@ export default function AdminMaster() {
 
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
 
-  // Validação segura via API interna (a palavra-passe nunca é descarregada no navegador)
+  // Validação segura via API interna
   const fazerLoginMaster = async (e) => {
     e.preventDefault();
     setErroLogin("");
@@ -46,7 +59,8 @@ export default function AdminMaster() {
 
       if (res.ok && data.ok) {
         setAutenticado(true);
-        carregarAgencias();
+        setSenhaMasterSalva(senhaInput);
+        carregarAgencias(senhaInput);
       } else {
         setErroLogin(data.message || "Senha mestre incorreta.");
       }
@@ -58,13 +72,23 @@ export default function AdminMaster() {
     }
   };
 
-  const carregarAgencias = async () => {
+  // Carregar lista de agências através da API interna
+  const carregarAgencias = async (chaveMaster = senhaMasterSalva) => {
     setCarregando(true);
     try {
-      const snap = await getDocs(collection(db, "agencias"));
-      const lista = [];
-      snap.forEach((d) => lista.push({ id: d.id, ...d.data() }));
-      setAgencias(lista);
+      const res = await fetch("/api/admin-agencias", {
+        method: "GET",
+        headers: {
+          "x-admin-master-key": chaveMaster,
+        },
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setAgencias(data.agencias || []);
+      } else {
+        alert(data.message || "Erro ao carregar agências.");
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -93,6 +117,7 @@ export default function AdminMaster() {
     setPermiteTarifario(false);
   };
 
+  // Guardar (criar ou atualizar) via API interna
   const salvarAgencia = async (e) => {
     e.preventDefault();
     if (!nome || !usuario || !senhaAgencia || !whatsapp) {
@@ -112,17 +137,30 @@ export default function AdminMaster() {
       };
 
       if (agenciaEditandoId) {
-        await updateDoc(doc(db, "agencias", agenciaEditandoId), {
-          ...dados,
-          atualizadoEm: serverTimestamp(),
+        const res = await fetch("/api/admin-agencias", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-master-key": senhaMasterSalva,
+          },
+          body: JSON.stringify({ id: agenciaEditandoId, dados }),
         });
+
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.message);
         alert("Agência atualizada com sucesso!");
       } else {
-        await addDoc(collection(db, "agencias"), {
-          ...dados,
-          status: "ativo",
-          criadoEm: serverTimestamp(),
+        const res = await fetch("/api/admin-agencias", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-master-key": senhaMasterSalva,
+          },
+          body: JSON.stringify(dados),
         });
+
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.message);
         alert("Agência cadastrada com sucesso!");
       }
 
@@ -130,45 +168,94 @@ export default function AdminMaster() {
       carregarAgencias();
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar agência.");
+      alert(err.message || "Erro ao salvar agência.");
     } finally {
       setSalvando(false);
     }
   };
 
+  // Alternar Status (Ativo / Bloqueado)
   const alternarStatus = async (agencia) => {
     const novoStatus = agencia.status === "ativo" ? "bloqueado" : "ativo";
     try {
-      await updateDoc(doc(db, "agencias", agencia.id), { status: novoStatus });
-      setAgencias((prev) =>
-        prev.map((a) => (a.id === agencia.id ? { ...a, status: novoStatus } : a))
-      );
+      const res = await fetch("/api/admin-agencias", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-master-key": senhaMasterSalva,
+        },
+        body: JSON.stringify({
+          id: agencia.id,
+          dados: { status: novoStatus },
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setAgencias((prev) =>
+          prev.map((a) => (a.id === agencia.id ? { ...a, status: novoStatus } : a))
+        );
+      } else {
+        alert(data.message || "Erro ao alterar status.");
+      }
     } catch (err) {
       console.error(err);
+      alert("Falha de rede ao alterar status.");
     }
   };
 
+  // Alternar Modo Tarifário
   const alternarModoTarifario = async (agencia) => {
     const novoValor = !agencia.permiteTarifario;
     try {
-      await updateDoc(doc(db, "agencias", agencia.id), { permiteTarifario: novoValor });
-      setAgencias((prev) =>
-        prev.map((a) => (a.id === agencia.id ? { ...a, permiteTarifario: novoValor } : a))
-      );
+      const res = await fetch("/api/admin-agencias", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-master-key": senhaMasterSalva,
+        },
+        body: JSON.stringify({
+          id: agencia.id,
+          dados: { permiteTarifario: novoValor },
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setAgencias((prev) =>
+          prev.map((a) => (a.id === agencia.id ? { ...a, permiteTarifario: novoValor } : a))
+        );
+      } else {
+        alert(data.message || "Erro ao alterar o modo de orçamento.");
+      }
     } catch (err) {
       console.error(err);
-      alert("Erro ao alterar o modo de orçamento.");
+      alert("Falha de rede ao alterar o modo de orçamento.");
     }
   };
 
+  // Excluir Agência
   const excluirAgencia = async (id, nomeAgencia) => {
     if (!confirm(`Tem certeza que deseja excluir o acesso da agência ${nomeAgencia}?`)) return;
+
     try {
-      await deleteDoc(doc(db, "agencias", id));
-      if (agenciaEditandoId === id) cancelarEdicao();
-      setAgencias((prev) => prev.filter((a) => a.id !== id));
+      const res = await fetch(`/api/admin-agencias?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: {
+          "x-admin-master-key": senhaMasterSalva,
+        },
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        if (agenciaEditandoId === id) cancelarEdicao();
+        setAgencias((prev) => prev.filter((a) => a.id !== id));
+      } else {
+        alert(data.message || "Erro ao excluir agência.");
+      }
     } catch (err) {
       console.error(err);
+      alert("Falha de rede ao excluir agência.");
     }
   };
 
@@ -242,7 +329,10 @@ export default function AdminMaster() {
           </div>
         </div>
         <button
-          onClick={() => setAutenticado(false)}
+          onClick={() => {
+            setAutenticado(false);
+            setSenhaMasterSalva("");
+          }}
           className="text-xs bg-emerald-900 hover:bg-emerald-800 px-3 py-1.5 rounded-lg font-semibold transition"
         >
           Sair
@@ -342,7 +432,7 @@ export default function AdminMaster() {
               />
             </div>
 
-            {/* SELEÇÃO DO TIPO DE ORÇAMENTO (PADRÃO OU COM TARIFÁRIO) */}
+            {/* SELEÇÃO DO TIPO DE ORÇAMENTO */}
             <div className="pt-2 border-t border-slate-100">
               <label className="text-xs font-bold text-slate-700 uppercase block mb-1.5 flex items-center gap-1">
                 <CalendarDays className="w-3.5 h-3.5 text-emerald-800" />
