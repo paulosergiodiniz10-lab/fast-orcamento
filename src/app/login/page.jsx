@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Building2, Lock, User, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { db } from "../../lib/firebase";
-import { collection, query, where, getDocs, collectionGroup, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
 
 export default function LoginPage() {
   const [usuario, setUsuario] = useState("");
@@ -37,7 +37,7 @@ export default function LoginPage() {
             sessaoValida = {
               id: documento.id,
               ...data,
-              // Dados de controle de acesso
+              // Dados de controlo de acesso
               permissao: "gestor",
               nomeUsuario: data.nome || "Gestor Principal",
               loginUsuario: data.usuario,
@@ -53,7 +53,7 @@ export default function LoginPage() {
         }
       }
 
-      // 2. Se não encontrou na agência principal, procura nos sub-usuários da agência
+      // 2. Se não encontrou na agência principal, procura nos sub-utilizadores da agência
       if (!sessaoValida) {
         const qSubUsuarios = query(
           collectionGroup(db, "usuarios"),
@@ -66,14 +66,13 @@ export default function LoginPage() {
             const dataSub = docSub.data();
 
             if (dataSub.senha === senhaInput) {
-              // Verifica o status do sub-usuário
               if (dataSub.status === "bloqueado") {
                 setErro("O seu acesso foi bloqueado pela agência.");
                 setCarregando(false);
                 return;
               }
 
-              // Busca a agência pai deste usuário
+              // Procura a agência mãe deste utilizador
               const agenciaRef = docSub.ref.parent.parent;
               if (agenciaRef) {
                 const snapPai = await getDoc(agenciaRef);
@@ -89,7 +88,6 @@ export default function LoginPage() {
                   sessaoValida = {
                     id: snapPai.id,
                     ...dataPai,
-                    // Sobrescreve dados com o perfil do sub-usuário autenticado
                     permissao: dataSub.permissao || "usuario",
                     nomeUsuario: dataSub.nome || "Colaborador",
                     loginUsuario: dataSub.login,
@@ -104,15 +102,24 @@ export default function LoginPage() {
         }
       }
 
-      // Se não encontrou nem agência nem sub-usuário com essa senha
       if (!sessaoValida) {
         setErro("Utilizador ou senha incorretos.");
         setCarregando(false);
         return;
       }
 
-      // Salva a sessão preservando a compatibilidade total com o painel atual
+      // 1. Guarda a sessão completa no localStorage para os componentes de cliente
       localStorage.setItem("fast_agencia", JSON.stringify(sessaoValida));
+
+      // 2. Guarda os dados essenciais num cookie para o middleware.js do Next.js ler no servidor
+      const dadosCookie = {
+        id: sessaoValida.id,
+        permissao: sessaoValida.permissao || "usuario"
+      };
+      document.cookie = `fast_agencia_auth=${encodeURIComponent(
+        JSON.stringify(dadosCookie)
+      )}; path=/; max-age=2592000; SameSite=Lax`;
+
       window.location.href = "/";
     } catch (err) {
       console.error(err);
