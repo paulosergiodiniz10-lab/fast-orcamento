@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "../../../lib/firebaseAdmin";
+import { getAdminDb } from "../../../lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 
-// Garante que a Vercel trate a rota como dinâmica no ambiente Node.js
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Validação da senha master
 function autenticacaoValida(req) {
   const authHeader = req.headers.get("x-admin-master-key");
   const masterKey = process.env.SENHA_MASTER;
@@ -20,6 +18,7 @@ export async function GET(req) {
   }
 
   try {
+    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection("agencias").get();
     const agencias = [];
     snapshot.forEach((doc) => {
@@ -40,6 +39,7 @@ export async function POST(req) {
   }
 
   try {
+    const adminDb = getAdminDb();
     const body = await req.json();
     const docRef = await adminDb.collection("agencias").add({
       nome: body.nome || "",
@@ -66,6 +66,7 @@ export async function PUT(req) {
   }
 
   try {
+    const adminDb = getAdminDb();
     const { id, dados } = await req.json();
     if (!id || !dados) {
       return NextResponse.json({ ok: false, message: "Dados insuficientes." }, { status: 400 });
@@ -90,6 +91,7 @@ export async function DELETE(req) {
   }
 
   try {
+    const adminDb = getAdminDb();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
