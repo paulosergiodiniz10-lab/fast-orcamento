@@ -383,6 +383,13 @@ export default function GestaoHoteis() {
       return;
     }
     const ag = JSON.parse(dadosSalvos);
+
+    // Proteção de rota: sub-usuário comum não pode aceder aos hotéis
+    if (ag.permissao === "usuario") {
+      window.location.href = "/";
+      return;
+    }
+
     setAgencia(ag);
     carregarHoteis(ag.id);
   }, []);
@@ -917,7 +924,6 @@ export default function GestaoHoteis() {
 
     setSalvandoTarifa(true);
     try {
-      // Converte valores para float para facilitar cálculos
       const valoresNumericos = {};
       REGIMES_LISTA.forEach((r) => {
         const item = tarifaValores[r.id] || {};
@@ -943,7 +949,6 @@ export default function GestaoHoteis() {
 
       await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), dadosTarifa);
       
-      // Limpa form de tarifa
       setTarifaNome("");
       setTarifaDataInicio("");
       setTarifaDataFim("");
@@ -1673,7 +1678,7 @@ export default function GestaoHoteis() {
                                 onClick={() => removerOpcaoCrianca(opIdx)}
                                 className="text-emerald-700 hover:text-red-600 transition"
                               >
-                                <X className="w-3 h-3" />
+                                <X className="w-3.5 h-3.5" />
                               </button>
                             </span>
                           ))}
@@ -2013,7 +2018,7 @@ export default function GestaoHoteis() {
                                   onClick={() => removerFotoApto(index, fIdx)}
                                   className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded opacity-90 group-hover:opacity-100"
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ))}
@@ -2027,7 +2032,7 @@ export default function GestaoHoteis() {
             )}
 
             {/* ============================================================== */}
-            {/* ABA 5: TARIFÁRIO & REGRAS (ISOLADA POR FEATURE FLAG)           */}
+            {/* ABA 5: TARIFÁRIO & REGRAS (ISOLADA POR FEATURE FLAG)            */}
             {/* ============================================================== */}
             {abaAtiva === "tarifario" && temPermissaoTarifario && (
               <div className="space-y-6">
