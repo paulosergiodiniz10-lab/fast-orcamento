@@ -5,7 +5,7 @@ import {
   FileText, Search, ArrowLeft, MessageCircle, ExternalLink, 
   Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle, 
   Clock, ChevronLeft, ChevronRight, HelpCircle, AlertCircle,
-  Copy, Check, Phone
+  Copy, Check, Phone, UserCheck
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -57,7 +57,7 @@ export default function GestaoOrcamentos() {
       tipo: "alert",
       titulo,
       mensagem,
-      onConfirm,
+      onConfirm: null,
     });
   };
 
@@ -168,7 +168,6 @@ export default function GestaoOrcamentos() {
     }
 
     if (orc.hospedes) {
-      // Remove textos complementares entre parênteses que não sejam o indicador plural (s)
       return orc.hospedes.replace(/\s*\((?![sS]\)).*$/, "").trim();
     }
 
@@ -196,6 +195,8 @@ export default function GestaoOrcamentos() {
     setTimeout(() => setCopiadoId(null), 2000);
   };
 
+  const ehGestor = !agencia?.permissao || agencia.permissao === "gestor";
+
   // Filtragem dos orçamentos
   const orcamentosFiltrados = orcamentos.filter((o) => {
     const termo = buscaGeral.toLowerCase();
@@ -203,13 +204,17 @@ export default function GestaoOrcamentos() {
     const nomeCliente = (o.clienteNome || "").toLowerCase();
     const nomeHotel = (o.hotel?.nome || "").toLowerCase();
     const zapCliente = (o.clienteWhatsapp || "").toLowerCase();
+    const autorNome = (o.criadoPor?.nome || "").toLowerCase();
+    const autorLogin = (o.criadoPor?.login || "").toLowerCase();
 
     const bateGeral =
       termo === "" ||
       idCurto.includes(termo) ||
       nomeCliente.includes(termo) ||
       nomeHotel.includes(termo) ||
-      zapCliente.includes(termo);
+      zapCliente.includes(termo) ||
+      autorNome.includes(termo) ||
+      autorLogin.includes(termo);
 
     const bateCheckin =
       filtroCheckin === "" || (o.checkin && o.checkin === filtroCheckin);
@@ -302,7 +307,7 @@ export default function GestaoOrcamentos() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <input
                   type="text"
-                  placeholder="Buscar por ID, Nome do Cliente, Hotel ou Telefone..."
+                  placeholder="Buscar por ID, Cliente, Hotel, Telefone ou Vendedor..."
                   value={buscaGeral}
                   onChange={(e) => {
                     setBuscaGeral(e.target.value);
@@ -465,6 +470,14 @@ export default function GestaoOrcamentos() {
                           </span>
                         )}
 
+                        {/* Indicação do colaborador responsável */}
+                        {orc.criadoPor?.nome && (
+                          <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-purple-600" />
+                            {orc.criadoPor.nome}
+                          </span>
+                        )}
+
                         <span className="text-[11px] text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-md flex items-center gap-1 font-normal ml-auto sm:ml-0">
                           <Clock className="w-3.5 h-3.5 text-slate-500" />
                           {formatarDataHoraCriacao(orc.criadoEm)}
@@ -583,13 +596,16 @@ export default function GestaoOrcamentos() {
                         <span className="hidden sm:inline">Vitrine</span>
                       </Link>
 
-                      <button
-                        onClick={() => excluirOrcamento(orc.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 rounded-xl hover:bg-red-50 transition"
-                        title="Excluir cotação"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* Botão de excluir visível apenas para Gestor */}
+                      {ehGestor && (
+                        <button
+                          onClick={() => excluirOrcamento(orc.id)}
+                          className="p-2 text-slate-400 hover:text-red-600 rounded-xl hover:bg-red-50 transition"
+                          title="Excluir cotação"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
