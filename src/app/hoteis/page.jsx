@@ -268,7 +268,8 @@ function TabelaGestaoCalendario({ tarifas = [] }) {
       });
 
       if (tarifasCompativeis.length > 0) {
-        tarifasCompativeis.sort((a, b) => (b.prioridade || 1) - (a.prioridade || 1));
+        // Se houver mais de uma tarifa, pacotes fechados têm precedência natural
+        tarifasCompativeis.sort((a, b) => (b.pacoteFechado ? 1 : 0) - (a.pacoteFechado ? 1 : 0));
         const tarifaVencedora = tarifasCompativeis[0];
 
         Object.keys(tarifaVencedora.valores || {}).forEach((regId) => {
@@ -517,7 +518,6 @@ export default function GestaoHoteis() {
   const [tarifaDiasSemana, setTarifaDiasSemana] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [tarifaMinNoites, setTarifaMinNoites] = useState("1");
   const [tarifaPacoteFechado, setTarifaPacoteFechado] = useState(false);
-  const [tarifaPrioridade, setTarifaPrioridade] = useState("1");
   const [tarifaAptoVinculado, setTarifaAptoVinculado] = useState("todos");
   const [regimeAbaAtiva, setRegimeAbaAtiva] = useState("cafe");
   
@@ -1103,8 +1103,10 @@ export default function GestaoHoteis() {
   // =========================================================================
   const selecionarPredefinicaoDias = (tipo) => {
     if (tipo === "todos") setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
-    if (tipo === "semana") setTarifaDiasSemana([0, 1, 2, 3, 4]);
-    if (tipo === "fim_de_semana") setTarifaDiasSemana([5, 6]);
+    // Entra Domingo e sai Quinta: 4 noites (Dom, Seg, Ter, Qua)
+    if (tipo === "dom_qui") setTarifaDiasSemana([0, 1, 2, 3]);
+    // Entra Sexta e sai Domingo: 2 noites (Sex, Sáb)
+    if (tipo === "sex_dom") setTarifaDiasSemana([5, 6]);
   };
 
   const toggleDiaSemanaTarifa = (diaId) => {
@@ -1132,7 +1134,6 @@ export default function GestaoHoteis() {
     setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
     setTarifaMinNoites("1");
     setTarifaPacoteFechado(false);
-    setTarifaPrioridade("1");
     setTarifaAptoVinculado("todos");
     setTarifaValores({
       cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
@@ -1151,7 +1152,6 @@ export default function GestaoHoteis() {
     setTarifaDiasSemana(t.diasSemana || [0, 1, 2, 3, 4, 5, 6]);
     setTarifaMinNoites(String(t.minimoNoites || 1));
     setTarifaPacoteFechado(Boolean(t.pacoteFechado));
-    setTarifaPrioridade(String(t.prioridade || 1));
     setTarifaAptoVinculado(t.aptoVinculado || "todos");
 
     const novosValores = {};
@@ -1198,7 +1198,6 @@ export default function GestaoHoteis() {
         diasSemana: tarifaDiasSemana,
         minimoNoites: parseInt(tarifaMinNoites, 10) || 1,
         pacoteFechado: Boolean(tarifaPacoteFechado),
-        prioridade: parseInt(tarifaPrioridade, 10) || 1,
         aptoVinculado: tarifaAptoVinculado || "todos",
         ativo: true,
         valores: valoresNumericos,
@@ -2350,7 +2349,7 @@ export default function GestaoHoteis() {
                           />
                         </div>
 
-                        {/* SELEÇÃO INTELIGENTE DE DIAS DA SEMANA */}
+                        {/* SELEÇÃO DE DIAS DA SEMANA COM ATALHOS HOTELEIROS */}
                         <div className="md:col-span-12 space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -2361,23 +2360,25 @@ export default function GestaoHoteis() {
                               <button
                                 type="button"
                                 onClick={() => selecionarPredefinicaoDias("todos")}
-                                className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
+                                className="text-[11px] font-bold px-2.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
                               >
                                 Todos
                               </button>
                               <button
                                 type="button"
-                                onClick={() => selecionarPredefinicaoDias("semana")}
-                                className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition"
+                                onClick={() => selecionarPredefinicaoDias("dom_qui")}
+                                className="text-[11px] font-bold px-2.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition"
+                                title="Entrada Domingo e Saída Quinta (Dorme Dom, Seg, Ter, Qua = 4 noites)"
                               >
-                                Dom a Qui (Semana)
+                                Dom a Qui
                               </button>
                               <button
                                 type="button"
-                                onClick={() => selecionarPredefinicaoDias("fim_de_semana")}
-                                className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition"
+                                onClick={() => selecionarPredefinicaoDias("sex_dom")}
+                                className="text-[11px] font-bold px-2.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition"
+                                title="Entrada Sexta e Saída Domingo (Dorme Sex e Sáb = 2 noites)"
                               >
-                                Sex e Sáb (Fim de Semana)
+                                Sex a Dom
                               </button>
                             </div>
                           </div>
@@ -2403,35 +2404,15 @@ export default function GestaoHoteis() {
                           </div>
                         </div>
 
-                        {/* PRIORIDADE E CATEGORIA DO QUARTO */}
-                        <div className="md:col-span-6 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                          <label className="text-xs font-bold text-slate-800 uppercase block">
-                            Prioridade da Regra
-                          </label>
-                          <select
-                            value={tarifaPrioridade}
-                            onChange={(e) => setTarifaPrioridade(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-amber-600"
-                          >
-                            <option value="1">1 - Padrão / Meio de Semana</option>
-                            <option value="2">2 - Final de Semana</option>
-                            <option value="3">3 - Feriado / Pacote Especial</option>
-                            <option value="4">4 - Alta Temporada Prioritária</option>
-                            <option value="5">5 - Máxima (Sobrepõe qualquer outra)</option>
-                          </select>
-                          <span className="text-[10px] text-slate-500 block">
-                            Se duas tarifas caírem no mesmo dia, o sistema calcula pela de maior prioridade.
-                          </span>
-                        </div>
-
-                        <div className="md:col-span-6 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+                        {/* CATEGORIA DO QUARTO VINCULADO */}
+                        <div className="md:col-span-12 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
                           <label className="text-xs font-bold text-slate-800 uppercase block">
                             Válido para qual Acomodação?
                           </label>
                           <select
                             value={tarifaAptoVinculado}
                             onChange={(e) => setTarifaAptoVinculado(e.target.value)}
-                            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
                           >
                             <option value="todos">Todos os Apartamentos (Geral)</option>
                             {tiposApto.map((ap, idx) => (
@@ -2599,9 +2580,6 @@ export default function GestaoHoteis() {
                                   )}
                                   <span className="bg-slate-200 text-slate-700 text-[10px] font-semibold px-1.5 py-0.2 rounded">
                                     Mín: {t.minimoNoites} noite(s)
-                                  </span>
-                                  <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                    Prioridade {t.prioridade || 1}
                                   </span>
                                   {t.aptoVinculado && t.aptoVinculado !== "todos" && (
                                     <span className="bg-amber-100 text-amber-900 text-[10px] font-semibold px-1.5 py-0.2 rounded">
