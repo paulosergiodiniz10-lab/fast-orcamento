@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, FileText, Pencil, X } from "lucide-react";
+import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, FileText, Pencil, X, CalendarDays, CheckCircle2 } from "lucide-react";
 import { db } from "../../lib/firebase";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
@@ -27,6 +27,7 @@ export default function AdminMaster() {
   const [usuario, setUsuario] = useState("");
   const [senhaAgencia, setSenhaAgencia] = useState("");
   const [cadastur, setCadastur] = useState("");
+  const [permiteTarifario, setPermiteTarifario] = useState(false);
 
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
 
@@ -62,6 +63,7 @@ export default function AdminMaster() {
     setUsuario(ag.usuario || "");
     setSenhaAgencia(ag.senha || "");
     setCadastur(ag.cadastur || "");
+    setPermiteTarifario(Boolean(ag.permiteTarifario));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -72,6 +74,7 @@ export default function AdminMaster() {
     setUsuario("");
     setSenhaAgencia("");
     setCadastur("");
+    setPermiteTarifario(false);
   };
 
   const salvarAgencia = async (e) => {
@@ -89,6 +92,7 @@ export default function AdminMaster() {
         senha: senhaAgencia.trim(),
         whatsapp: whatsapp.replace(/\D/g, ""),
         cadastur: cadastur.trim() || "Regular / Ativo",
+        permiteTarifario: Boolean(permiteTarifario),
       };
 
       if (agenciaEditandoId) {
@@ -127,6 +131,20 @@ export default function AdminMaster() {
       );
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Alterna diretamente entre Orçamento Padrão e com Tarifário no card da agência
+  const alternarModoTarifario = async (agencia) => {
+    const novoValor = !agencia.permiteTarifario;
+    try {
+      await updateDoc(doc(db, "agencias", agencia.id), { permiteTarifario: novoValor });
+      setAgencias((prev) =>
+        prev.map((a) => (a.id === agencia.id ? { ...a, permiteTarifario: novoValor } : a))
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao alterar o modo de orçamento.");
     }
   };
 
@@ -302,7 +320,49 @@ export default function AdminMaster() {
               />
             </div>
 
-            <div className="flex gap-2 pt-1">
+            {/* SELEÇÃO DO TIPO DE ORÇAMENTO (PADRÃO OU COM TARIFÁRIO) */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold text-slate-700 uppercase block mb-1.5 flex items-center gap-1">
+                <CalendarDays className="w-3.5 h-3.5 text-emerald-800" />
+                Modo de Orçamento da Agência
+              </label>
+              
+              <div className="grid grid-cols-1 gap-1.5">
+                <label className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                  !permiteTarifario ? "bg-slate-100 border-slate-400 font-bold text-slate-900" : "bg-white border-slate-200 text-slate-600"
+                }`}>
+                  <input
+                    type="radio"
+                    name="tipoModoOrcamento"
+                    checked={!permiteTarifario}
+                    onChange={() => setPermiteTarifario(false)}
+                    className="accent-slate-800"
+                  />
+                  <div className="text-[11px]">
+                    <span className="block">Orçamento Padrão (Manual)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Digitação manual dos valores</span>
+                  </div>
+                </label>
+
+                <label className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                  permiteTarifario ? "bg-amber-50 border-amber-500 font-bold text-amber-950" : "bg-white border-slate-200 text-slate-600"
+                }`}>
+                  <input
+                    type="radio"
+                    name="tipoModoOrcamento"
+                    checked={permiteTarifario}
+                    onChange={() => setPermiteTarifario(true)}
+                    className="accent-amber-600"
+                  />
+                  <div className="text-[11px]">
+                    <span className="block text-amber-900">Orçamento com Tarifário</span>
+                    <span className="text-[10px] text-amber-700 font-normal">Cálculo e descontos automáticos</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
               {agenciaEditandoId && (
                 <button
                   type="button"
@@ -378,8 +438,10 @@ export default function AdminMaster() {
                   }`}
                 >
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-sm text-slate-900">{ag.nome}</span>
+                      
+                      {/* Status Ativo/Bloqueado */}
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           ag.status === "ativo"
@@ -389,6 +451,21 @@ export default function AdminMaster() {
                       >
                         {ag.status === "ativo" ? "Ativo" : "Bloqueado"}
                       </span>
+
+                      {/* Tag do Modo (Padrão ou Tarifário) com Botão Rápido de 1 Clique */}
+                      <button
+                        type="button"
+                        onClick={() => alternarModoTarifario(ag)}
+                        title="Clique para alternar o modo desta agência"
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 transition ${
+                          ag.permiteTarifario
+                            ? "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                            : "bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <CalendarDays className="w-3 h-3" />
+                        <span>{ag.permiteTarifario ? "Com Tarifário" : "Padrão"}</span>
+                      </button>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
