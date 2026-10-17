@@ -220,6 +220,232 @@ function EditorToolbar({ editorRef }) {
   );
 }
 
+// =========================================================================
+// COMPONENTE: TABELA DE GESTÃO DO CALENDÁRIO COM FILTROS DINÂMICOS
+// =========================================================================
+function TabelaGestaoCalendario({ tarifas = [] }) {
+  const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth());
+  const [anoSelecionado, setAnoSelecionado] = useState(new Date().getFullYear());
+  const [filtroTarifa, setFiltroTarifa] = useState("todas");
+  const [filtroRegime, setFiltroRegime] = useState("todos");
+
+  const MESES = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
+  const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+  const REGIMES_ROTULOS = {
+    cafe: "Café da Manhã",
+    cafe_almoco: "Café + Almoço",
+    cafe_jantar: "Café + Jantar",
+    pensao_completa: "Pensão Completa",
+    sem_refeicao: "Sem refeição",
+  };
+
+  const limparFiltros = () => {
+    setFiltroTarifa("todas");
+    setFiltroRegime("todos");
+  };
+
+  const gerarLinhasCalendario = () => {
+    const totalDias = new Date(anoSelecionado, mesSelecionado + 1, 0).getDate();
+    const linhas = [];
+
+    for (let dia = 1; dia <= totalDias; dia++) {
+      const dataObj = new Date(anoSelecionado, mesSelecionado, dia);
+      const diaSemanaIdx = dataObj.getDay();
+      const mesStr = String(mesSelecionado + 1).padStart(2, "0");
+      const diaStr = String(dia).padStart(2, "0");
+      const dataIso = `${anoSelecionado}-${mesStr}-${diaStr}`;
+
+      const tarifasCompativeis = tarifas.filter((t) => {
+        if (!t.ativo) return false;
+        const noPeriodo = dataIso >= t.dataInicio && dataIso <= t.dataFim;
+        const noDiaSemana = !t.diasSemana || t.diasSemana.includes(diaSemanaIdx);
+        return noPeriodo && noDiaSemana;
+      });
+
+      if (tarifasCompativeis.length > 0) {
+        tarifasCompativeis.sort((a, b) => (b.prioridade || 1) - (a.prioridade || 1));
+        const tarifaVencedora = tarifasCompativeis[0];
+
+        Object.keys(tarifaVencedora.valores || {}).forEach((regId) => {
+          const val = tarifaVencedora.valores[regId];
+          const temPreco = val && (val.single > 0 || val.duplo > 0);
+
+          if (temPreco) {
+            linhas.push({
+              id: `${dataIso}-${regId}`,
+              dataIso,
+              dataExibicao: `${diaStr}/${mesStr}/${anoSelecionado}`,
+              diaSemana: DIAS_SEMANA[diaSemanaIdx],
+              tarifaNome: tarifaVencedora.nome,
+              tarifaId: tarifaVencedora.id,
+              regimeId: regId,
+              regimeNome: REGIMES_ROTULOS[regId] || regId,
+              single: val.single || 0,
+              duplo: val.duplo || 0,
+              adExtra: val.adicAdulto || val.adicCrianca || 0,
+              minNoites: tarifaVencedora.minimoNoites || 1,
+            });
+          }
+        });
+      }
+    }
+
+    return linhas;
+  };
+
+  const todasLinhas = gerarLinhasCalendario();
+
+  const linhasFiltradas = todasLinhas.filter((item) => {
+    if (filtroTarifa !== "todas" && item.tarifaNome !== filtroTarifa) return false;
+    if (filtroRegime !== "todos" && item.regimeId !== filtroRegime) return false;
+    return true;
+  });
+
+  const nomesTarifasUnicas = Array.from(new Set(todasLinhas.map((l) => l.tarifaNome)));
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden space-y-4 p-5 md:p-6 mt-6">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+          <CalendarDays className="w-5 h-5 text-brand-700" />
+          Gestão do Calendário
+        </h3>
+        <span className="bg-blue-50 text-blue-700 font-bold text-xs px-2.5 py-1 rounded-full border border-blue-200">
+          {linhasFiltradas.length} resultados
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+        <div className="sm:col-span-4">
+          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+            Filtrar por Mês
+          </label>
+          <select
+            value={mesSelecionado}
+            onChange={(e) => setMesSelecionado(Number(e.target.value))}
+            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+          >
+            {MESES.map((m, idx) => (
+              <option key={idx} value={idx}>
+                {m} {anoSelecionado}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sm:col-span-4">
+          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+            Filtrar por Tarifa
+          </label>
+          <select
+            value={filtroTarifa}
+            onChange={(e) => setFiltroTarifa(e.target.value)}
+            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+          >
+            <option value="todas">Todas as tarifas</option>
+            {nomesTarifasUnicas.map((nome) => (
+              <option key={nome} value={nome}>
+                {nome}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sm:col-span-3">
+          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+            Filtrar por Regime Pensão
+          </label>
+          <select
+            value={filtroRegime}
+            onChange={(e) => setFiltroRegime(e.target.value)}
+            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+          >
+            <option value="todos">Todos os regimes</option>
+            {Object.entries(REGIMES_ROTULOS).map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sm:col-span-1 flex justify-end">
+          <button
+            type="button"
+            onClick={limparFiltros}
+            className="text-xs text-blue-600 hover:text-blue-800 font-bold py-2 px-1 transition"
+            title="Limpar todos os filtros"
+          >
+            Limpar
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-200 text-[10px]">
+              <th className="py-3 px-3">Data</th>
+              <th className="py-3 px-3">Dia</th>
+              <th className="py-3 px-3">Tarifa</th>
+              <th className="py-3 px-3">Alimentação</th>
+              <th className="py-3 px-3">Single (1 Pax)</th>
+              <th className="py-3 px-3 font-extrabold text-slate-700">Duplo (2 Pax)</th>
+              <th className="py-3 px-3">Ad. Extra</th>
+              <th className="py-3 px-3 text-center">Mín. Noites</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {linhasFiltradas.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-slate-400 italic">
+                  Nenhum tarifário ativo encontrado para este mês ou filtro selecionado.
+                </td>
+              </tr>
+            ) : (
+              linhasFiltradas.map((linha) => (
+                <tr key={linha.id} className="hover:bg-slate-50/80 transition">
+                  <td className="py-2.5 px-3 font-extrabold text-slate-900">
+                    {linha.dataExibicao}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-400 font-medium">
+                    {linha.diaSemana}
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span className="bg-blue-50 text-blue-700 border border-blue-200 font-bold px-2 py-0.5 rounded text-[10px] uppercase">
+                      {linha.tarifaNome}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 font-bold text-amber-700">
+                    {linha.regimeNome}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-600 font-semibold">
+                    R$ {linha.single.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-2.5 px-3 font-extrabold text-slate-900">
+                    R$ {linha.duplo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-600 font-semibold">
+                    R$ {linha.adExtra.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-2.5 px-3 text-center font-bold text-slate-700">
+                    {linha.minNoites}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function GestaoHoteis() {
   const [agencia, setAgencia] = useState(null);
   const [hoteis, setHoteis] = useState([]);
@@ -237,7 +463,7 @@ export default function GestaoHoteis() {
 
   const [filtroCidadeLista, setFiltroCidadeLista] = useState("todas");
 
-  // Campos do Formulário - Informações Básicas
+  // Informações Básicas
   const [cidade, setCidade] = useState("Caldas Novas");
   const [estado, setEstado] = useState("GO");
   const [nome, setNome] = useState("");
@@ -278,22 +504,21 @@ export default function GestaoHoteis() {
   const [observacoesHtml, setObservacoesHtml] = useState("");
 
   // =========================================================================
-  // ESTADOS DO MÓDULO TARIFÁRIO AVANÇADO (Aba 5)
+  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5)
   // =========================================================================
   const [tarifasCadastradas, setTarifasCadastradas] = useState([]);
   const [carregandoTarifas, setCarregandoTarifas] = useState(false);
   const [salvandoTarifa, setSalvandoTarifa] = useState(false);
   const [tarifaEditandoId, setTarifaEditandoId] = useState(null);
 
-  // Form Nova Tarifa
   const [tarifaNome, setTarifaNome] = useState("");
   const [tarifaDataInicio, setTarifaDataInicio] = useState("");
   const [tarifaDataFim, setTarifaDataFim] = useState("");
   const [tarifaDiasSemana, setTarifaDiasSemana] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [tarifaMinNoites, setTarifaMinNoites] = useState("1");
   const [tarifaPacoteFechado, setTarifaPacoteFechado] = useState(false);
-  const [tarifaPrioridade, setTarifaPrioridade] = useState("1"); // 1 (Padrão), 2 (Fim de semana), 3 (Feriados/Pacotes)
-  const [tarifaAptoVinculado, setTarifaAptoVinculado] = useState("todos"); // 'todos' ou nome específico do quarto
+  const [tarifaPrioridade, setTarifaPrioridade] = useState("1");
+  const [tarifaAptoVinculado, setTarifaAptoVinculado] = useState("todos");
   const [regimeAbaAtiva, setRegimeAbaAtiva] = useState("cafe");
   
   const [tarifaValores, setTarifaValores] = useState({
@@ -878,8 +1103,8 @@ export default function GestaoHoteis() {
   // =========================================================================
   const selecionarPredefinicaoDias = (tipo) => {
     if (tipo === "todos") setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
-    if (tipo === "semana") setTarifaDiasSemana([0, 1, 2, 3, 4]); // Dom a Qui
-    if (tipo === "fim_de_semana") setTarifaDiasSemana([5, 6]); // Sex e Sáb
+    if (tipo === "semana") setTarifaDiasSemana([0, 1, 2, 3, 4]);
+    if (tipo === "fim_de_semana") setTarifaDiasSemana([5, 6]);
   };
 
   const toggleDiaSemanaTarifa = (diaId) => {
@@ -2342,7 +2567,7 @@ export default function GestaoHoteis() {
                       </div>
                     </div>
 
-                    {/* LISTA DE TARIFAS CADASTRADAS COM BOTÃO DE EDIÇÃO */}
+                    {/* LISTA DE TARIFAS CADASTRADAS */}
                     <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                         Tarifas Ativas no Hotel ({tarifasCadastradas.length})
@@ -2514,6 +2739,9 @@ export default function GestaoHoteis() {
                         </div>
                       </div>
                     </div>
+
+                    {/* 5.4 GESTÃO DO CALENDÁRIO COM FILTROS DINÂMICOS */}
+                    <TabelaGestaoCalendario tarifas={tarifasCadastradas} />
                   </>
                 )}
               </div>
