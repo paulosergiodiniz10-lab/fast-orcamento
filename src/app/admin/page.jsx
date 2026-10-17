@@ -5,14 +5,12 @@ import { Plus, Trash2, Key, ShieldCheck, Eye, EyeOff, Loader2, Building, Phone, 
 import { db } from "../../lib/firebase";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
-// Defina aqui a sua senha mestre exclusiva
-const SENHA_MASTER = "Paulo1970!@!500";
-
 export default function AdminMaster() {
   const [autenticado, setAutenticado] = useState(false);
   const [senhaInput, setSenhaInput] = useState("");
   const [verSenhaMaster, setVerSenhaMaster] = useState(false);
   const [erroLogin, setErroLogin] = useState("");
+  const [validandoLogin, setValidandoLogin] = useState(false);
 
   const [agencias, setAgencias] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -31,14 +29,32 @@ export default function AdminMaster() {
 
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
 
-  const fazerLoginMaster = (e) => {
+  // Validação segura via API interna (a palavra-passe nunca é descarregada no navegador)
+  const fazerLoginMaster = async (e) => {
     e.preventDefault();
-    if (senhaInput === SENHA_MASTER) {
-      setAutenticado(true);
-      setErroLogin("");
-      carregarAgencias();
-    } else {
-      setErroLogin("Senha mestre incorreta.");
+    setErroLogin("");
+    setValidandoLogin(true);
+
+    try {
+      const res = await fetch("/api/admin-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senha: senhaInput }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        setAutenticado(true);
+        carregarAgencias();
+      } else {
+        setErroLogin(data.message || "Senha mestre incorreta.");
+      }
+    } catch (err) {
+      console.error(err);
+      setErroLogin("Erro ao contactar o servidor de autenticação.");
+    } finally {
+      setValidandoLogin(false);
     }
   };
 
@@ -96,14 +112,12 @@ export default function AdminMaster() {
       };
 
       if (agenciaEditandoId) {
-        // Atualizar agência existente
         await updateDoc(doc(db, "agencias", agenciaEditandoId), {
           ...dados,
           atualizadoEm: serverTimestamp(),
         });
         alert("Agência atualizada com sucesso!");
       } else {
-        // Criar nova agência
         await addDoc(collection(db, "agencias"), {
           ...dados,
           status: "ativo",
@@ -134,7 +148,6 @@ export default function AdminMaster() {
     }
   };
 
-  // Alterna diretamente entre Orçamento Padrão e com Tarifário no card da agência
   const alternarModoTarifario = async (agencia) => {
     const novoValor = !agencia.permiteTarifario;
     try {
@@ -186,7 +199,8 @@ export default function AdminMaster() {
                 placeholder="Digite sua senha..."
                 value={senhaInput}
                 onChange={(e) => setSenhaInput(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-emerald-900"
+                disabled={validandoLogin}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-emerald-900 disabled:opacity-50"
               />
               <button
                 type="button"
@@ -200,9 +214,17 @@ export default function AdminMaster() {
 
           <button
             type="submit"
-            className="w-full bg-emerald-900 hover:bg-emerald-950 text-white font-bold py-2.5 rounded-xl text-sm transition shadow"
+            disabled={validandoLogin}
+            className="w-full bg-emerald-900 hover:bg-emerald-950 text-white font-bold py-2.5 rounded-xl text-sm transition shadow flex items-center justify-center gap-2 disabled:opacity-70"
           >
-            Acessar Controle
+            {validandoLogin ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>A verificar...</span>
+              </>
+            ) : (
+              <span>Acessar Controle</span>
+            )}
           </button>
         </form>
       </div>
@@ -452,7 +474,7 @@ export default function AdminMaster() {
                         {ag.status === "ativo" ? "Ativo" : "Bloqueado"}
                       </span>
 
-                      {/* Tag do Modo (Padrão ou Tarifário) com Botão Rápido de 1 Clique */}
+                      {/* Alternador Rápido de Modo */}
                       <button
                         type="button"
                         onClick={() => alternarModoTarifario(ag)}
