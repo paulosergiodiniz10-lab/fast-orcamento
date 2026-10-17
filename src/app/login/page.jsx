@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Building2, Lock, User, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { db } from "../../lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, collectionGroup, doc, getDoc } from "firebase/firestore";
 
 export default function LoginPage() {
   const [usuario, setUsuario] = useState("");
@@ -17,40 +17,102 @@ export default function LoginPage() {
     setErro("");
     setCarregando(true);
 
+    const loginInput = usuario.trim().toLowerCase();
+    const senhaInput = senha.trim();
+
     try {
-      const q = query(
+      // 1. Tenta autenticar primeiro como a Agência Principal (Gestor Master da Agência)
+      const qAgencia = query(
         collection(db, "agencias"),
-        where("usuario", "==", usuario.trim().toLowerCase())
+        where("usuario", "==", loginInput)
       );
-      const querySnapshot = await getDocs(q);
+      const snapAgencia = await getDocs(qAgencia);
 
-      if (querySnapshot.empty) {
-        setErro("Utilizador ou agência não encontrados.");
-        setCarregando(false);
-        return;
-      }
+      let sessaoValida = null;
 
-      let agenciaValida = null;
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.senha === senha.trim()) {
-          agenciaValida = { id: doc.id, ...data };
+      if (!snapAgencia.empty) {
+        snapAgencia.forEach((documento) => {
+          const data = documento.data();
+          if (data.senha === senhaInput) {
+            sessaoValida = {
+              id: documento.id,
+              ...data,
+              // Dados de controle de acesso
+              permissao: "gestor",
+              nomeUsuario: data.nome || "Gestor Principal",
+              loginUsuario: data.usuario,
+              isContaPrincipal: true
+            };
+          }
+        });
+
+        if (sessaoValida && sessaoValida.status === "bloqueado") {
+          setErro("Acesso da agência suspenso. Contacte o administrador.");
+          setCarregando(false);
+          return;
         }
-      });
+      }
 
-      if (!agenciaValida) {
-        setErro("Senha incorreta. Solicite a sua senha ao suporte.");
+      // 2. Se não encontrou na agência principal, procura nos sub-usuários da agência
+      if (!sessaoValida) {
+        const qSubUsuarios = query(
+          collectionGroup(db, "usuarios"),
+          where("login", "==", loginInput)
+        );
+        const snapSub = await getDocs(qSubUsuarios);
+
+        if (!snapSub.empty) {
+          for (const docSub of snapSub.docs) {
+            const dataSub = docSub.data();
+
+            if (dataSub.senha === senhaInput) {
+              // Verifica o status do sub-usuário
+              if (dataSub.status === "bloqueado") {
+                setErro("O seu acesso foi bloqueado pela agência.");
+                setCarregando(false);
+                return;
+              }
+
+              // Busca a agência pai deste usuário
+              const agenciaRef = docSub.ref.parent.parent;
+              if (agenciaRef) {
+                const snapPai = await getDoc(agenciaRef);
+                if (snapPai.exists()) {
+                  const dataPai = snapPai.data();
+
+                  if (dataPai.status === "bloqueado") {
+                    setErro("Acesso da agência suspenso. Contacte o administrador.");
+                    setCarregando(false);
+                    return;
+                  }
+
+                  sessaoValida = {
+                    id: snapPai.id,
+                    ...dataPai,
+                    // Sobrescreve dados com o perfil do sub-usuário autenticado
+                    permissao: dataSub.permissao || "usuario",
+                    nomeUsuario: dataSub.nome || "Colaborador",
+                    loginUsuario: dataSub.login,
+                    usuarioId: docSub.id,
+                    isContaPrincipal: false
+                  };
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Se não encontrou nem agência nem sub-usuário com essa senha
+      if (!sessaoValida) {
+        setErro("Utilizador ou senha incorretos.");
         setCarregando(false);
         return;
       }
 
-      if (agenciaValida.status === "bloqueado") {
-        setErro("Acesso suspenso. Contacte o administrador.");
-        setCarregando(false);
-        return;
-      }
-
-      localStorage.setItem("fast_agencia", JSON.stringify(agenciaValida));
+      // Salva a sessão preservando a compatibilidade total com o painel atual
+      localStorage.setItem("fast_agencia", JSON.stringify(sessaoValida));
       window.location.href = "/";
     } catch (err) {
       console.error(err);
@@ -80,13 +142,13 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Utilizador / Login</label>
+            <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Utilizador / E-mail</label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
                 required
-                placeholder="o seu utilizador"
+                placeholder="seu usuario ou e-mail"
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
@@ -132,7 +194,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-[11px] text-center text-slate-400 mt-6">
-          Esqueceu-se da senha? Peça o reenvio diretamente ao suporte via WhatsApp.
+          Esqueceu a senha? Solicite à sua agência ou ao administrador.
         </p>
       </div>
     </div>
