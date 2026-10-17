@@ -398,6 +398,18 @@ function GeradorOrcamentoConteudo() {
 
       if (lista.length > 0) {
         setHoteis(lista);
+
+        // Se tiver apenas 1 hotel cadastrado, já fixa a cidade e o hotel automaticamente
+        if (lista.length === 1) {
+          const unicoHotel = lista[0];
+          if (unicoHotel.cidade) {
+            setCidadeSelecionada(unicoHotel.cidade);
+          }
+          selecionarHotel(unicoHotel);
+          return;
+        }
+
+        // Se houver mais de um hotel, verifica parâmetros na URL
         const hotelNomeUrl = searchParams.get("hotelNome");
         const hotelEncontrado = hotelNomeUrl ? lista.find((h) => h.nome === hotelNomeUrl) : null;
         if (hotelEncontrado) {
@@ -520,8 +532,17 @@ function GeradorOrcamentoConteudo() {
   const executarLimpeza = () => {
     setClienteNome("");
     setClienteWhatsapp("");
-    setCidadeSelecionada("todas");
-    setHotelSelecionado(null);
+
+    // Se tiver apenas 1 hotel, mantém ele selecionado para agilizar
+    if (hoteis.length === 1) {
+      const unicoHotel = hoteis[0];
+      if (unicoHotel.cidade) setCidadeSelecionada(unicoHotel.cidade);
+      selecionarHotel(unicoHotel);
+    } else {
+      setCidadeSelecionada("todas");
+      setHotelSelecionado(null);
+    }
+
     setAptoSelecionado("");
     setCheckin(hojeStr);
     setCheckout(somarDias(hojeStr, 1));
@@ -1294,7 +1315,7 @@ function GeradorOrcamentoConteudo() {
                               className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
                               title="Copiar configuração do apartamento anterior"
                             >
-                              <CopyPlus className="w-3 h-3" />
+                              <CopyPlus className="w-3 hand-3" />
                               Repetir Apto #{index}
                             </button>
                           )}
