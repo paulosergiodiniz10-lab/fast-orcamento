@@ -4,7 +4,7 @@ export async function POST(request) {
   try {
     const { senha } = await request.json();
 
-    if (senha === process.env.SENHA_MASTER) {
+    if (senha && senha === process.env.SENHA_MASTER) {
       return NextResponse.json({ ok: true });
     }
 
