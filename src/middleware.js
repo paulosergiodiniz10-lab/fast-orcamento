@@ -20,13 +20,20 @@ export function middleware(request) {
     }
   }
 
+  const estaAutenticado = Boolean(sessao?.id);
+
+  // Se já estiver logado e tentar abrir a página de login, redireciona para a home
+  if (pathname === "/login" && estaAutenticado) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   // Verifica se a rota atual exige autenticação
   const precisaAutenticacao = rotasPrivadas.some(
     (rota) => pathname === rota || (rota !== "/" && pathname.startsWith(rota))
   );
 
   // Redireciona para /login se não houver cookie de sessão válido
-  if (precisaAutenticacao && !sessao?.id) {
+  if (precisaAutenticacao && !estaAutenticado) {
     const urlLogin = new URL("/login", request.url);
     return NextResponse.redirect(urlLogin);
   }
@@ -51,7 +58,7 @@ export const config = {
      * - api (rotas de API)
      * - _next/static (arquivos estáticos)
      * - _next/image (otimização de imagens)
-     * - favicon.ico e imagens estáticas
+     * - favicon.ico e extensões de imagem comuns
      */
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)",
   ],
