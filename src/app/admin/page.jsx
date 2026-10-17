@@ -6,7 +6,7 @@ import { db } from "../../lib/firebase";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 // Defina aqui a sua senha mestre exclusiva
-const SENHA_MASTER = "admin123";
+const SENHA_MASTER = "Paulo1970!@!500";
 
 export default function AdminMaster() {
   const [autenticado, setAutenticado] = useState(false);
