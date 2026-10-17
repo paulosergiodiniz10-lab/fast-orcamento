@@ -5,7 +5,7 @@ import {
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
   HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare,
-  FileText, Image as ImageIcon, CalendarDays, Percent, ShieldCheck
+  FileText, Image as ImageIcon, CalendarDays, Percent, ShieldCheck, Zap
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -233,8 +233,7 @@ export default function GestaoHoteis() {
   const [modoVisualizacao, setModoVisualizacao] = useState("lista");
   const [hotelEditandoId, setHotelEditandoId] = useState(null);
 
-  // Controle da Aba Ativa do Formulário
-  const [abaAtiva, setAbaAtiva] = useState("sobre"); // 'sobre', 'videos', 'fotos', 'apartamentos', 'tarifario'
+  const [abaAtiva, setAbaAtiva] = useState("sobre");
 
   const [filtroCidadeLista, setFiltroCidadeLista] = useState("todas");
 
@@ -247,7 +246,6 @@ export default function GestaoHoteis() {
   const [checkinHora, setCheckinHora] = useState("14:00");
   const [checkoutHora, setCheckoutHora] = useState("11:00");
 
-  // Formas de Pagamento Estruturadas
   const [pagamentoCartao, setPagamentoCartao] = useState("Em até 10x sem juros");
   const [pagamentoPix, setPagamentoPix] = useState("Desconto especial");
   const [pagamentoBoleto, setPagamentoBoleto] = useState("");
@@ -258,19 +256,16 @@ export default function GestaoHoteis() {
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
 
-  // Parques Aquáticos / Lazer Adicional
   const [tituloFotosParque, setTituloFotosParque] = useState("Fotos dos Parques Aquáticos");
   const [fotosParque, setFotosParque] = useState([]);
   const [tituloVideoParque, setTituloVideoParque] = useState("Vídeo dos Parques Aquáticos");
   const [videoParqueUrl, setVideoParqueUrl] = useState("");
 
-  // Configurações do Orçamento (WhatsApp)
   const [mostrarTituloValores, setMostrarTituloValores] = useState(true);
   const [tituloValoresCustomizado, setTituloValoresCustomizado] = useState("Valor total do pacote:");
   const [opcoesCriancas, setOpcoesCriancas] = useState(["até 12 anos", "0 a 5 anos cortesia"]);
   const [novaOpcaoCrianca, setNovaOpcaoCrianca] = useState("");
 
-  // Flags Liga/Desliga no Site
   const [mostrarLocalizacao, setMostrarLocalizacao] = useState(true);
   const [mostrarSobre, setMostrarSobre] = useState(true);
   const [mostrarVideo, setMostrarVideo] = useState(true);
@@ -279,16 +274,16 @@ export default function GestaoHoteis() {
   const [mostrarParques, setMostrarParques] = useState(true);
   const [mostrarVideoParque, setMostrarVideoParque] = useState(true);
 
-  // Textos Ricos
   const [descricaoHtml, setDescricaoHtml] = useState("");
   const [observacoesHtml, setObservacoesHtml] = useState("");
 
   // =========================================================================
-  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5 - Isolada por Feature Flag)
+  // ESTADOS DO MÓDULO TARIFÁRIO AVANÇADO (Aba 5)
   // =========================================================================
   const [tarifasCadastradas, setTarifasCadastradas] = useState([]);
   const [carregandoTarifas, setCarregandoTarifas] = useState(false);
   const [salvandoTarifa, setSalvandoTarifa] = useState(false);
+  const [tarifaEditandoId, setTarifaEditandoId] = useState(null);
 
   // Form Nova Tarifa
   const [tarifaNome, setTarifaNome] = useState("");
@@ -297,9 +292,10 @@ export default function GestaoHoteis() {
   const [tarifaDiasSemana, setTarifaDiasSemana] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [tarifaMinNoites, setTarifaMinNoites] = useState("1");
   const [tarifaPacoteFechado, setTarifaPacoteFechado] = useState(false);
+  const [tarifaPrioridade, setTarifaPrioridade] = useState("1"); // 1 (Padrão), 2 (Fim de semana), 3 (Feriados/Pacotes)
+  const [tarifaAptoVinculado, setTarifaAptoVinculado] = useState("todos"); // 'todos' ou nome específico do quarto
   const [regimeAbaAtiva, setRegimeAbaAtiva] = useState("cafe");
   
-  // Matriz de valores por regime { cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" } }
   const [tarifaValores, setTarifaValores] = useState({
     cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
     cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
@@ -308,7 +304,6 @@ export default function GestaoHoteis() {
     sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
   });
 
-  // Regras de Crianças
   const [regrasCriancas, setRegrasCriancas] = useState({
     idadeMaximaCortesia: "12",
     qtdMaximaCortesia: "2",
@@ -384,7 +379,6 @@ export default function GestaoHoteis() {
     }
     const ag = JSON.parse(dadosSalvos);
 
-    // Proteção de rota: sub-usuário comum não pode aceder aos hotéis
     if (ag.permissao === "usuario") {
       window.location.href = "/";
       return;
@@ -409,19 +403,16 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Carrega tarifas e regras de crianças do hotel selecionado
   const carregarTarifasERegras = async (hotelId) => {
     try {
       setCarregandoTarifas(true);
       
-      // 1. Carrega Tarifas
       const colTarifas = collection(db, "hoteis", hotelId, "tarifas");
       const snapTarifas = await getDocs(colTarifas);
       const lista = [];
       snapTarifas.forEach((d) => lista.push({ id: d.id, ...d.data() }));
       setTarifasCadastradas(lista);
 
-      // 2. Carrega Regras de Crianças
       const docRegrasRef = doc(db, "hoteis", hotelId, "configuracoes", "regras_criancas");
       const snapRegras = await getDoc(docRegrasRef);
       if (snapRegras.exists()) {
@@ -482,16 +473,12 @@ export default function GestaoHoteis() {
 
     const vagasRestantes = 18 - fotosGerais.length;
     if (vagasRestantes <= 0) {
-      abrirModal("error", "Limite Atingido", "Você já atingiu o limite máximo de 18 fotos gerais para este hotel.");
+      abrirModal("error", "Limite Atingido", "Você já atingiu o limite máximo de 18 fotos gerais.");
       e.target.value = "";
       return;
     }
 
     const arquivosParaEnviar = files.slice(0, vagasRestantes);
-    if (files.length > vagasRestantes) {
-      abrirModal("error", "Limite Parcial", `Você selecionou ${files.length} fotos, mas apenas ${vagasRestantes} foram adicionadas para respeitar o limite máximo de 18.`);
-    }
-
     setEnviandoFotoGeral(true);
     try {
       const urls = [];
@@ -501,7 +488,7 @@ export default function GestaoHoteis() {
       }
       setFotosGerais((prev) => [...prev, ...urls]);
     } catch (err) {
-      console.error("Erro no upload geral:", err);
+      console.error(err);
       abrirModal("error", "Falha no Upload", err.message || "Tente novamente.");
     } finally {
       setEnviandoFotoGeral(false);
@@ -529,16 +516,12 @@ export default function GestaoHoteis() {
 
     const vagasRestantes = 18 - fotosParque.length;
     if (vagasRestantes <= 0) {
-      abrirModal("error", "Limite Atingido", "Você já atingiu o limite máximo de 18 fotos de parques para este hotel.");
+      abrirModal("error", "Limite Atingido", "Você já atingiu o limite máximo de 18 fotos de parques.");
       e.target.value = "";
       return;
     }
 
     const arquivosParaEnviar = files.slice(0, vagasRestantes);
-    if (files.length > vagasRestantes) {
-      abrirModal("error", "Limite Parcial", `Você selecionou ${files.length} fotos, mas apenas ${vagasRestantes} foram adicionadas para respeitar o limite máximo de 18.`);
-    }
-
     setEnviandoFotoParque(true);
     try {
       const urls = [];
@@ -548,7 +531,7 @@ export default function GestaoHoteis() {
       }
       setFotosParque((prev) => [...prev, ...urls]);
     } catch (err) {
-      console.error("Erro no upload dos parques:", err);
+      console.error(err);
       abrirModal("error", "Falha no Upload", err.message || "Tente novamente.");
     } finally {
       setEnviandoFotoParque(false);
@@ -610,16 +593,12 @@ export default function GestaoHoteis() {
     const fotosAtuais = tiposApto[index].fotos || [];
     const vagasRestantes = 10 - fotosAtuais.length;
     if (vagasRestantes <= 0) {
-      abrirModal("error", "Limite Atingido", "Esta categoria de apartamento já atingiu o limite máximo de 10 fotos.");
+      abrirModal("error", "Limite Atingido", "Limite máximo de 10 fotos por quarto atingido.");
       e.target.value = "";
       return;
     }
 
     const arquivosParaEnviar = files.slice(0, vagasRestantes);
-    if (files.length > vagasRestantes) {
-      abrirModal("error", "Limite Parcial", `Você selecionou ${files.length} fotos, mas apenas ${vagasRestantes} foram adicionadas para respeitar o limite máximo de 10 por quarto.`);
-    }
-
     setEnviandoFotoAptoIndex(index);
     try {
       const urls = [];
@@ -637,7 +616,7 @@ export default function GestaoHoteis() {
         return lista;
       });
     } catch (err) {
-      console.error("Erro no upload do apto:", err);
+      console.error(err);
       abrirModal("error", "Falha no Upload", err.message || "Tente novamente.");
     } finally {
       setEnviandoFotoAptoIndex(null);
@@ -717,6 +696,7 @@ export default function GestaoHoteis() {
     setDescricaoHtml("");
     setObservacoesHtml("");
     setTarifasCadastradas([]);
+    limparFormTarifa();
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = "";
@@ -769,6 +749,7 @@ export default function GestaoHoteis() {
     setMostrarVideoParque(hotel.mostrarVideoParque !== false);
     setDescricaoHtml(hotel.descricao || "");
     setObservacoesHtml(hotel.observacoes || "");
+    limparFormTarifa();
 
     setTimeout(() => {
       if (descRef.current) descRef.current.innerHTML = hotel.descricao || "";
@@ -893,8 +874,14 @@ export default function GestaoHoteis() {
   };
 
   // =========================================================================
-  // HANDLERS TARIFÁRIO (Aba 5)
+  // HANDLERS TARIFÁRIO INTELIGENTE (Aba 5)
   // =========================================================================
+  const selecionarPredefinicaoDias = (tipo) => {
+    if (tipo === "todos") setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
+    if (tipo === "semana") setTarifaDiasSemana([0, 1, 2, 3, 4]); // Dom a Qui
+    if (tipo === "fim_de_semana") setTarifaDiasSemana([5, 6]); // Sex e Sáb
+  };
+
   const toggleDiaSemanaTarifa = (diaId) => {
     setTarifaDiasSemana((prev) =>
       prev.includes(diaId) ? prev.filter((d) => d !== diaId) : [...prev, diaId]
@@ -910,6 +897,50 @@ export default function GestaoHoteis() {
         [campo]: formatado,
       },
     }));
+  };
+
+  const limparFormTarifa = () => {
+    setTarifaEditandoId(null);
+    setTarifaNome("");
+    setTarifaDataInicio("");
+    setTarifaDataFim("");
+    setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
+    setTarifaMinNoites("1");
+    setTarifaPacoteFechado(false);
+    setTarifaPrioridade("1");
+    setTarifaAptoVinculado("todos");
+    setTarifaValores({
+      cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+      cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+      cafe_jantar: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+      pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+      sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+    });
+  };
+
+  const iniciarEdicaoTarifa = (t) => {
+    setTarifaEditandoId(t.id);
+    setTarifaNome(t.nome || "");
+    setTarifaDataInicio(t.dataInicio || "");
+    setTarifaDataFim(t.dataFim || "");
+    setTarifaDiasSemana(t.diasSemana || [0, 1, 2, 3, 4, 5, 6]);
+    setTarifaMinNoites(String(t.minimoNoites || 1));
+    setTarifaPacoteFechado(Boolean(t.pacoteFechado));
+    setTarifaPrioridade(String(t.prioridade || 1));
+    setTarifaAptoVinculado(t.aptoVinculado || "todos");
+
+    const novosValores = {};
+    REGIMES_LISTA.forEach((r) => {
+      const dadosR = t.valores?.[r.id] || {};
+      novosValores[r.id] = {
+        single: dadosR.single ? formatarMoedaInput(String(Math.round(dadosR.single * 100))) : "",
+        duplo: dadosR.duplo ? formatarMoedaInput(String(Math.round(dadosR.duplo * 100))) : "",
+        adicAdulto: dadosR.adicAdulto ? formatarMoedaInput(String(Math.round(dadosR.adicAdulto * 100))) : "",
+        adicCrianca: dadosR.adicCrianca ? formatarMoedaInput(String(Math.round(dadosR.adicCrianca * 100))) : "",
+      };
+    });
+    setTarifaValores(novosValores);
+    window.scrollTo({ top: 300, behavior: "smooth" });
   };
 
   const salvarNovaTarifa = async () => {
@@ -942,28 +973,27 @@ export default function GestaoHoteis() {
         diasSemana: tarifaDiasSemana,
         minimoNoites: parseInt(tarifaMinNoites, 10) || 1,
         pacoteFechado: Boolean(tarifaPacoteFechado),
+        prioridade: parseInt(tarifaPrioridade, 10) || 1,
+        aptoVinculado: tarifaAptoVinculado || "todos",
         ativo: true,
         valores: valoresNumericos,
-        criadoEm: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), dadosTarifa);
-      
-      setTarifaNome("");
-      setTarifaDataInicio("");
-      setTarifaDataFim("");
-      setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
-      setTarifaMinNoites("1");
-      setTarifaPacoteFechado(false);
-      setTarifaValores({
-        cafe: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
-        cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
-        cafe_jantar: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
-        pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
-        sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
-      });
+      if (tarifaEditandoId) {
+        await updateDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaEditandoId), {
+          ...dadosTarifa,
+          atualizadoEm: serverTimestamp(),
+        });
+        abrirModal("success", "Tarifa Atualizada!", "Período tarifário atualizado com sucesso.");
+      } else {
+        await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), {
+          ...dadosTarifa,
+          criadoEm: serverTimestamp(),
+        });
+        abrirModal("success", "Tarifa Salva!", "Nova regra de tarifa adicionada ao hotel.");
+      }
 
-      abrirModal("success", "Tarifa Salva!", "Tarifa adicionada com sucesso.");
+      limparFormTarifa();
       carregarTarifasERegras(hotelEditandoId);
     } catch (err) {
       console.error(err);
@@ -1250,7 +1280,7 @@ export default function GestaoHoteis() {
               </button>
             </div>
 
-            {/* BARRA DE NAVEGAÇÃO POR ABAS (TABS) */}
+            {/* BARRA DE NAVEGAÇÃO POR ABAS */}
             <div className="bg-slate-100 p-1.5 rounded-2xl border border-slate-200 flex flex-wrap gap-1 shadow-sm">
               <button
                 type="button"
@@ -1309,7 +1339,6 @@ export default function GestaoHoteis() {
                 )}
               </button>
 
-              {/* ABA 5: TARIFÁRIO (VISÍVEL APENAS COM A FEATURE FLAG ATIVA) */}
               {temPermissaoTarifario && (
                 <button
                   type="button"
@@ -1331,9 +1360,7 @@ export default function GestaoHoteis() {
               )}
             </div>
 
-            {/* ============================================================== */}
-            {/* ABA 1: SOBRE O HOTEL, INFORMAÇÕES BÁSICAS & WHATSAPP          */}
-            {/* ============================================================== */}
+            {/* ABA 1: SOBRE */}
             {abaAtiva === "sobre" && (
               <div className="space-y-5">
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
@@ -1471,7 +1498,6 @@ export default function GestaoHoteis() {
                       />
                     </div>
 
-                    {/* FORMAS DE PAGAMENTO COM TEXTOS LIVRES */}
                     <div className="md:col-span-12 space-y-2 pt-1 border-t border-slate-100">
                       <label className="text-xs font-bold text-slate-700 uppercase block flex items-center gap-1.5">
                         <CreditCard className="w-3.5 h-3.5 text-brand-700" />
@@ -1690,9 +1716,7 @@ export default function GestaoHoteis() {
               </div>
             )}
 
-            {/* ============================================================== */}
-            {/* ABA 2: VÍDEOS                                                  */}
-            {/* ============================================================== */}
+            {/* ABA 2: VÍDEOS */}
             {abaAtiva === "videos" && (
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
                 <div className="border-b border-slate-100 pb-3">
@@ -1777,9 +1801,7 @@ export default function GestaoHoteis() {
               </div>
             )}
 
-            {/* ============================================================== */}
-            {/* ABA 3: FOTOS                                                   */}
-            {/* ============================================================== */}
+            {/* ABA 3: FOTOS */}
             {abaAtiva === "fotos" && (
               <div className="space-y-6">
                 <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
@@ -1918,9 +1940,7 @@ export default function GestaoHoteis() {
               </div>
             )}
 
-            {/* ============================================================== */}
-            {/* ABA 4: APARTAMENTOS                                            */}
-            {/* ============================================================== */}
+            {/* ABA 4: APARTAMENTOS */}
             {abaAtiva === "apartamentos" && (
               <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -2031,9 +2051,7 @@ export default function GestaoHoteis() {
               </div>
             )}
 
-            {/* ============================================================== */}
-            {/* ABA 5: TARIFÁRIO & REGRAS (ISOLADA POR FEATURE FLAG)            */}
-            {/* ============================================================== */}
+            {/* ABA 5: TARIFÁRIO INTELIGENTE */}
             {abaAtiva === "tarifario" && temPermissaoTarifario && (
               <div className="space-y-6">
                 {!hotelEditandoId ? (
@@ -2046,18 +2064,27 @@ export default function GestaoHoteis() {
                   </div>
                 ) : (
                   <>
-                    {/* 5.1 FORMULÁRIO DE CADASTRO/EDIÇÃO DE TARIFAS */}
+                    {/* FORMULÁRIO DE CADASTRO/EDIÇÃO DE TARIFAS */}
                     <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
                       <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                         <div>
                           <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
                             <CalendarDays className="w-5 h-5 text-amber-600" />
-                            Cadastrar Nova Tarifa / Temporada
+                            {tarifaEditandoId ? "Editar Tarifa Selecionada" : "Cadastrar Nova Tarifa / Temporada"}
                           </h3>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            Defina valores por noite, mínimo de estadias e regras de pacotes para este hotel.
+                            Configure períodos, regras de dias da semana e valores por pensão sem conflito.
                           </p>
                         </div>
+                        {tarifaEditandoId && (
+                          <button
+                            type="button"
+                            onClick={limparFormTarifa}
+                            className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
+                          >
+                            Cancelar Edição
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -2067,7 +2094,7 @@ export default function GestaoHoteis() {
                           </label>
                           <input
                             type="text"
-                            placeholder="Ex: Baixa Temporada, Feriado Finados, Alta Julho"
+                            placeholder="Ex: Baixa Semana, Final de Semana, Feriado Finados"
                             value={tarifaNome}
                             onChange={(e) => setTarifaNome(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
@@ -2098,10 +2125,38 @@ export default function GestaoHoteis() {
                           />
                         </div>
 
-                        <div className="md:col-span-12">
-                          <label className="text-xs font-bold text-slate-700 uppercase block mb-1.5">
-                            Aplicar nestes dias da semana:
-                          </label>
+                        {/* SELEÇÃO INTELIGENTE DE DIAS DA SEMANA */}
+                        <div className="md:col-span-12 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label className="text-xs font-bold text-slate-700 uppercase block">
+                              Aplicar nestes dias da semana:
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">Atalhos:</span>
+                              <button
+                                type="button"
+                                onClick={() => selecionarPredefinicaoDias("todos")}
+                                className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
+                              >
+                                Todos
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => selecionarPredefinicaoDias("semana")}
+                                className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition"
+                              >
+                                Dom a Qui (Semana)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => selecionarPredefinicaoDias("fim_de_semana")}
+                                className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition"
+                              >
+                                Sex e Sáb (Fim de Semana)
+                              </button>
+                            </div>
+                          </div>
+
                           <div className="flex flex-wrap gap-2">
                             {DIAS_SEMANA_NOMES.map((d) => {
                               const ativo = tarifaDiasSemana.includes(d.id);
@@ -2123,10 +2178,52 @@ export default function GestaoHoteis() {
                           </div>
                         </div>
 
+                        {/* PRIORIDADE E CATEGORIA DO QUARTO */}
+                        <div className="md:col-span-6 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+                          <label className="text-xs font-bold text-slate-800 uppercase block">
+                            Prioridade da Regra
+                          </label>
+                          <select
+                            value={tarifaPrioridade}
+                            onChange={(e) => setTarifaPrioridade(e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                          >
+                            <option value="1">1 - Padrão / Meio de Semana</option>
+                            <option value="2">2 - Final de Semana</option>
+                            <option value="3">3 - Feriado / Pacote Especial</option>
+                            <option value="4">4 - Alta Temporada Prioritária</option>
+                            <option value="5">5 - Máxima (Sobrepõe qualquer outra)</option>
+                          </select>
+                          <span className="text-[10px] text-slate-500 block">
+                            Se duas tarifas caírem no mesmo dia, o sistema calcula pela de maior prioridade.
+                          </span>
+                        </div>
+
+                        <div className="md:col-span-6 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+                          <label className="text-xs font-bold text-slate-800 uppercase block">
+                            Válido para qual Acomodação?
+                          </label>
+                          <select
+                            value={tarifaAptoVinculado}
+                            onChange={(e) => setTarifaAptoVinculado(e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                          >
+                            <option value="todos">Todos os Apartamentos (Geral)</option>
+                            {tiposApto.map((ap, idx) => (
+                              <option key={idx} value={ap.nome}>
+                                Apenas: {ap.nome}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-[10px] text-slate-500 block">
+                            Permite ter preços diferentes por tipo de apartamento (ex: Luxo vs Standard).
+                          </span>
+                        </div>
+
                         <div className="md:col-span-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
                           <div>
                             <span className="text-xs font-bold text-slate-800 uppercase block">Mínimo de Noites</span>
-                            <span className="text-[11px] text-slate-500">Menos diárias que isso serão bloqueadas.</span>
+                            <span className="text-[11px] text-slate-500">Bloqueia períodos menores.</span>
                           </div>
                           <input
                             type="number"
@@ -2140,7 +2237,7 @@ export default function GestaoHoteis() {
                         <div className="md:col-span-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
                           <div>
                             <span className="text-xs font-bold text-slate-800 uppercase block">Trava de Pacote Fechado?</span>
-                            <span className="text-[11px] text-slate-500">Impede entrada fracionada (ex: feriado fechado).</span>
+                            <span className="text-[11px] text-slate-500">Exige contratação integral do período.</span>
                           </div>
                           <ToggleSwitch
                             ativo={tarifaPacoteFechado}
@@ -2156,7 +2253,6 @@ export default function GestaoHoteis() {
                           Valores das Diárias por Regime de Pensão:
                         </label>
 
-                        {/* Abas dos regimes */}
                         <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
                           {REGIMES_LISTA.map((reg) => (
                             <button
@@ -2174,7 +2270,6 @@ export default function GestaoHoteis() {
                           ))}
                         </div>
 
-                        {/* Campos do regime ativo */}
                         <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3">
                           <div>
                             <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
@@ -2242,12 +2337,12 @@ export default function GestaoHoteis() {
                           className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow flex items-center gap-1.5 disabled:opacity-50"
                         >
                           {salvandoTarifa ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                          <span>Adicionar Tarifa à Tabela</span>
+                          <span>{tarifaEditandoId ? "Atualizar Tarifa" : "Adicionar Tarifa à Tabela"}</span>
                         </button>
                       </div>
                     </div>
 
-                    {/* 5.2 TABELA DE TARIFAS CADASTRADAS */}
+                    {/* LISTA DE TARIFAS CADASTRADAS COM BOTÃO DE EDIÇÃO */}
                     <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                         Tarifas Ativas no Hotel ({tarifasCadastradas.length})
@@ -2267,7 +2362,7 @@ export default function GestaoHoteis() {
                           {tarifasCadastradas.map((t) => (
                             <div
                               key={t.id}
-                              className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                              className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs hover:bg-slate-100/70 transition"
                             >
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-2">
@@ -2280,13 +2375,29 @@ export default function GestaoHoteis() {
                                   <span className="bg-slate-200 text-slate-700 text-[10px] font-semibold px-1.5 py-0.2 rounded">
                                     Mín: {t.minimoNoites} noite(s)
                                   </span>
+                                  <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-1.5 py-0.2 rounded">
+                                    Prioridade {t.prioridade || 1}
+                                  </span>
+                                  {t.aptoVinculado && t.aptoVinculado !== "todos" && (
+                                    <span className="bg-amber-100 text-amber-900 text-[10px] font-semibold px-1.5 py-0.2 rounded">
+                                      {t.aptoVinculado}
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-slate-500">
-                                  {t.dataInicio?.split("-").reverse().join("/")} até {t.dataFim?.split("-").reverse().join("/")}
+                                  {t.dataInicio?.split("-").reverse().join("/")} até {t.dataFim?.split("-").reverse().join("/")} • Dias: {t.diasSemana?.map((d) => DIAS_SEMANA_NOMES.find((item) => item.id === d)?.label).join(", ")}
                                 </p>
                               </div>
 
                               <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => iniciarEdicaoTarifa(t)}
+                                  className="p-1.5 text-slate-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
+                                  title="Editar esta tarifa"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
                                 <ToggleSwitch
                                   ativo={t.ativo !== false}
                                   onToggle={() => alternarStatusTarifa(t.id, t.ativo !== false)}
@@ -2307,7 +2418,7 @@ export default function GestaoHoteis() {
                       )}
                     </div>
 
-                    {/* 5.3 REGRAS DE CORTESIAS E ADICIONAIS DE CRIANÇAS */}
+                    {/* REGRAS DE CRIANÇAS */}
                     <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                         <div>
@@ -2408,7 +2519,7 @@ export default function GestaoHoteis() {
               </div>
             )}
 
-            {/* AÇÕES FINAIS (RODAPÉ DO FORMULÁRIO) */}
+            {/* AÇÕES FINAIS (RODAPÉ) */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 {abaAtiva !== "sobre" && (
