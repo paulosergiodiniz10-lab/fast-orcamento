@@ -6,11 +6,13 @@ import {
   Copy, Check, MessageSquare, Building2, ExternalLink, 
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
-  Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin
+  Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin,
+  Percent, Sparkles, Tag
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
-import { collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { calcularTarifasEstadia } from "../lib/calculadoraTarifas";
 
 const REGIMES_OPCOES = [
   { id: "sem_refeicao", label: "Sem refeições" },
@@ -72,10 +74,10 @@ const gerarSlug = (texto) => {
     .replace(/-+/g, "-");
 };
 
-// Componente do Calendário com seleção separada de Check-in e Check-out
+// Componente do Calendário Moderno
 function DateRangePickerModerno({ checkin, checkout, onSelectCheckin, onSelectCheckout, dataMinima }) {
   const [aberto, setAberto] = useState(false);
-  const [campoAtivo, setCampoAtivo] = useState("checkin"); // "checkin" ou "checkout"
+  const [campoAtivo, setCampoAtivo] = useState("checkin");
   const containerRef = useRef(null);
 
   const hoje = dataMinima || obterDataHojeLocal();
@@ -325,6 +327,15 @@ function GeradorOrcamentoConteudo() {
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
+  // =========================================================================
+  // ESTADOS DO MÓDULO TARIFÁRIO & DESCONTO (Blindado por Feature Flag)
+  // =========================================================================
+  const [tarifasHotelAtivo, setTarifasHotelAtivo] = useState([]);
+  const [regrasCriancasHotel, setRegrasCriancasHotel] = useState({});
+  const [alertaTarifario, setAlertaTarifario] = useState("");
+  const [descontoTipo, setDescontoTipo] = useState("porcentagem"); // 'porcentagem' ou 'valor'
+  const [descontoValor, setDescontoValor] = useState("");
+
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
       id: 1,
@@ -399,7 +410,6 @@ function GeradorOrcamentoConteudo() {
       if (lista.length > 0) {
         setHoteis(lista);
 
-        // Se tiver apenas 1 hotel cadastrado, já fixa a cidade e o hotel automaticamente
         if (lista.length === 1) {
           const unicoHotel = lista[0];
           if (unicoHotel.cidade) {
@@ -409,7 +419,6 @@ function GeradorOrcamentoConteudo() {
           return;
         }
 
-        // Se houver mais de um hotel, verifica parâmetros na URL
         const hotelNomeUrl = searchParams.get("hotelNome");
         const hotelEncontrado = hotelNomeUrl ? lista.find((h) => h.nome === hotelNomeUrl) : null;
         if (hotelEncontrado) {
@@ -426,12 +435,44 @@ function GeradorOrcamentoConteudo() {
 
   const agencyIdSafe = (id) => id || "";
 
+  // Carrega tarifas e regras de crianças do hotel selecionado se a agência tiver permissão
+  const carregarDadosTarifarioHotel = async (hotelId) => {
+    if (!agencia?.permiteTarifario || !hotelId) {
+      setTarifasHotelAtivo([]);
+      setRegrasCriancasHotel({});
+      return;
+    }
+
+    try {
+      // 1. Tarifas do hotel
+      const colTarifas = collection(db, "hoteis", hotelId, "tarifas");
+      const snapTarifas = await getDocs(colTarifas);
+      const lista = [];
+      snapTarifas.forEach((d) => lista.push({ id: d.id, ...d.data() }));
+      setTarifasHotelAtivo(lista);
+
+      // 2. Regras de Crianças
+      const docRegrasRef = doc(db, "hoteis", hotelId, "configuracoes", "regras_criancas");
+      const snapRegras = await getDoc(docRegrasRef);
+      if (snapRegras.exists()) {
+        setRegrasCriancasHotel(snapRegras.data());
+      } else {
+        setRegrasCriancasHotel({});
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados tarifários:", err);
+    }
+  };
+
   const selecionarHotel = (hotel) => {
     if (!hotel) {
       setHotelSelecionado(null);
       setParquesMarcados([]);
       setAptoSelecionado("");
       setRegimesValores({});
+      setTarifasHotelAtivo([]);
+      setRegrasCriancasHotel({});
+      setAlertaTarifario("");
       return;
     }
 
@@ -440,7 +481,11 @@ function GeradorOrcamentoConteudo() {
     setAptoSelecionado("");
     setRegimesValores({});
 
-    // Pega exatamente o que foi digitado em cada campo, sem forçar prefixos fixos como "Cartão de Crédito:", "PIX:" ou "Boleto:"
+    // Carrega módulo tarifário se agência for permitida
+    if (agencia?.permiteTarifario) {
+      carregarDadosTarifarioHotel(hotel.id);
+    }
+
     const partesPagamento = [];
     if (hotel.pagamentoCartao?.trim()) {
       partesPagamento.push(`• ${hotel.pagamentoCartao.trim()}`);
@@ -467,6 +512,69 @@ function GeradorOrcamentoConteudo() {
       setFormaPagamento("• Em até 10x sem juros\n• Com desconto especial no PIX");
     }
   };
+
+  // =========================================================================
+  // MOTOR DE CÁLCULO AUTOMÁTICO EM TEMPO REAL (Apenas Modo Individual)
+  // =========================================================================
+  useEffect(() => {
+    if (!agencia?.permiteTarifario || !hotelSelecionado || abaAtiva !== "individual") {
+      setAlertaTarifario("");
+      return;
+    }
+
+    if (!tarifasHotelAtivo || tarifasHotelAtivo.length === 0) {
+      setAlertaTarifario("");
+      return;
+    }
+
+    // Extrai números de idades das crianças
+    const numCr = parseInt(criancas, 10) || 0;
+    const arrayIdades = [];
+    if (numCr > 0 && idadesCriancas.trim()) {
+      const matches = idadesCriancas.match(/\d+/g);
+      if (matches) {
+        matches.forEach((m) => arrayIdades.push(parseInt(m, 10)));
+      }
+    }
+
+    const resultado = calcularTarifasEstadia({
+      checkin,
+      checkout,
+      qtdAdultos: parseInt(adultos, 10) || 2,
+      idadesCriancas: arrayIdades,
+      tarifasHotel: tarifasHotelAtivo,
+      regrasCriancas: regrasCriancasHotel,
+      desconto: {
+        tipo: descontoTipo,
+        valor: parseFloat(descontoValor) || 0,
+      },
+    });
+
+    if (resultado.sucesso) {
+      setAlertaTarifario("");
+      if (resultado.valoresPorRegime && Object.keys(resultado.valoresPorRegime).length > 0) {
+        setRegimesValores((prev) => ({
+          ...prev,
+          ...resultado.valoresPorRegime,
+        }));
+      }
+    } else {
+      setAlertaTarifario(resultado.mensagem || "");
+    }
+  }, [
+    checkin,
+    checkout,
+    adultos,
+    criancas,
+    idadesCriancas,
+    tarifasHotelAtivo,
+    regrasCriancasHotel,
+    descontoTipo,
+    descontoValor,
+    hotelSelecionado,
+    abaAtiva,
+    agencia,
+  ]);
 
   const cidadesDisponiveis = Array.from(
     new Set(hoteis.map((h) => h.cidade || "Caldas Novas").filter(Boolean))
@@ -533,7 +641,6 @@ function GeradorOrcamentoConteudo() {
     setClienteNome("");
     setClienteWhatsapp("");
 
-    // Se tiver apenas 1 hotel, mantém ele selecionado para agilizar
     if (hoteis.length === 1) {
       const unicoHotel = hoteis[0];
       if (unicoHotel.cidade) setCidadeSelecionada(unicoHotel.cidade);
@@ -550,6 +657,8 @@ function GeradorOrcamentoConteudo() {
     setCriancas("0");
     setIdadesCriancas("");
     setRegimesValores({});
+    setDescontoValor("");
+    setAlertaTarifario("");
     setApartamentosGrupo([
       {
         id: Date.now(),
@@ -659,7 +768,6 @@ function GeradorOrcamentoConteudo() {
 
   const numCriancas = parseInt(criancas, 10) || 0;
 
-  // Montagem limpa e condicional com título dinâmico das inclusões e dos valores
   const gerarTextoZap = (urlVitrine, idDoc, modo = "copiar") => {
     if (!hotelSelecionado) {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
@@ -689,7 +797,6 @@ function GeradorOrcamentoConteudo() {
       texto += `\n`;
     }
 
-    // Título dos Valores (Opcional & Editável pelo cadastro do hotel)
     const mostrarTituloValores = hotelSelecionado.mostrarTituloValores !== false;
     const tituloValores = hotelSelecionado.tituloValoresCustomizado?.trim() || "Valor total do pacote:";
     if (mostrarTituloValores && tituloValores.length > 0) {
@@ -840,6 +947,7 @@ function GeradorOrcamentoConteudo() {
       apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
       formaPagamento,
       aptosRestantes,
+      descontoAplicado: descontoValor ? { tipo: descontoTipo, valor: descontoValor } : null,
       criadoEm: serverTimestamp(),
     };
 
@@ -1057,8 +1165,6 @@ function GeradorOrcamentoConteudo() {
 
           {/* ================= ESCOLHA DA CIDADE E HOSPEDAGEM ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-            
-            {/* 1. SELETOR DE CIDADE */}
             <div>
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-brand-700" />
@@ -1078,7 +1184,6 @@ function GeradorOrcamentoConteudo() {
               </select>
             </div>
 
-            {/* 2. SELETOR DE HOSPEDAGEM (APENAS O NOME DO HOTEL) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1116,7 +1221,6 @@ function GeradorOrcamentoConteudo() {
               )}
             </div>
 
-            {/* SELEÇÃO DO TIPO DE APARTAMENTO (MODO INDIVIDUAL) */}
             {abaAtiva === "individual" && hotelSelecionado?.tiposApto?.length > 0 && (
               <div className="pt-2 border-t border-slate-100">
                 <label className="text-xs font-bold text-slate-600 uppercase block mb-1.5 flex items-center gap-1">
@@ -1154,7 +1258,7 @@ function GeradorOrcamentoConteudo() {
             )}
           </div>
 
-          {/* ================= DATAS (CHECK-IN E CHECK-OUT SEPARADOS) ================= */}
+          {/* ================= DATAS ================= */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
               <CalendarIcon className="w-4 h-4 text-brand-700" />
@@ -1167,6 +1271,14 @@ function GeradorOrcamentoConteudo() {
               onSelectCheckout={setCheckout}
               dataMinima={hojeStr}
             />
+
+            {/* AVISO DO MOTOR TARIFÁRIO (SE HOUVER BLOQUEIO OU PACOTE QUEBRADO) */}
+            {alertaTarifario && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2 text-xs text-amber-800 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="font-medium">{alertaTarifario}</span>
+              </div>
+            )}
           </div>
 
           {/* ================= CONTEÚDO DA ABA INDIVIDUAL ================= */}
@@ -1210,7 +1322,6 @@ function GeradorOrcamentoConteudo() {
                       className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
                     />
 
-                    {/* Chips rápidos pré-cadastrados do Hotel */}
                     {opcoesCriancasHotel.length > 0 && (
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
                         <span className="text-[10px] uppercase font-bold text-slate-400">Opções rápidas:</span>
@@ -1234,10 +1345,47 @@ function GeradorOrcamentoConteudo() {
                 )}
               </div>
 
+              {/* REGIMES E VALORES COM MÓDULO DE DESCONTO RÁPIDO */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
-                  Regimes de Pensão e Valores (R$)
-                </label>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    Regimes de Pensão e Valores (R$)
+                  </label>
+
+                  {/* BLOCO DE DESCONTO EM TEMPO REAL (LIBERADO PARA PLANO TARIFÁRIO) */}
+                  {agencia?.permiteTarifario && (
+                    <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2 py-1 rounded-lg">
+                      <Tag className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="text-[11px] font-bold text-emerald-900 uppercase">Desconto:</span>
+                      
+                      <div className="flex items-center border border-emerald-300 rounded overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => setDescontoTipo("porcentagem")}
+                          className={`px-1.5 py-0.5 text-[10px] font-black ${descontoTipo === "porcentagem" ? "bg-emerald-600 text-white" : "text-slate-600"}`}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDescontoTipo("valor")}
+                          className={`px-1.5 py-0.5 text-[10px] font-black ${descontoTipo === "valor" ? "bg-emerald-600 text-white" : "text-slate-600"}`}
+                        >
+                          R$
+                        </button>
+                      </div>
+
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={descontoValor}
+                        onChange={(e) => setDescontoValor(e.target.value)}
+                        className="w-14 bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-center font-bold text-emerald-950 outline-none focus:ring-1 focus:ring-emerald-600"
+                      />
+                    </div>
+                  )}
+                </div>
+
                 {REGIMES_OPCOES.map((reg) => (
                   <div key={reg.id} className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
@@ -1315,7 +1463,7 @@ function GeradorOrcamentoConteudo() {
                               className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
                               title="Copiar configuração do apartamento anterior"
                             >
-                              <CopyPlus className="w-3 hand-3" />
+                              <CopyPlus className="w-3 h-3" />
                               Repetir Apto #{index}
                             </button>
                           )}
