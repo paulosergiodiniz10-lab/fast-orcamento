@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { adminDb } from "../../../lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 
+// Garante que a Vercel trate a rota como dinâmica no ambiente Node.js
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 // Validação da senha master
 function autenticacaoValida(req) {
   const authHeader = req.headers.get("x-admin-master-key");
