@@ -18,6 +18,7 @@ export default function GestaoOrcamentos() {
   const router = useRouter();
   const [agencia, setAgencia] = useState(null);
   const [orcamentos, setOrcamentos] = useState([]);
+  const [colaboradores, setColaboradores] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
   // Controle de cópia rápida do telefone
@@ -28,6 +29,7 @@ export default function GestaoOrcamentos() {
   const [filtroCheckin, setFiltroCheckin] = useState("");
   const [filtroPeriodo, setFiltroPeriodo] = useState("todos"); // 'todos', 'hoje', 'ontem', '7dias', 'personalizado'
   const [dataPersonalizada, setDataPersonalizada] = useState("");
+  const [filtroColaborador, setFiltroColaborador] = useState("todos");
 
   // Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -57,7 +59,7 @@ export default function GestaoOrcamentos() {
       tipo: "alert",
       titulo,
       mensagem,
-      onConfirm: null,
+      onConfirm,
     });
   };
 
@@ -73,30 +75,50 @@ export default function GestaoOrcamentos() {
     }
     const ag = JSON.parse(dadosSalvos);
     setAgencia(ag);
-    carregarOrcamentos(ag.id);
+    carregarDados(ag.id);
   }, []);
 
-  const carregarOrcamentos = async (agenciaId) => {
+  const carregarDados = async (agenciaId) => {
     try {
       setCarregando(true);
-      const q = query(
+
+      // 1. Carrega orçamentos da agência
+      const qOrc = query(
         collection(db, "orcamentos"),
         where("agenciaId", "==", agenciaId)
       );
-      const snap = await getDocs(q);
-      const lista = [];
-      snap.forEach((d) => {
-        lista.push({ id: d.id, ...d.data() });
+      const snapOrc = await getDocs(qOrc);
+      const listaOrc = [];
+      snapOrc.forEach((d) => {
+        listaOrc.push({ id: d.id, ...d.data() });
       });
 
-      // Ordena por data de criação mais recente
-      lista.sort((a, b) => {
+      listaOrc.sort((a, b) => {
         const tA = a.criadoEm?.seconds || 0;
         const tB = b.criadoEm?.seconds || 0;
         return tB - tA;
       });
+      setOrcamentos(listaOrc);
 
-      setOrcamentos(lista);
+      // 2. Carrega lista de colaboradores para o filtro
+      try {
+        const colabRef = collection(db, "agencias", agenciaId, "usuarios");
+        const snapColab = await getDocs(colabRef);
+        const listaColab = [];
+        snapColab.forEach((d) => {
+          const dados = d.data();
+          if (dados.nome) {
+            listaColab.push({
+              id: d.id,
+              nome: dados.nome,
+              login: dados.login || "",
+            });
+          }
+        });
+        setColaboradores(listaColab);
+      } catch (errColab) {
+        console.warn("Colaboradores não carregados:", errColab);
+      }
     } catch (err) {
       console.error("Erro ao carregar orçamentos:", err);
     } finally {
@@ -109,6 +131,7 @@ export default function GestaoOrcamentos() {
     setFiltroCheckin("");
     setFiltroPeriodo("todos");
     setDataPersonalizada("");
+    setFiltroColaborador("todos");
     setPaginaAtual(1);
   };
 
@@ -153,7 +176,6 @@ export default function GestaoOrcamentos() {
     return `${dia}/${mes}/${ano} às ${hora}:${min}`;
   };
 
-  // Formata os hóspedes de forma limpa na listagem interna
   const formatarHospedesLimpo = (orc) => {
     if (!orc) return "";
     const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
@@ -174,7 +196,6 @@ export default function GestaoOrcamentos() {
     return "Não informado";
   };
 
-  // Formata o número visualmente: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
   const formatarNumeroTelefone = (tel) => {
     if (!tel) return "";
     const num = tel.replace(/\D/g, "");
@@ -219,6 +240,11 @@ export default function GestaoOrcamentos() {
     const bateCheckin =
       filtroCheckin === "" || (o.checkin && o.checkin === filtroCheckin);
 
+    const bateColaborador =
+      filtroColaborador === "todos" ||
+      (o.criadoPor?.login && o.criadoPor.login.toLowerCase() === filtroColaborador.toLowerCase()) ||
+      (o.criadoPor?.nome && o.criadoPor.nome.toLowerCase() === filtroColaborador.toLowerCase());
+
     let bateDataCriacao = true;
     if (filtroPeriodo !== "todos" && o.criadoEm?.seconds) {
       const dataCriacao = new Date(o.criadoEm.seconds * 1000);
@@ -246,7 +272,7 @@ export default function GestaoOrcamentos() {
       }
     }
 
-    return bateGeral && bateCheckin && bateDataCriacao;
+    return bateGeral && bateCheckin && bateDataCriacao && bateColaborador;
   });
 
   const totalPaginas = Math.ceil(orcamentosFiltrados.length / ITENS_POR_PAGINA) || 1;
@@ -286,7 +312,7 @@ export default function GestaoOrcamentos() {
         </div>
 
         <button
-          onClick={() => agencia && carregarOrcamentos(agencia.id)}
+          onClick={() => agencia && carregarDados(agencia.id)}
           className="p-2 bg-brand-800 hover:bg-brand-700 rounded-lg text-white transition flex items-center gap-1.5 text-xs font-semibold"
           title="Atualizar lista"
         >
@@ -299,7 +325,7 @@ export default function GestaoOrcamentos() {
         {/* BARRA DE PESQUISA, FILTROS E DATAS */}
         <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-            <div className="sm:col-span-6">
+            <div className={`sm:col-span-${ehGestor && colaboradores.length > 0 ? "5" : "6"}`}>
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Pesquisar
               </label>
@@ -318,7 +344,34 @@ export default function GestaoOrcamentos() {
               </div>
             </div>
 
-            <div className="sm:col-span-4">
+            {/* SELETOR DE COLABORADOR (APENAS SE FOR GESTOR E HOUVER COLABORADORES) */}
+            {ehGestor && colaboradores.length > 0 && (
+              <div className="sm:col-span-3">
+                <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                  Vendedor / Autor
+                </label>
+                <div className="relative">
+                  <UserCheck className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <select
+                    value={filtroColaborador}
+                    onChange={(e) => {
+                      setFiltroColaborador(e.target.value);
+                      setPaginaAtual(1);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-2 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold"
+                  >
+                    <option value="todos">Todos os Colaboradores</option>
+                    {colaboradores.map((c) => (
+                      <option key={c.id} value={c.login || c.nome}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div className={`sm:col-span-${ehGestor && colaboradores.length > 0 ? "2" : "4"}`}>
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Check-in
               </label>
@@ -338,7 +391,7 @@ export default function GestaoOrcamentos() {
               <button
                 type="button"
                 onClick={limparFiltros}
-                disabled={!buscaGeral && !filtroCheckin && filtroPeriodo === "todos" && !dataPersonalizada}
+                disabled={!buscaGeral && !filtroCheckin && filtroPeriodo === "todos" && !dataPersonalizada && filtroColaborador === "todos"}
                 className="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Limpar todos os filtros"
               >
@@ -497,7 +550,6 @@ export default function GestaoOrcamentos() {
                               <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md text-[11px] text-slate-700 font-mono">
                                 <span>{formatarNumeroTelefone(orc.clienteWhatsapp)}</span>
 
-                                {/* Ícone do WhatsApp para acesso rápido sem texto */}
                                 <a
                                   href={linkZapDiretoSemMensagem}
                                   target="_blank"
@@ -508,7 +560,6 @@ export default function GestaoOrcamentos() {
                                   <MessageCircle className="w-3.5 h-3.5" />
                                 </a>
 
-                                {/* Ícone para Copiar o número */}
                                 <button
                                   type="button"
                                   onClick={() => copiarTelefone(orc.clienteWhatsapp, orc.id)}
@@ -612,7 +663,7 @@ export default function GestaoOrcamentos() {
               })}
             </div>
 
-            {/* CONTROLES DE PAGINAÇÃO (MÁXIMO 50 POR PÁGINA) */}
+            {/* CONTROLES DE PAGINAÇÃO */}
             {totalPaginas > 1 && (
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between text-xs font-semibold text-slate-600 mt-4">
                 <span>
@@ -646,7 +697,7 @@ export default function GestaoOrcamentos() {
         )}
       </main>
 
-      {/* ================= MODAL ESTILIZADO DE CONFIRMAÇÃO / ALERTA ================= */}
+      {/* MODAL ESTILIZADO DE CONFIRMAÇÃO / ALERTA */}
       {modalConfig.aberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
