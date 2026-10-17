@@ -7,11 +7,14 @@ import {
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
   Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin,
-  Percent, Sparkles, Tag
+  Percent, Sparkles, Tag, ShieldCheck, UserPlus, Lock, Eye, EyeOff, Ban, CheckCircle2
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
-import { collection, addDoc, getDocs, query, where, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { 
+  collection, addDoc, getDocs, query, where, serverTimestamp, 
+  doc, getDoc, updateDoc, setDoc 
+} from "firebase/firestore";
 import { calcularTarifasEstadia } from "../lib/calculadoraTarifas";
 
 const REGIMES_OPCOES = [
@@ -357,12 +360,29 @@ function GeradorOrcamentoConteudo() {
   const [linkGerado, setLinkGerado] = useState("");
   const [idOrcamentoAtual, setIdOrcamentoAtual] = useState("");
 
+  // Modal Alertas Genéricos
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
     tipo: "confirm",
     titulo: "",
     mensagem: "",
     onConfirm: null,
+  });
+
+  // =========================================================================
+  // ESTADOS DO GERENCIAMENTO DE EQUIPE (SUB-USUÁRIOS DA AGÊNCIA)
+  // =========================================================================
+  const [modalEquipeAberto, setModalEquipeAberto] = useState(false);
+  const [usuariosEquipe, setUsuariosEquipe] = useState([]);
+  const [carregandoEquipe, setCarregandoEquipe] = useState(false);
+  const [mostrarSenhasEquipe, setMostrarSenhasEquipe] = useState({});
+  const [salvandoUsuario, setSalvandoUsuario] = useState(false);
+  const [erroUsuario, setErroUsuario] = useState("");
+  const [novoUsuario, setNovoUsuario] = useState({
+    nome: "",
+    login: "",
+    senha: "",
+    permissao: "usuario",
   });
 
   const abrirAlerta = (titulo, mensagem) => {
@@ -435,6 +455,99 @@ function GeradorOrcamentoConteudo() {
 
   const agencyIdSafe = (id) => id || "";
 
+  // Carregar sub-usuários da agência
+  const carregarEquipe = async () => {
+    if (!agencia?.id) return;
+    setCarregandoEquipe(true);
+    try {
+      const colRef = collection(db, "agencias", agencia.id, "usuarios");
+      const snap = await getDocs(colRef);
+      const lista = [];
+      snap.forEach((d) => lista.push({ id: d.id, ...d.data() }));
+      setUsuariosEquipe(lista);
+    } catch (err) {
+      console.error("Erro ao buscar utilizadores:", err);
+    } finally {
+      setCarregandoEquipe(false);
+    }
+  };
+
+  const abrirModalEquipe = () => {
+    setModalEquipeAberto(true);
+    carregarEquipe();
+  };
+
+  const alternarMostrarSenhaEquipe = (id) => {
+    setMostrarSenhasEquipe((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleCriarUsuario = async (e) => {
+    e.preventDefault();
+    setErroUsuario("");
+
+    if (!novoUsuario.nome.trim() || !novoUsuario.login.trim() || !novoUsuario.senha.trim()) {
+      setErroUsuario("Preencha todos os campos.");
+      return;
+    }
+
+    const loginNormalizado = novoUsuario.login.trim().toLowerCase();
+
+    // Impede usar o mesmo login da conta principal da agência
+    if (agencia?.usuario && agencia.usuario.toLowerCase() === loginNormalizado) {
+      setErroUsuario("Este login já é utilizado pela agência principal.");
+      return;
+    }
+
+    // Verifica se já existe na equipe
+    const jaExiste = usuariosEquipe.some((u) => u.login.toLowerCase() === loginNormalizado);
+    if (jaExiste) {
+      setErroUsuario("Já existe um utilizador com este login.");
+      return;
+    }
+
+    setSalvandoUsuario(true);
+    try {
+      const colRef = collection(db, "agencias", agencia.id, "usuarios");
+      await addDoc(colRef, {
+        nome: novoUsuario.nome.trim(),
+        login: loginNormalizado,
+        senha: novoUsuario.senha.trim(),
+        permissao: novoUsuario.permissao || "usuario",
+        status: "ativo",
+        criadoEm: serverTimestamp(),
+      });
+
+      setNovoUsuario({
+        nome: "",
+        login: "",
+        senha: "",
+        permissao: "usuario",
+      });
+
+      await carregarEquipe();
+    } catch (err) {
+      console.error("Erro ao salvar utilizador:", err);
+      setErroUsuario("Não foi possível salvar o utilizador.");
+    } finally {
+      setSalvandoUsuario(false);
+    }
+  };
+
+  const alternarStatusUsuario = async (userId, statusAtual) => {
+    if (!agencia?.id) return;
+    const novoStatus = statusAtual === "ativo" ? "bloqueado" : "ativo";
+    try {
+      const docRef = doc(db, "agencias", agencia.id, "usuarios", userId);
+      await updateDoc(docRef, { status: novoStatus });
+      setUsuariosEquipe((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, status: novoStatus } : u))
+      );
+    } catch (err) {
+      console.error("Erro ao atualizar status:", err);
+      abrirAlerta("Erro", "Não foi possível atualizar o status do utilizador.");
+    }
+  };
+
   // Carrega tarifas e regras de crianças do hotel selecionado se a agência tiver permissão
   const carregarDadosTarifarioHotel = async (hotelId) => {
     if (!agencia?.permiteTarifario || !hotelId) {
@@ -444,14 +557,12 @@ function GeradorOrcamentoConteudo() {
     }
 
     try {
-      // 1. Tarifas do hotel
       const colTarifas = collection(db, "hoteis", hotelId, "tarifas");
       const snapTarifas = await getDocs(colTarifas);
       const lista = [];
       snapTarifas.forEach((d) => lista.push({ id: d.id, ...d.data() }));
       setTarifasHotelAtivo(lista);
 
-      // 2. Regras de Crianças
       const docRegrasRef = doc(db, "hoteis", hotelId, "configuracoes", "regras_criancas");
       const snapRegras = await getDoc(docRegrasRef);
       if (snapRegras.exists()) {
@@ -481,7 +592,6 @@ function GeradorOrcamentoConteudo() {
     setAptoSelecionado("");
     setRegimesValores({});
 
-    // Carrega módulo tarifário se agência for permitida
     if (agencia?.permiteTarifario) {
       carregarDadosTarifarioHotel(hotel.id);
     }
@@ -513,9 +623,6 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
-  // =========================================================================
-  // MOTOR DE CÁLCULO AUTOMÁTICO EM TEMPO REAL (Apenas Modo Individual)
-  // =========================================================================
   useEffect(() => {
     if (!agencia?.permiteTarifario || !hotelSelecionado || abaAtiva !== "individual") {
       setAlertaTarifario("");
@@ -527,7 +634,6 @@ function GeradorOrcamentoConteudo() {
       return;
     }
 
-    // Extrai números de idades das crianças
     const numCr = parseInt(criancas, 10) || 0;
     const arrayIdades = [];
     if (numCr > 0 && idadesCriancas.trim()) {
@@ -935,6 +1041,11 @@ function GeradorOrcamentoConteudo() {
         whatsapp: agencia?.whatsapp || "",
         cadastur: agencia?.cadastur || "",
       },
+      criadoPor: {
+        nome: agencia?.nomeUsuario || agencia?.nome || "Colaborador",
+        login: agencia?.loginUsuario || agencia?.usuario || "",
+        permissao: agencia?.permissao || "gestor",
+      },
       checkin,
       checkout,
       periodoFormatado: formatarDatas(),
@@ -1024,6 +1135,8 @@ function GeradorOrcamentoConteudo() {
     (op) => Boolean(op && op.trim().length > 0)
   );
 
+  const ehGestor = !agencia?.permissao || agencia.permissao === "gestor";
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-12 font-sans relative">
       <header className="bg-brand-900 text-white px-4 py-3 shadow-md sticky top-0 z-30 flex items-center justify-between">
@@ -1033,7 +1146,14 @@ function GeradorOrcamentoConteudo() {
           </div>
           <div>
             <h1 className="font-bold text-base leading-tight tracking-wide">Fast Orçamento</h1>
-            <p className="text-[11px] text-brand-100">{agencia?.nome || "Painel da Agência"}</p>
+            <p className="text-[11px] text-brand-100 flex items-center gap-1.5">
+              <span>{agencia?.nome || "Painel da Agência"}</span>
+              {agencia?.nomeUsuario && (
+                <span className="bg-brand-800/80 px-1.5 py-0.2 rounded text-[10px] text-emerald-300">
+                  {agencia.nomeUsuario} ({ehGestor ? "Gestor" : "Usuário"})
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
@@ -1047,13 +1167,28 @@ function GeradorOrcamentoConteudo() {
             <span className="hidden sm:inline">Cotações</span>
           </Link>
 
-          <Link
-            href="/hoteis"
-            className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
-          >
-            <Hotel className="w-4 h-4" />
-            <span className="hidden sm:inline">Meus Hotéis</span>
-          </Link>
+          {/* O menu de Meus Hotéis e Gestão de Equipa só é exibido para o Gestor */}
+          {ehGestor && (
+            <>
+              <Link
+                href="/hoteis"
+                className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+              >
+                <Hotel className="w-4 h-4" />
+                <span className="hidden sm:inline">Meus Hotéis</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={abrirModalEquipe}
+                className="flex items-center gap-1.5 bg-brand-800 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+                title="Gerenciar Equipa de Utilizadores"
+              >
+                <Users className="w-4 h-4 text-blue-300" />
+                <span className="hidden sm:inline">Equipa</span>
+              </button>
+            </>
+          )}
 
           <button
             onClick={salvarEGerarLink}
@@ -1189,17 +1324,21 @@ function GeradorOrcamentoConteudo() {
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Escolha sua Hospedagem
                 </label>
-                <Link href="/hoteis" className="text-xs text-brand-700 hover:underline font-semibold">
-                  + Gerenciar
-                </Link>
+                {ehGestor && (
+                  <Link href="/hoteis" className="text-xs text-brand-700 hover:underline font-semibold">
+                    + Gerenciar
+                  </Link>
+                )}
               </div>
 
               {hoteis.length === 0 ? (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
                   Nenhuma hospedagem cadastrada.{" "}
-                  <Link href="/hoteis" className="underline font-bold">
-                    Clique aqui para cadastrar a primeira.
-                  </Link>
+                  {ehGestor && (
+                    <Link href="/hoteis" className="underline font-bold">
+                      Clique aqui para cadastrar a primeira.
+                    </Link>
+                  )}
                 </div>
               ) : hoteisFiltradosPorCidade.length === 0 ? (
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500 italic">
@@ -1730,6 +1869,181 @@ function GeradorOrcamentoConteudo() {
           </div>
         </div>
       </main>
+
+      {/* ================= MODAL: GESTÃO DA EQUIPA (APENAS GESTOR) ================= */}
+      {modalEquipeAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto space-y-5">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-brand-100 text-brand-900 rounded-lg">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Equipa da Agência</h3>
+                  <p className="text-xs text-slate-500">Cadastre e controle os utilizadores que podem gerar orçamentos</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalEquipeAberto(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* FORMULÁRIO PARA CADASTRAR NOVO UTILIZADOR */}
+            <form onSubmit={handleCriarUsuario} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
+              <span className="text-xs font-bold uppercase text-brand-900 flex items-center gap-1.5">
+                <UserPlus className="w-4 h-4" /> Novo Colaborador
+              </span>
+
+              {erroUsuario && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-2.5 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{erroUsuario}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Nome Completo</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Carlos Oliveira"
+                    value={novoUsuario.nome}
+                    onChange={(e) => setNovoUsuario({ ...novoUsuario, nome: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">E-mail / Login</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="carlos@agencia.com.br"
+                    value={novoUsuario.login}
+                    onChange={(e) => setNovoUsuario({ ...novoUsuario, login: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Senha de Acesso</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Senha do colaborador"
+                    value={novoUsuario.senha}
+                    onChange={(e) => setNovoUsuario({ ...novoUsuario, senha: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 outline-none focus:ring-2 focus:ring-brand-900 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Permissão</label>
+                  <select
+                    value={novoUsuario.permissao}
+                    onChange={(e) => setNovoUsuario({ ...novoUsuario, permissao: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                  >
+                    <option value="usuario">Usuário (Apenas cotações)</option>
+                    <option value="gestor">Gestor (Acesso total)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={salvandoUsuario}
+                  className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                >
+                  {salvandoUsuario ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  <span>{salvandoUsuario ? "A salvar..." : "Adicionar Colaborador"}</span>
+                </button>
+              </div>
+            </form>
+
+            {/* LISTAGEM DE UTILIZADORES */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold uppercase text-slate-600 block">Colaboradores Registados</span>
+
+              {carregandoEquipe ? (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-brand-900" />
+                </div>
+              ) : usuariosEquipe.length === 0 ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+                  Nenhum utilizador registado ainda nesta agência. Use o formulário acima para convidar o primeiro membro.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {usuariosEquipe.map((u) => {
+                    const isBloqueado = u.status === "bloqueado";
+                    const senhaVisivel = mostrarSenhasEquipe[u.id];
+
+                    return (
+                      <div key={u.id} className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900">{u.nome}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              u.permissao === "gestor" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
+                            }`}>
+                              {u.permissao === "gestor" ? "Gestor" : "Usuário"}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isBloqueado ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-800"
+                            }`}>
+                              {isBloqueado ? "Bloqueado" : "Ativo"}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
+                            <span>Login: <strong className="text-slate-700">{u.login}</strong></span>
+                            <span className="flex items-center gap-1">
+                              Senha: 
+                              <strong className="text-slate-700 font-mono">
+                                {senhaVisivel ? u.senha : "••••••••"}
+                              </strong>
+                              <button
+                                type="button"
+                                onClick={() => alternarMostrarSenhaEquipe(u.id)}
+                                className="text-slate-400 hover:text-slate-600 p-0.5"
+                                title={senhaVisivel ? "Ocultar senha" : "Ver senha"}
+                              >
+                                {senhaVisivel ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => alternarStatusUsuario(u.id, u.status)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                              isBloqueado
+                                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                : "bg-red-100 text-red-700 hover:bg-red-200"
+                            }`}
+                          >
+                            {isBloqueado ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                            <span>{isBloqueado ? "Ativar" : "Bloquear"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL DE ALERTA E CONFIRMAÇÃO ================= */}
       {modalConfig.aberto && (
