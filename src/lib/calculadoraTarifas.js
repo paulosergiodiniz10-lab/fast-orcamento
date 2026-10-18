@@ -1,7 +1,7 @@
 /**
  * Motor de Cálculo Tarifário - Fast Orçamento
  * Módulo inteligente: responsável pelo cálculo de diárias/noites, travas de pacote,
- * sobreposição de regras (dias específicos sobre dias gerais), regras de crianças e descontos.
+ * sobreposição de regras (dias específicos sobre dias gerais, priorizando tarifas mais recentes), regras de crianças e descontos.
  */
 
 export const REGIMES_SUPORTADOS = [
@@ -212,7 +212,7 @@ export function calcularTarifasEstadia({
     acumuladoRegimes[r.id] = { total: 0, noitesCalculadas: 0, existeTarifa: false };
   });
 
-  // 2. Loop Noite a Noite com Sobreposição Inteligente
+  // 2. Loop Noite a Noite com Sobreposição Inteligente e Prioridade por Recência
   for (const noiteStr of noites) {
     const dataObj = converterParaDataLocal(noiteStr);
     const diaDaSemana = dataObj.getDay();
@@ -236,8 +236,8 @@ export function calcularTarifasEstadia({
       // Regra de Sobreposição e Desempate:
       // 1º Quarto específico tem prioridade sobre "todos"
       // 2º Pacote fechado tem prioridade sobre tarifa comum
-      // 3º Regra com menos dias na semana (ex: Final de Semana com 2 ou 3 dias)
-      //    sobrepõe regra geral (ex: Baixa Temporada de 7 dias)
+      // 3º Regra com menos dias na semana (ex: Final de Semana) sobrepõe regra geral
+      // 4º Tarifa criada ou atualizada mais recentemente tem prioridade absoluta
       tarifasCompativeis.sort((a, b) => {
         const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
         const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
@@ -248,10 +248,16 @@ export function calcularTarifasEstadia({
         const especificidadeDiasA = 7 - (a.diasSemana?.length || 7);
         const especificidadeDiasB = 7 - (b.diasSemana?.length || 7);
 
+        const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
+        const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
+
         const scoreA = pesoAptoA + pesoPacoteA + especificidadeDiasA;
         const scoreB = pesoAptoB + pesoPacoteB + especificidadeDiasB;
 
-        return scoreB - scoreA;
+        if (scoreA !== scoreB) {
+          return scoreB - scoreA;
+        }
+        return tempoB - tempoA;
       });
 
       const tarifaVencedora = tarifasCompativeis[0];
