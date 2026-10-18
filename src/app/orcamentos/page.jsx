@@ -5,12 +5,13 @@ import {
   FileText, Search, ArrowLeft, MessageCircle, ExternalLink, 
   Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle, 
   Clock, ChevronLeft, ChevronRight, HelpCircle, AlertCircle,
-  Copy, Check, Phone, UserCheck
+  Copy, Check, Phone, UserCheck, DollarSign, CheckCircle2,
+  TrendingUp, Undo2
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
-import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 const ITENS_POR_PAGINA = 50;
 
@@ -30,11 +31,20 @@ export default function GestaoOrcamentos() {
   const [filtroPeriodo, setFiltroPeriodo] = useState("todos"); // 'todos', 'hoje', 'ontem', '7dias', 'personalizado'
   const [dataPersonalizada, setDataPersonalizada] = useState("");
   const [filtroColaborador, setFiltroColaborador] = useState("todos");
+  const [filtroStatusVenda, setFiltroStatusVenda] = useState("todos"); // 'todos', 'fechado', 'aberto'
 
   // Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
 
-  // Modal Customizado
+  // Modal Fechamento de Venda
+  const [modalVendaConfig, setModalVendaConfig] = useState({
+    aberto: false,
+    orcamento: null,
+    regimeSelecionado: "",
+    valorFechado: "",
+  });
+
+  // Modal Customizado Alerta/Confirmação
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
     tipo: "confirm", // 'confirm' ou 'alert'
@@ -59,7 +69,7 @@ export default function GestaoOrcamentos() {
       tipo: "alert",
       titulo,
       mensagem,
-      onConfirm,
+      onConfirm: null,
     });
   };
 
@@ -100,7 +110,7 @@ export default function GestaoOrcamentos() {
       });
       setOrcamentos(listaOrc);
 
-      // 2. Carrega lista de colaboradores para o filtro
+      // 2. Carrega lista de colaboradores
       try {
         const colabRef = collection(db, "agencias", agenciaId, "usuarios");
         const snapColab = await getDocs(colabRef);
@@ -132,6 +142,7 @@ export default function GestaoOrcamentos() {
     setFiltroPeriodo("todos");
     setDataPersonalizada("");
     setFiltroColaborador("todos");
+    setFiltroStatusVenda("todos");
     setPaginaAtual(1);
   };
 
@@ -139,6 +150,7 @@ export default function GestaoOrcamentos() {
     try {
       await deleteDoc(doc(db, "orcamentos", id));
       setOrcamentos((prev) => prev.filter((o) => o.id !== id));
+      abrirAlerta("Sucesso", "Orçamento excluído com sucesso.");
     } catch (err) {
       console.error(err);
       abrirAlerta("Erro ao Excluir", "Não foi possível excluir este orçamento.");
@@ -150,6 +162,78 @@ export default function GestaoOrcamentos() {
       "Excluir Orçamento",
       "Deseja realmente excluir este orçamento salvo? Esta ação não poderá ser desfeita.",
       () => executarExclusao(id)
+    );
+  };
+
+  // =========================================================================
+  // GESTÃO DO STATUS DE VENDA FECHADA
+  // =========================================================================
+  const abrirModalFechamentoVenda = (orc) => {
+    const regimesDisponiveis = orc.regimes || [];
+    const primeiroRegime = regimesDisponiveis[0] || {};
+    
+    setModalVendaConfig({
+      aberto: true,
+      orcamento: orc,
+      regimeSelecionado: primeiroRegime.nome || "Café da Manhã",
+      valorFechado: primeiroRegime.valor || "",
+    });
+  };
+
+  const salvarFechamentoVenda = async () => {
+    const { orcamento, regimeSelecionado, valorFechado } = modalVendaConfig;
+    if (!orcamento?.id) return;
+
+    try {
+      const docRef = doc(db, "orcamentos", orcamento.id);
+      const dadosAtualizados = {
+        vendaFechada: true,
+        fechamento: {
+          regimeNome: regimeSelecionado,
+          valorFechado: valorFechado,
+          fechadoEm: serverTimestamp(),
+          fechadoPor: agencia?.nomeUsuario || agencia?.nome || "Gestor",
+        },
+      };
+
+      await updateDoc(docRef, dadosAtualizados);
+
+      setOrcamentos((prev) =>
+        prev.map((o) =>
+          o.id === orcamento.id ? { ...o, ...dadosAtualizados } : o
+        )
+      );
+
+      setModalVendaConfig({ aberto: false, orcamento: null, regimeSelecionado: "", valorFechado: "" });
+      abrirAlerta("Parabéns!", "Venda marcada como fechada com sucesso!");
+    } catch (err) {
+      console.error("Erro ao registrar venda fechada:", err);
+      abrirAlerta("Erro", "Não foi possível registrar o fechamento desta venda.");
+    }
+  };
+
+  const reabrirCotacao = (orc) => {
+    abrirConfirmacao(
+      "Reabrir Cotação",
+      "Deseja remover o status de venda fechada desta cotação?",
+      async () => {
+        try {
+          const docRef = doc(db, "orcamentos", orc.id);
+          await updateDoc(docRef, {
+            vendaFechada: false,
+            fechamento: null,
+          });
+
+          setOrcamentos((prev) =>
+            prev.map((o) =>
+              o.id === orc.id ? { ...o, vendaFechada: false, fechamento: null } : o
+            )
+          );
+        } catch (err) {
+          console.error(err);
+          abrirAlerta("Erro", "Não foi possível reabrir esta cotação.");
+        }
+      }
     );
   };
 
@@ -245,6 +329,11 @@ export default function GestaoOrcamentos() {
       (o.criadoPor?.login && o.criadoPor.login.toLowerCase() === filtroColaborador.toLowerCase()) ||
       (o.criadoPor?.nome && o.criadoPor.nome.toLowerCase() === filtroColaborador.toLowerCase());
 
+    const bateStatusVenda =
+      filtroStatusVenda === "todos" ||
+      (filtroStatusVenda === "fechado" && o.vendaFechada === true) ||
+      (filtroStatusVenda === "aberto" && !o.vendaFechada);
+
     let bateDataCriacao = true;
     if (filtroPeriodo !== "todos" && o.criadoEm?.seconds) {
       const dataCriacao = new Date(o.criadoEm.seconds * 1000);
@@ -272,8 +361,20 @@ export default function GestaoOrcamentos() {
       }
     }
 
-    return bateGeral && bateCheckin && bateDataCriacao && bateColaborador;
+    return bateGeral && bateCheckin && bateDataCriacao && bateColaborador && bateStatusVenda;
   });
+
+  // Métricas de Vendas Fechadas calculadas de acordo com os filtros de data/vendedor ativos
+  const vendasFechadasFiltradas = orcamentosFiltrados.filter((o) => o.vendaFechada);
+  const totalFaturadoFechado = vendasFechadasFiltradas.reduce((acc, o) => {
+    const valorStr = o.fechamento?.valorFechado || "";
+    const num = parseFloat(String(valorStr).replace(/\./g, "").replace(",", ".")) || 0;
+    return acc + num;
+  }, 0);
+
+  const ticketMedioFechado = vendasFechadasFiltradas.length > 0 
+    ? totalFaturadoFechado / vendasFechadasFiltradas.length 
+    : 0;
 
   const totalPaginas = Math.ceil(orcamentosFiltrados.length / ITENS_POR_PAGINA) || 1;
   const indexInicial = (paginaAtual - 1) * ITENS_POR_PAGINA;
@@ -322,10 +423,56 @@ export default function GestaoOrcamentos() {
       </header>
 
       <main className="max-w-6xl mx-auto p-4 md:p-6 mt-2 space-y-4">
-        {/* BARRA DE PESQUISA, FILTROS E DATAS */}
-        <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+        {/* DASHBOARD EXECUTIVO: FATURAMENTO DE VENDAS FECHADAS */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3.5">
+            <div className="p-3 bg-emerald-100 text-emerald-800 rounded-xl">
+              <DollarSign className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">
+                Vendas Fechadas
+              </span>
+              <p className="text-lg md:text-xl font-black text-emerald-700">
+                R$ {totalFaturadoFechado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3.5">
+            <div className="p-3 bg-blue-100 text-blue-800 rounded-xl">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">
+                Cotações Convertidas
+              </span>
+              <p className="text-lg md:text-xl font-black text-slate-900">
+                {vendasFechadasFiltradas.length} <span className="text-xs font-medium text-slate-400">venda(s)</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3.5">
+            <div className="p-3 bg-amber-100 text-amber-800 rounded-xl">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">
+                Ticket Médio
+              </span>
+              <p className="text-lg md:text-xl font-black text-amber-900">
+                R$ {ticketMedioFechado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* BARRA DE PESQUISA, FILTROS AMPLOS E DATAS */}
+        <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-            <div className={`sm:col-span-${ehGestor && colaboradores.length > 0 ? "5" : "6"}`}>
+            {/* Campo Pesquisar */}
+            <div className="sm:col-span-4">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Pesquisar
               </label>
@@ -333,7 +480,7 @@ export default function GestaoOrcamentos() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <input
                   type="text"
-                  placeholder="Buscar por ID, Cliente, Hotel, Telefone ou Vendedor..."
+                  placeholder="ID, Cliente, Hotel, WhatsApp..."
                   value={buscaGeral}
                   onChange={(e) => {
                     setBuscaGeral(e.target.value);
@@ -344,11 +491,11 @@ export default function GestaoOrcamentos() {
               </div>
             </div>
 
-            {/* SELETOR DE COLABORADOR (APENAS SE FOR GESTOR E HOUVER COLABORADORES) */}
+            {/* Vendedor / Autor */}
             {ehGestor && colaboradores.length > 0 && (
               <div className="sm:col-span-3">
                 <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
-                  Vendedor / Autor
+                  Vendedor
                 </label>
                 <div className="relative">
                   <UserCheck className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -360,7 +507,7 @@ export default function GestaoOrcamentos() {
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-2 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold"
                   >
-                    <option value="todos">Todos os Colaboradores</option>
+                    <option value="todos">Todos Vendedores</option>
                     {colaboradores.map((c) => (
                       <option key={c.id} value={c.login || c.nome}>
                         {c.nome}
@@ -371,7 +518,8 @@ export default function GestaoOrcamentos() {
               </div>
             )}
 
-            <div className={`sm:col-span-${ehGestor && colaboradores.length > 0 ? "2" : "4"}`}>
+            {/* Check-in */}
+            <div className="sm:col-span-2">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Check-in
               </label>
@@ -383,25 +531,45 @@ export default function GestaoOrcamentos() {
                   setFiltroCheckin(e.target.value);
                   setPaginaAtual(1);
                 }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 px-3 text-xs md:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 px-2.5 text-xs md:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
               />
             </div>
 
+            {/* Filtro Status da Venda */}
             <div className="sm:col-span-2">
+              <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                Status
+              </label>
+              <select
+                value={filtroStatusVenda}
+                onChange={(e) => {
+                  setFiltroStatusVenda(e.target.value);
+                  setPaginaAtual(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 px-2.5 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold"
+              >
+                <option value="todos">Todos Status</option>
+                <option value="fechado">Vendas Fechadas</option>
+                <option value="aberto">Em Aberto</option>
+              </select>
+            </div>
+
+            {/* Botão Limpar com Visual Escuro e Bem Visível */}
+            <div className="sm:col-span-1">
               <button
                 type="button"
                 onClick={limparFiltros}
-                disabled={!buscaGeral && !filtroCheckin && filtroPeriodo === "todos" && !dataPersonalizada && filtroColaborador === "todos"}
-                className="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={!buscaGeral && !filtroCheckin && filtroPeriodo === "todos" && !dataPersonalizada && filtroColaborador === "todos" && filtroStatusVenda === "todos"}
+                className="w-full py-2.5 px-3 rounded-xl border border-slate-300 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs flex items-center justify-center gap-1 transition shadow-xs disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Limpar todos os filtros"
               >
-                <X className="w-3.5 h-3.5 text-slate-500" />
+                <X className="w-3.5 h-3.5 text-slate-700" />
                 <span>Limpar</span>
               </button>
             </div>
           </div>
 
-          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO DO ORÇAMENTO */}
+          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO */}
           <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] font-bold uppercase text-slate-500 mr-1 flex items-center gap-1">
@@ -479,6 +647,7 @@ export default function GestaoOrcamentos() {
                 const idCurto = orc.id.slice(0, 6).toUpperCase();
                 const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
                 const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
+                const isFechado = Boolean(orc.vendaFechada);
                 
                 // Link de WhatsApp direto SEM mensagem prévia
                 const linkZapDiretoSemMensagem = zapTratado
@@ -500,7 +669,9 @@ export default function GestaoOrcamentos() {
                 return (
                   <div
                     key={orc.id}
-                    className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className={`bg-white p-4 md:p-5 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:shadow-md ${
+                      isFechado ? "border-emerald-300 ring-1 ring-emerald-400/30" : "border-slate-200"
+                    }`}
                   >
                     {/* Dados Básicos */}
                     <div className="space-y-2 flex-1">
@@ -512,6 +683,13 @@ export default function GestaoOrcamentos() {
                         <h3 className="font-extrabold text-sm md:text-base text-slate-900">
                           {orc.hotel?.nome}
                         </h3>
+
+                        {/* Tag de Venda Fechada */}
+                        {isFechado && (
+                          <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
+                            <CheckCircle2 className="w-3 h-3" /> Venda Fechada
+                          </span>
+                        )}
 
                         {isGrupo ? (
                           <span className="bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
@@ -538,7 +716,6 @@ export default function GestaoOrcamentos() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600 pt-1">
-                        {/* Cliente + Telefone + Botão Zap Rápido + Botão Copiar */}
                         <div>
                           <strong className="text-slate-800 block text-[11px]">Cliente:</strong>
                           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
@@ -555,7 +732,7 @@ export default function GestaoOrcamentos() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-emerald-600 hover:text-emerald-700 p-0.5 rounded transition hover:bg-emerald-50"
-                                  title="Abrir WhatsApp direto (conversa limpa sem texto)"
+                                  title="Abrir WhatsApp direto"
                                 >
                                   <MessageCircle className="w-3.5 h-3.5" />
                                 </a>
@@ -564,7 +741,7 @@ export default function GestaoOrcamentos() {
                                   type="button"
                                   onClick={() => copiarTelefone(orc.clienteWhatsapp, orc.id)}
                                   className="text-slate-500 hover:text-slate-800 p-0.5 rounded transition hover:bg-slate-200"
-                                  title="Copiar número de telefone"
+                                  title="Copiar telefone"
                                 >
                                   {copiadoId === orc.id ? (
                                     <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -598,21 +775,51 @@ export default function GestaoOrcamentos() {
 
                       {/* Valores Cotados */}
                       {!isGrupo && orc.regimes && orc.regimes.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100 mt-2">
-                          {orc.regimes.map((r, rIdx) => (
-                            <span
-                              key={rIdx}
-                              className="text-[11px] bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-slate-700 font-medium"
-                            >
-                              <strong>{r.nome}:</strong> R$ {r.valor}
-                            </span>
-                          ))}
+                        <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100 mt-2 items-center">
+                          {orc.regimes.map((r, rIdx) => {
+                            const fechouNeste = isFechado && orc.fechamento?.regimeNome === r.nome;
+                            return (
+                              <span
+                                key={rIdx}
+                                className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${
+                                  fechouNeste 
+                                    ? "bg-emerald-100 text-emerald-950 border-emerald-400 font-bold ring-1 ring-emerald-500" 
+                                    : "bg-slate-50 border-slate-200 text-slate-700"
+                                }`}
+                              >
+                                <strong>{r.nome}:</strong> R$ {fechouNeste ? orc.fechamento.valorFechado : r.valor}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
 
-                    {/* Ações Rápidas */}
-                    <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 shrink-0 justify-end">
+                    {/* Ações Rápidas & Gestão de Fechamento */}
+                    <div className="flex flex-wrap items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 shrink-0 justify-end">
+                      {/* BOTÃO FECHAR VENDA / STATUS */}
+                      {isFechado ? (
+                        <button
+                          type="button"
+                          onClick={() => reabrirCotacao(orc)}
+                          className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-3 py-2 rounded-xl transition shadow-xs"
+                          title="Clique para reabrir este orçamento"
+                        >
+                          <Undo2 className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Fechado</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => abrirModalFechamentoVenda(orc)}
+                          className="flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold px-3 py-2 rounded-xl transition shadow-xs"
+                          title="Marcar orçamento como venda concluída"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Fechar Venda</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => criarNovaCotacaoComDados(orc)}
@@ -647,7 +854,6 @@ export default function GestaoOrcamentos() {
                         <span className="hidden sm:inline">Vitrine</span>
                       </Link>
 
-                      {/* Botão de excluir visível apenas para Gestor */}
                       {ehGestor && (
                         <button
                           onClick={() => excluirOrcamento(orc.id)}
@@ -696,6 +902,101 @@ export default function GestaoOrcamentos() {
           </div>
         )}
       </main>
+
+      {/* MODAL PARA MARCAR VENDA FECHADA COM REGIME E VALOR */}
+      {modalVendaConfig.aberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-100 text-emerald-800 rounded-2xl">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 leading-tight">
+                  Registrar Venda Fechada
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {modalVendaConfig.orcamento?.clienteNome || "Cliente"}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                  Regime Fechado
+                </label>
+                <select
+                  value={modalVendaConfig.regimeSelecionado}
+                  onChange={(e) => {
+                    const novoRegime = e.target.value;
+                    const regimeObj = (modalVendaConfig.orcamento?.regimes || []).find(
+                      (r) => r.nome === novoRegime
+                    );
+                    setModalVendaConfig((prev) => ({
+                      ...prev,
+                      regimeSelecionado: novoRegime,
+                      valorFechado: regimeObj?.valor || prev.valorFechado,
+                    }));
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                >
+                  {(modalVendaConfig.orcamento?.regimes || []).map((r, idx) => (
+                    <option key={idx} value={r.nome}>
+                      {r.nome} (R$ {r.valor})
+                    </option>
+                  ))}
+                  {(!modalVendaConfig.orcamento?.regimes || modalVendaConfig.orcamento.regimes.length === 0) && (
+                    <option value="Pacote Fechado">Pacote Fechado Geral</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                  Valor Total Fechado (R$)
+                </label>
+                <input
+                  type="text"
+                  value={modalVendaConfig.valorFechado}
+                  onChange={(e) =>
+                    setModalVendaConfig((prev) => ({
+                      ...prev,
+                      valorFechado: e.target.value,
+                    }))
+                  }
+                  placeholder="Ex: 540,00"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm font-extrabold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() =>
+                  setModalVendaConfig({
+                    aberto: false,
+                    orcamento: null,
+                    regimeSelecionado: "",
+                    valorFechado: "",
+                  })
+                }
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={salvarFechamentoVenda}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition shadow"
+              >
+                Confirmar Venda
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL ESTILIZADO DE CONFIRMAÇÃO / ALERTA */}
       {modalConfig.aberto && (
