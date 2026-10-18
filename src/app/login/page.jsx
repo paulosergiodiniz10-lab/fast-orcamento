@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Building2, Lock, User, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { db } from "../../lib/firebase";
-import { collection, query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc } from "firebase/firestore";
 
 export default function LoginPage() {
   const [usuario, setUsuario] = useState("");
@@ -21,14 +21,14 @@ export default function LoginPage() {
     const senhaInput = senha.trim();
 
     try {
-      // 1. Tenta autenticar primeiro como a Agência Principal (Gestor Master da Agência)
+      let sessaoValida = null;
+
+      // 1. Tenta autenticar primeiro como a Conta Principal da Agência (Gestor Master)
       const qAgencia = query(
         collection(db, "agencias"),
         where("usuario", "==", loginInput)
       );
       const snapAgencia = await getDocs(qAgencia);
-
-      let sessaoValida = null;
 
       if (!snapAgencia.empty) {
         snapAgencia.forEach((documento) => {
@@ -37,11 +37,10 @@ export default function LoginPage() {
             sessaoValida = {
               id: documento.id,
               ...data,
-              // Dados de controlo de acesso
               permissao: "gestor",
               nomeUsuario: data.nome || "Gestor Principal",
               loginUsuario: data.usuario,
-              isContaPrincipal: true
+              isContaPrincipal: true,
             };
           }
         });
@@ -53,16 +52,17 @@ export default function LoginPage() {
         }
       }
 
-      // 2. Se não encontrou na agência principal, procura nos sub-utilizadores da agência
+      // 2. Se não for conta mestra, procura nos Colaboradores das agências (sem travar por falta de índice)
       if (!sessaoValida) {
-        const qSubUsuarios = query(
-          collectionGroup(db, "usuarios"),
-          where("login", "==", loginInput)
-        );
-        const snapSub = await getDocs(qSubUsuarios);
+        const todasAgenciasSnap = await getDocs(collection(db, "agencias"));
 
-        if (!snapSub.empty) {
-          for (const docSub of snapSub.docs) {
+        for (const agenciaDoc of todasAgenciasSnap.docs) {
+          const subUsuariosRef = collection(db, "agencias", agenciaDoc.id, "usuarios");
+          const qSub = query(subUsuariosRef, where("login", "==", loginInput));
+          const subSnap = await getDocs(qSub);
+
+          if (!subSnap.empty) {
+            const docSub = subSnap.docs[0];
             const dataSub = docSub.data();
 
             if (dataSub.senha === senhaInput) {
@@ -72,31 +72,23 @@ export default function LoginPage() {
                 return;
               }
 
-              // Procura a agência mãe deste utilizador
-              const agenciaRef = docSub.ref.parent.parent;
-              if (agenciaRef) {
-                const snapPai = await getDoc(agenciaRef);
-                if (snapPai.exists()) {
-                  const dataPai = snapPai.data();
-
-                  if (dataPai.status === "bloqueado") {
-                    setErro("Acesso da agência suspenso. Contacte o administrador.");
-                    setCarregando(false);
-                    return;
-                  }
-
-                  sessaoValida = {
-                    id: snapPai.id,
-                    ...dataPai,
-                    permissao: dataSub.permissao || "usuario",
-                    nomeUsuario: dataSub.nome || "Colaborador",
-                    loginUsuario: dataSub.login,
-                    usuarioId: docSub.id,
-                    isContaPrincipal: false
-                  };
-                  break;
-                }
+              const dataAgenciaPai = agenciaDoc.data();
+              if (dataAgenciaPai.status === "bloqueado") {
+                setErro("Acesso da agência suspenso. Contacte o administrador.");
+                setCarregando(false);
+                return;
               }
+
+              sessaoValida = {
+                id: agenciaDoc.id,
+                ...dataAgenciaPai,
+                permissao: dataSub.permissao || "usuario",
+                nomeUsuario: dataSub.nome || "Colaborador",
+                loginUsuario: dataSub.login,
+                usuarioId: docSub.id,
+                isContaPrincipal: false,
+              };
+              break;
             }
           }
         }
@@ -111,10 +103,10 @@ export default function LoginPage() {
       // 1. Guarda a sessão completa no localStorage para os componentes de cliente
       localStorage.setItem("fast_agencia", JSON.stringify(sessaoValida));
 
-      // 2. Guarda os dados essenciais num cookie para o middleware.js do Next.js ler no servidor
+      // 2. Guarda os dados essenciais num cookie para o middleware.js ler no servidor
       const dadosCookie = {
         id: sessaoValida.id,
-        permissao: sessaoValida.permissao || "usuario"
+        permissao: sessaoValida.permissao || "usuario",
       };
       document.cookie = `fast_agencia_auth=${encodeURIComponent(
         JSON.stringify(dadosCookie)
@@ -122,8 +114,8 @@ export default function LoginPage() {
 
       window.location.href = "/";
     } catch (err) {
-      console.error(err);
-      setErro("Erro ao ligar ao servidor.");
+      console.error("Erro na autenticação:", err);
+      setErro("Erro ao autenticar. Verifique a sua conexão.");
     } finally {
       setCarregando(false);
     }
@@ -149,7 +141,9 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Utilizador / E-mail</label>
+            <label className="text-xs font-bold text-slate-600 uppercase block mb-1">
+              Utilizador / E-mail
+            </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
@@ -164,7 +158,9 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Senha de Acesso</label>
+            <label className="text-xs font-bold text-slate-600 uppercase block mb-1">
+              Senha de Acesso
+            </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
