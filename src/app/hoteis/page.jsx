@@ -533,7 +533,10 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
                         </button>
                         <button
                           type="button"
-                          onClick={() => onExcluirTarifa(linha.tarifaOriginal.id)}
+                          onClick={() => {
+                            const idReal = linha.tarifaOriginal?.id || linha.tarifaOriginal?._id;
+                            onExcluirTarifa(idReal);
+                          }}
                           className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
                           title="Excluir tarifa"
                         >
@@ -1371,7 +1374,10 @@ export default function GestaoHoteis() {
 
   // Exclusão corrigida com passagem segura do ID do documento do Firestore
   const excluirTarifa = (tarifaId) => {
-    if (!hotelEditandoId || !tarifaId) return;
+    if (!hotelEditandoId || !tarifaId) {
+      abrirModal("error", "Erro", "Identificador do hotel ou da tarifa não encontrado.");
+      return;
+    }
 
     abrirModal(
       "confirm",
@@ -1382,6 +1388,7 @@ export default function GestaoHoteis() {
           const docRef = doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaId);
           await deleteDoc(docRef);
           setTarifasCadastradas((prev) => prev.filter((t) => t.id !== tarifaId));
+          abrirModal("success", "Sucesso", "Tarifa excluída com sucesso!");
         } catch (err) {
           console.error("Erro ao deletar documento no Firestore:", err);
           setTimeout(() => {
