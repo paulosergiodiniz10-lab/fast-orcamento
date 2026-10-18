@@ -29,7 +29,8 @@ export default function GestaoOrcamentos() {
   const [buscaGeral, setBuscaGeral] = useState("");
   const [filtroCheckin, setFiltroCheckin] = useState("");
   const [filtroPeriodo, setFiltroPeriodo] = useState("todos"); // 'todos', 'hoje', 'ontem', '7dias', 'personalizado'
-  const [dataPersonalizada, setDataPersonalizada] = useState("");
+  const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState("");
+  const [dataFimPersonalizada, setDataFimPersonalizada] = useState("");
   const [filtroColaborador, setFiltroColaborador] = useState("todos");
   const [filtroStatusVenda, setFiltroStatusVenda] = useState("todos"); // 'todos', 'fechado', 'aberto'
 
@@ -47,7 +48,7 @@ export default function GestaoOrcamentos() {
   // Modal Customizado Alerta/Confirmação
   const [modalConfig, setModalConfig] = useState({
     aberto: false,
-    tipo: "confirm", // 'confirm' ou 'alert'
+    tipo: "confirm",
     titulo: "",
     mensagem: "",
     onConfirm: null,
@@ -125,6 +126,19 @@ export default function GestaoOrcamentos() {
             });
           }
         });
+
+        // Adiciona à lista de opções também criadores encontrados nas cotações que não estejam na subcoleção
+        listaOrc.forEach((item) => {
+          const autor = item.criadoPor?.nome;
+          if (autor && !listaColab.some((c) => c.nome.toLowerCase() === autor.toLowerCase())) {
+            listaColab.push({
+              id: autor,
+              nome: autor,
+              login: item.criadoPor?.login || autor,
+            });
+          }
+        });
+
         setColaboradores(listaColab);
       } catch (errColab) {
         console.warn("Colaboradores não carregados:", errColab);
@@ -140,7 +154,8 @@ export default function GestaoOrcamentos() {
     setBuscaGeral("");
     setFiltroCheckin("");
     setFiltroPeriodo("todos");
-    setDataPersonalizada("");
+    setDataInicioPersonalizada("");
+    setDataFimPersonalizada("");
     setFiltroColaborador("todos");
     setFiltroStatusVenda("todos");
     setPaginaAtual(1);
@@ -165,9 +180,7 @@ export default function GestaoOrcamentos() {
     );
   };
 
-  // =========================================================================
-  // GESTÃO DO STATUS DE VENDA FECHADA
-  // =========================================================================
+  // Gestão de Venda Fechada
   const abrirModalFechamentoVenda = (orc) => {
     const regimesDisponiveis = orc.regimes || [];
     const primeiroRegime = regimesDisponiveis[0] || {};
@@ -353,18 +366,31 @@ export default function GestaoOrcamentos() {
         const seteDiasAtras = new Date(hoje);
         seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
         bateDataCriacao = dataCriacaoZerada.getTime() >= seteDiasAtras.getTime();
-      } else if (filtroPeriodo === "personalizado" && dataPersonalizada) {
-        const [ano, mes, dia] = dataPersonalizada.split("-").map(Number);
-        const dataAlvo = new Date(ano, mes - 1, dia);
-        dataAlvo.setHours(0, 0, 0, 0);
-        bateDataCriacao = dataCriacaoZerada.getTime() === dataAlvo.getTime();
+      } else if (filtroPeriodo === "personalizado") {
+        let inicioOk = true;
+        let fimOk = true;
+
+        if (dataInicioPersonalizada) {
+          const [anoIni, mesIni, diaIni] = dataInicioPersonalizada.split("-").map(Number);
+          const dataIniObj = new Date(anoIni, mesIni - 1, diaIni);
+          dataIniObj.setHours(0, 0, 0, 0);
+          inicioOk = dataCriacaoZerada.getTime() >= dataIniObj.getTime();
+        }
+
+        if (dataFimPersonalizada) {
+          const [anoFim, mesFim, diaFim] = dataFimPersonalizada.split("-").map(Number);
+          const dataFimObj = new Date(anoFim, mesFim - 1, diaFim);
+          dataFimObj.setHours(23, 59, 59, 999);
+          fimOk = dataCriacao.getTime() <= dataFimObj.getTime();
+        }
+
+        bateDataCriacao = inicioOk && fimOk;
       }
     }
 
     return bateGeral && bateCheckin && bateDataCriacao && bateColaborador && bateStatusVenda;
   });
 
-  // Métricas de Vendas Fechadas calculadas de acordo com os filtros de data/vendedor ativos
   const vendasFechadasFiltradas = orcamentosFiltrados.filter((o) => o.vendaFechada);
   const totalFaturadoFechado = vendasFechadasFiltradas.reduce((acc, o) => {
     const valorStr = o.fechamento?.valorFechado || "";
@@ -472,7 +498,7 @@ export default function GestaoOrcamentos() {
         <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
             {/* Campo Pesquisar */}
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-3">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Pesquisar
               </label>
@@ -480,43 +506,41 @@ export default function GestaoOrcamentos() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <input
                   type="text"
-                  placeholder="ID, Cliente, Hotel, WhatsApp..."
+                  placeholder="ID, Cliente, Hotel, Telefone..."
                   value={buscaGeral}
                   onChange={(e) => {
                     setBuscaGeral(e.target.value);
                     setPaginaAtual(1);
                   }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
                 />
               </div>
             </div>
 
-            {/* Vendedor / Autor */}
-            {ehGestor && colaboradores.length > 0 && (
-              <div className="sm:col-span-3">
-                <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
-                  Vendedor
-                </label>
-                <div className="relative">
-                  <UserCheck className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <select
-                    value={filtroColaborador}
-                    onChange={(e) => {
-                      setFiltroColaborador(e.target.value);
-                      setPaginaAtual(1);
-                    }}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-2 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold"
-                  >
-                    <option value="todos">Todos Vendedores</option>
-                    {colaboradores.map((c) => (
-                      <option key={c.id} value={c.login || c.nome}>
-                        {c.nome}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Vendedor / Usuário */}
+            <div className="sm:col-span-3">
+              <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                Vendedor / Usuário
+              </label>
+              <div className="relative">
+                <UserCheck className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <select
+                  value={filtroColaborador}
+                  onChange={(e) => {
+                    setFiltroColaborador(e.target.value);
+                    setPaginaAtual(1);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pl-9 pr-2 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-semibold"
+                >
+                  <option value="todos">Todos os Vendedores</option>
+                  {colaboradores.map((c) => (
+                    <option key={c.id} value={c.login || c.nome}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
+            </div>
 
             {/* Check-in */}
             <div className="sm:col-span-2">
@@ -535,7 +559,7 @@ export default function GestaoOrcamentos() {
               />
             </div>
 
-            {/* Filtro Status da Venda */}
+            {/* Status da Venda */}
             <div className="sm:col-span-2">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Status
@@ -554,24 +578,23 @@ export default function GestaoOrcamentos() {
               </select>
             </div>
 
-            {/* Botão Limpar com Visual Escuro e Bem Visível */}
-            <div className="sm:col-span-1">
+            {/* Botão Limpar com Alto Contraste */}
+            <div className="sm:col-span-2">
               <button
                 type="button"
                 onClick={limparFiltros}
-                disabled={!buscaGeral && !filtroCheckin && filtroPeriodo === "todos" && !dataPersonalizada && filtroColaborador === "todos" && filtroStatusVenda === "todos"}
-                className="w-full py-2.5 px-3 rounded-xl border border-slate-300 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs flex items-center justify-center gap-1 transition shadow-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full py-2 px-3 rounded-xl border border-slate-300 bg-slate-200 hover:bg-slate-300 text-slate-900 font-extrabold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
                 title="Limpar todos os filtros"
               >
-                <X className="w-3.5 h-3.5 text-slate-700" />
-                <span>Limpar</span>
+                <X className="w-4 h-4 text-slate-900" />
+                <span>Limpar Filtros</span>
               </button>
             </div>
           </div>
 
-          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO */}
-          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
+          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO E INTERVALO PERSONALIZADO */}
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold uppercase text-slate-500 mr-1 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" /> Criado em:
               </span>
@@ -600,16 +623,30 @@ export default function GestaoOrcamentos() {
                 </button>
               ))}
 
+              {/* Intervalo de datas: De e Até */}
               {filtroPeriodo === "personalizado" && (
-                <input
-                  type="date"
-                  value={dataPersonalizada}
-                  onChange={(e) => {
-                    setDataPersonalizada(e.target.value);
-                    setPaginaAtual(1);
-                  }}
-                  className="bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900 ml-1"
-                />
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-300 ml-1 animate-in fade-in">
+                  <span className="text-[11px] font-bold text-slate-600 px-1">De:</span>
+                  <input
+                    type="date"
+                    value={dataInicioPersonalizada}
+                    onChange={(e) => {
+                      setDataInicioPersonalizada(e.target.value);
+                      setPaginaAtual(1);
+                    }}
+                    className="bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+                  />
+                  <span className="text-[11px] font-bold text-slate-600 px-1">Até:</span>
+                  <input
+                    type="date"
+                    value={dataFimPersonalizada}
+                    onChange={(e) => {
+                      setDataFimPersonalizada(e.target.value);
+                      setPaginaAtual(1);
+                    }}
+                    className="bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+                  />
+                </div>
               )}
             </div>
 
@@ -649,12 +686,10 @@ export default function GestaoOrcamentos() {
                 const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
                 const isFechado = Boolean(orc.vendaFechada);
                 
-                // Link de WhatsApp direto SEM mensagem prévia
                 const linkZapDiretoSemMensagem = zapTratado
                   ? `https://wa.me/${zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`}`
                   : null;
 
-                // Mensagem de Remarketing para o botão da direita
                 const saudacao = orc.clienteNome ? `Olá, ${orc.clienteNome}!` : "Olá!";
                 const textoRemarketing = encodeURIComponent(
                   `${saudacao} Vi que fez um *orçamento* conosco recentemente. *Ficou alguma dúvida?*\n\nTemos ofertas especiais e *pagamento facilitado*.\n\nQuer que eu prepare uma nova proposta para você?`
