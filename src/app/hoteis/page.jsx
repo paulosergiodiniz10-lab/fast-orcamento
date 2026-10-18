@@ -309,26 +309,33 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
 
       if (tarifasCompativeis.length > 0) {
         tarifasCompativeis.sort((a, b) => {
+          // Extrai o tempo em segundos/milissegundos com precisão
+          const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || (a.atualizadoEm instanceof Date ? a.atualizadoEm.getTime() / 1000 : 0);
+          const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || (b.atualizadoEm instanceof Date ? b.atualizadoEm.getTime() / 1000 : 0);
+
+          // 1º CRITÉRIO ABSOLUTO: O cadastro/atualização mais recente sempre prevalece
+          if (tempoA !== tempoB) {
+            return tempoB - tempoA;
+          }
+
+          // 2º CRITÉRIO: Exceção diária específica (dataInicio === dataFim)
           const isSingleDayA = a.dataInicio === a.dataFim ? 10 : 0;
           const isSingleDayB = b.dataInicio === b.dataFim ? 10 : 0;
+          if (isSingleDayA !== isSingleDayB) {
+            return isSingleDayB - isSingleDayA;
+          }
 
+          // 3º CRITÉRIO: Vinculação de apartamento específico
           const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
           const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
+          if (pesoAptoA !== pesoAptoB) {
+            return pesoAptoB - pesoAptoA;
+          }
+
+          // 4º CRITÉRIO: Pacote fechado
           const pesoPacoteA = a.pacoteFechado ? 2 : 0;
           const pesoPacoteB = b.pacoteFechado ? 2 : 0;
-          const especificidadeDiasA = 7 - (a.diasSemana?.length || 7);
-          const especificidadeDiasB = 7 - (b.diasSemana?.length || 7);
-          
-          const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
-          const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
-
-          const scoreA = isSingleDayA + pesoAptoA + pesoPacoteA + especificidadeDiasA;
-          const scoreB = isSingleDayB + pesoAptoB + pesoPacoteB + especificidadeDiasB;
-
-          if (scoreA !== scoreB) {
-            return scoreB - scoreA;
-          }
-          return tempoB - tempoA;
+          return pesoPacoteB - pesoPacoteA;
         });
 
         const tarifaVencedora = tarifasCompativeis[0];
@@ -648,7 +655,7 @@ export default function GestaoHoteis() {
 
   // Modal para Gerenciar / Criar / Renomear Nomes de Tarifas (Catálogo)
   const [modalRenomearAberto, setModalRenomearAberto] = useState(false);
-  const [abaModalCatalogo, setAbaModalCatalogo] = useState("novo"); // "novo" ou "renomear"
+  const [abaModalCatalogo, setAbaModalCatalogo] = useState("novo");
   const [novoNomeCatalogo, setNovoNomeCatalogo] = useState("");
   const [nomeParaRenomearAntigo, setNomeParaRenomearAntigo] = useState("");
   const [nomeParaRenomearNovo, setNomeParaRenomearNovo] = useState("");
@@ -2819,7 +2826,7 @@ export default function GestaoHoteis() {
                               placeholder="0,00"
                               value={tarifaValores[regimeAbaAtiva]?.adicAdulto || ""}
                               onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "adicAdulto", e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
                             />
                           </div>
 
@@ -2833,7 +2840,7 @@ export default function GestaoHoteis() {
                               placeholder="0,00"
                               value={tarifaValores[regimeAbaAtiva]?.adicCrianca || ""}
                               onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "adicCrianca", e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
                             />
                           </div>
                         </div>
