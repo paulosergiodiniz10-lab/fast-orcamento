@@ -692,6 +692,9 @@ function GeradorOrcamentoConteudo() {
       }
     }
 
+    // Sanitiza o desconto para garantir que seja um número positivo
+    const valorDescontoSanitizado = Math.abs(parseFloat(descontoValor)) || 0;
+
     const resultado = calcularTarifasEstadia({
       checkin,
       checkout,
@@ -702,7 +705,7 @@ function GeradorOrcamentoConteudo() {
       acomodacaoEscolhida: aptoSelecionado || null,
       desconto: {
         tipo: descontoTipo,
-        valor: parseFloat(descontoValor) || 0,
+        valor: valorDescontoSanitizado,
       },
     });
 
@@ -1061,6 +1064,9 @@ function GeradorOrcamentoConteudo() {
       valor: regimesValores[r.id],
     }));
 
+    // Sanitiza para gravar o desconto sem valores negativos
+    const valorDescontoPositivo = Math.abs(parseFloat(descontoValor)) || 0;
+
     const dadosOrcamento = {
       agenciaId: agencia?.id || "avulso",
       tipoOrcamento: abaAtiva,
@@ -1110,7 +1116,7 @@ function GeradorOrcamentoConteudo() {
       apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
       formaPagamento,
       aptosRestantes,
-      descontoAplicado: descontoValor ? { tipo: descontoTipo, valor: descontoValor } : null,
+      descontoAplicado: valorDescontoPositivo > 0 ? { tipo: descontoTipo, valor: String(valorDescontoPositivo) } : null,
       criadoEm: serverTimestamp(),
     };
 
@@ -1566,10 +1572,14 @@ function GeradorOrcamentoConteudo() {
                       </div>
 
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         placeholder="0"
                         value={descontoValor}
-                        onChange={(e) => setDescontoValor(e.target.value)}
+                        onChange={(e) => {
+                          const valorLimpo = e.target.value.replace(/[^0-9.]/g, "");
+                          setDescontoValor(valorLimpo);
+                        }}
                         className="w-14 bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-center font-bold text-emerald-950 outline-none focus:ring-1 focus:ring-emerald-600"
                       />
                     </div>
