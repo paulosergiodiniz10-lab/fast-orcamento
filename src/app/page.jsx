@@ -336,7 +336,7 @@ function GeradorOrcamentoConteudo() {
   const [tarifasHotelAtivo, setTarifasHotelAtivo] = useState([]);
   const [regrasCriancasHotel, setRegrasCriancasHotel] = useState({});
   const [alertaTarifario, setAlertaTarifario] = useState("");
-  const [descontoTipo, setDescontoTipo] = useState("porcentagem");
+  const [descontoTipo, setDescontoTipo] = useState("valor"); // 'porcentagem' ou 'valor'
   const [descontoValor, setDescontoValor] = useState("");
 
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
@@ -593,7 +593,7 @@ function GeradorOrcamentoConteudo() {
         prev.map((u) => (u.id === userId ? { ...u, status: novoStatus } : u))
       );
     } catch (err) {
-      console.error("Erro ao atualizar status:", err);
+      console.error(err);
       abrirAlerta("Erro", "Não foi possível atualizar o status do utilizador.");
     }
   };
@@ -672,6 +672,9 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
+  // =========================================================================
+  // MOTOR DE CÁLCULO E APLICAÇÃO DE TARIFAS
+  // =========================================================================
   useEffect(() => {
     if (!agencia?.permiteTarifario || !hotelSelecionado || abaAtiva !== "individual") {
       setAlertaTarifario("");
@@ -692,9 +695,6 @@ function GeradorOrcamentoConteudo() {
       }
     }
 
-    // Sanitiza o desconto para garantir que seja um número positivo
-    const valorDescontoSanitizado = Math.abs(parseFloat(descontoValor)) || 0;
-
     const resultado = calcularTarifasEstadia({
       checkin,
       checkout,
@@ -703,10 +703,7 @@ function GeradorOrcamentoConteudo() {
       tarifasHotel: tarifasHotelAtivo,
       regrasCriancas: regrasCriancasHotel,
       acomodacaoEscolhida: aptoSelecionado || null,
-      desconto: {
-        tipo: descontoTipo,
-        valor: valorDescontoSanitizado,
-      },
+      desconto: { tipo: "valor", valor: 0 },
     });
 
     if (resultado.sucesso) {
@@ -729,8 +726,6 @@ function GeradorOrcamentoConteudo() {
     tarifasHotelAtivo,
     regrasCriancasHotel,
     aptoSelecionado,
-    descontoTipo,
-    descontoValor,
     hotelSelecionado,
     abaAtiva,
     agencia,
@@ -783,7 +778,7 @@ function GeradorOrcamentoConteudo() {
   };
 
   const formatarMoeda = (valorDigitado) => {
-    const apenasNumeros = valorDigitado.replace(/\D/g, "");
+    const apenasNumeros = String(valorDigitado || "").replace(/\D/g, "");
     if (!apenasNumeros || parseInt(apenasNumeros, 10) === 0) return "";
 
     const valorFloat = parseFloat(apenasNumeros) / 100;
@@ -796,6 +791,40 @@ function GeradorOrcamentoConteudo() {
   const handleValorChange = (regimeId, valor) => {
     const formatado = formatarMoeda(valor);
     setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
+  };
+
+  /**
+   * Função que aplica o desconto em tempo real sobre qualquer valor digitado ou calculado
+   */
+  const calcularValorComDesconto = (valorOriginalStr) => {
+    if (!valorOriginalStr || valorOriginalStr.trim() === "" || valorOriginalStr === "0,00") {
+      return "";
+    }
+
+    const valorLimpo = String(valorOriginalStr).replace(/\./g, "").replace(",", ".");
+    const valorNum = parseFloat(valorLimpo);
+    if (isNaN(valorNum) || valorNum <= 0) return "";
+
+    const descNum = Math.abs(parseFloat(String(descontoValor).replace(",", "."))) || 0;
+    if (descNum <= 0) {
+      return valorNum.toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    let valorFinal = valorNum;
+    if (descontoTipo === "porcentagem") {
+      const taxa = Math.min(Math.max(descNum, 0), 100);
+      valorFinal = valorNum * (1 - taxa / 100);
+    } else {
+      valorFinal = Math.max(valorNum - descNum, 0);
+    }
+
+    return valorFinal.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   };
 
   const executarLimpeza = () => {
@@ -985,7 +1014,8 @@ function GeradorOrcamentoConteudo() {
       });
 
       regimesComValor.forEach((reg) => {
-        texto += `*${reg.label}:*\nR$ ${regimesValores[reg.id]}\n\n`;
+        const valorComDesconto = calcularValorComDesconto(regimesValores[reg.id]);
+        texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n\n`;
       });
     } else {
       apartamentosGrupo.forEach((ap) => {
@@ -1004,7 +1034,8 @@ function GeradorOrcamentoConteudo() {
 
         if (regimesComValor.length > 0) {
           regimesComValor.forEach((reg) => {
-            texto += `${reg.label}\nR$ ${ap.valores[reg.id]}\n\n`;
+            const valorComDesconto = calcularValorComDesconto(ap.valores[reg.id]);
+            texto += `${reg.label}\nR$ ${valorComDesconto}\n\n`;
           });
         } else {
           texto += `_Valores sob consulta_\n\n`;
@@ -1050,10 +1081,18 @@ function GeradorOrcamentoConteudo() {
       }
     }
 
-    const apartamentosTratados = apartamentosGrupo.map((ap) => ({
-      ...ap,
-      titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
-    }));
+    const apartamentosTratados = apartamentosGrupo.map((ap) => {
+      const valoresComDesconto = {};
+      Object.keys(ap.valores || {}).forEach((k) => {
+        valoresComDesconto[k] = calcularValorComDesconto(ap.valores[k]);
+      });
+
+      return {
+        ...ap,
+        valores: valoresComDesconto,
+        titulo: formatarDescricaoHospedes(ap.adultos, ap.criancas, ap.idadesCriancas),
+      };
+    });
 
     const regimesFiltradosGravar = REGIMES_OPCOES.filter((r) => {
       const val = regimesValores[r.id];
@@ -1061,11 +1100,10 @@ function GeradorOrcamentoConteudo() {
     }).map((r) => ({
       id: r.id,
       nome: r.label,
-      valor: regimesValores[r.id],
+      valor: calcularValorComDesconto(regimesValores[r.id]),
     }));
 
-    // Sanitiza para gravar o desconto sem valores negativos
-    const valorDescontoPositivo = Math.abs(parseFloat(descontoValor)) || 0;
+    const valorDescontoPositivo = Math.abs(parseFloat(String(descontoValor).replace(",", "."))) || 0;
 
     const dadosOrcamento = {
       agenciaId: agencia?.id || "avulso",
@@ -1542,50 +1580,69 @@ function GeradorOrcamentoConteudo() {
                 )}
               </div>
 
-              {/* REGIMES E VALORES COM MÓDULO DE DESCONTO */}
+              {/* REGIMES E VALORES - SEÇÃO REESTRUTURADA EM DUAS LINHAS COM DESCONTO LARGO */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                <div className="border-b border-slate-100 pb-3 space-y-2.5">
+                  {/* LINHA 1: TÍTULO PRINCIPAL */}
+                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
                     Regimes de Pensão e Valores (R$)
                   </label>
 
+                  {/* LINHA 2: CAMPO DE DESCONTO EM LINHA DEDICADA */}
                   {agencia?.permiteTarifario && (
-                    <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2 py-1 rounded-lg">
-                      <Tag className="w-3.5 h-3.5 text-emerald-700" />
-                      <span className="text-[11px] font-bold text-emerald-900 uppercase">Desconto:</span>
-                      
-                      <div className="flex items-center border border-emerald-300 rounded overflow-hidden bg-white">
-                        <button
-                          type="button"
-                          onClick={() => setDescontoTipo("porcentagem")}
-                          className={`px-1.5 py-0.5 text-[10px] font-black ${descontoTipo === "porcentagem" ? "bg-emerald-600 text-white" : "text-slate-600"}`}
-                        >
-                          %
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDescontoTipo("valor")}
-                          className={`px-1.5 py-0.5 text-[10px] font-black ${descontoTipo === "valor" ? "bg-emerald-600 text-white" : "text-slate-600"}`}
-                        >
-                          R$
-                        </button>
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-emerald-50/90 border border-emerald-300 p-2.5 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                          Desconto:
+                        </span>
                       </div>
+                      
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        {/* Seletor % / R$ */}
+                        <div className="flex items-center border border-emerald-300 rounded-lg overflow-hidden bg-white shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => setDescontoTipo("porcentagem")}
+                            className={`px-3 py-1.5 text-xs font-black transition ${
+                              descontoTipo === "porcentagem"
+                                ? "bg-emerald-600 text-white"
+                                : "text-slate-600 hover:bg-emerald-50"
+                            }`}
+                          >
+                            %
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDescontoTipo("valor")}
+                            className={`px-3 py-1.5 text-xs font-black transition ${
+                              descontoTipo === "valor"
+                                ? "bg-emerald-600 text-white"
+                                : "text-slate-600 hover:bg-emerald-50"
+                            }`}
+                          >
+                            R$
+                          </button>
+                        </div>
 
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={descontoValor}
-                        onChange={(e) => {
-                          const valorLimpo = e.target.value.replace(/[^0-9.]/g, "");
-                          setDescontoValor(valorLimpo);
-                        }}
-                        className="w-14 bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-center font-bold text-emerald-950 outline-none focus:ring-1 focus:ring-emerald-600"
-                      />
+                        {/* Campo de valor ampliado e confortável para celular */}
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          value={descontoValor}
+                          onChange={(e) => {
+                            const limpo = e.target.value.replace(/[^0-9,.]/g, "");
+                            setDescontoValor(limpo);
+                          }}
+                          className="w-28 sm:w-32 bg-white border border-emerald-300 rounded-lg py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-600 shadow-xs"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
 
+                {/* LISTAGEM DOS REGIMES */}
                 {REGIMES_OPCOES.map((reg) => (
                   <div key={reg.id} className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
