@@ -55,6 +55,23 @@ function obterEstiloTarifa(nomeTarifa) {
   return PALETA_CORES_TARIFAS[index];
 }
 
+const obterDataHojeIso = () => {
+  const d = new Date();
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
+
+const obterDataAmanhaIso = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
+
 function ToggleSwitch({ ativo, onToggle, label }) {
   return (
     <button
@@ -291,17 +308,26 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
       });
 
       if (tarifasCompativeis.length > 0) {
-        // Ordenação inteligente: sobrepõe regras mais específicas sobre regras gerais
+        // Ordenação inteligente: sobrepõe regras mais específicas sobre regras gerais e mais recentes
         tarifasCompativeis.sort((a, b) => {
           const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
           const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
           const pesoPacoteA = a.pacoteFechado ? 2 : 0;
           const pesoPacoteB = b.pacoteFechado ? 2 : 0;
-          // Quem tem menos dias da semana marcados é mais específico (ex: Final de semana bate semana inteira)
           const especificidadeDiasA = 7 - (a.diasSemana?.length || 7);
           const especificidadeDiasB = 7 - (b.diasSemana?.length || 7);
+          
+          // Data de criação/atualização (tarifa mais recente tem preferência na sobreposição)
+          const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
+          const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
 
-          return (pesoAptoB + pesoPacoteB + especificidadeDiasB) - (pesoAptoA + pesoPacoteA + especificidadeDiasA);
+          const scoreA = pesoAptoA + pesoPacoteA + especificidadeDiasA;
+          const scoreB = pesoAptoB + pesoPacoteB + especificidadeDiasB;
+
+          if (scoreA !== scoreB) {
+            return scoreB - scoreA;
+          }
+          return tempoB - tempoA;
         });
 
         const tarifaVencedora = tarifasCompativeis[0];
@@ -586,7 +612,7 @@ export default function GestaoHoteis() {
   const [observacoesHtml, setObservacoesHtml] = useState("");
 
   // =========================================================================
-  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5)
+  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5) - Datas iniciam com Hoje e Amanhã
   // =========================================================================
   const [tarifasCadastradas, setTarifasCadastradas] = useState([]);
   const [carregandoTarifas, setCarregandoTarifas] = useState(false);
@@ -594,8 +620,8 @@ export default function GestaoHoteis() {
   const [tarifaEditandoId, setTarifaEditandoId] = useState(null);
 
   const [tarifaNome, setTarifaNome] = useState("");
-  const [tarifaDataInicio, setTarifaDataInicio] = useState("");
-  const [tarifaDataFim, setTarifaDataFim] = useState("");
+  const [tarifaDataInicio, setTarifaDataInicio] = useState(obterDataHojeIso());
+  const [tarifaDataFim, setTarifaDataFim] = useState(obterDataAmanhaIso());
   const [tarifaDiasSemana, setTarifaDiasSemana] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [tarifaMinNoites, setTarifaMinNoites] = useState("1");
   const [tarifaPacoteFechado, setTarifaPacoteFechado] = useState(false);
@@ -1212,8 +1238,8 @@ export default function GestaoHoteis() {
   const limparFormTarifa = () => {
     setTarifaEditandoId(null);
     setTarifaNome("");
-    setTarifaDataInicio("");
-    setTarifaDataFim("");
+    setTarifaDataInicio(obterDataHojeIso());
+    setTarifaDataFim(obterDataAmanhaIso());
     setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
     setTarifaMinNoites("1");
     setTarifaPacoteFechado(false);
@@ -1243,8 +1269,8 @@ export default function GestaoHoteis() {
     setTarifaEmEdicaoModal({
       id: t.id,
       nome: t.nome || "",
-      dataInicio: t.dataInicio || "",
-      dataFim: t.dataFim || "",
+      dataInicio: t.dataInicio || obterDataHojeIso(),
+      dataFim: t.dataFim || obterDataAmanhaIso(),
       diasSemana: t.diasSemana || [0, 1, 2, 3, 4, 5, 6],
       minimoNoites: String(t.minimoNoites || 1),
       pacoteFechado: Boolean(t.pacoteFechado),
@@ -1328,24 +1354,15 @@ export default function GestaoHoteis() {
         aptoVinculado: tarifaAptoVinculado || "todos",
         ativo: true,
         valores: valoresNumericos,
+        criadoEm: serverTimestamp(),
+        atualizadoEm: serverTimestamp(),
       };
 
-      if (tarifaEditandoId) {
-        await updateDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaEditandoId), {
-          ...dadosTarifa,
-          atualizadoEm: serverTimestamp(),
-        });
-        abrirModal("success", "Tarifa Atualizada!", "Período tarifário atualizado com sucesso.");
-      } else {
-        await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), {
-          ...dadosTarifa,
-          criadoEm: serverTimestamp(),
-        });
-        abrirModal("success", "Tarifa Salva!", "Nova regra de tarifa adicionada ao hotel.");
-      }
+      await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), dadosTarifa);
 
       limparFormTarifa();
       carregarTarifasERegras(hotelEditandoId);
+      abrirModal("success", "Tarifa Salva!", "Nova regra de tarifa adicionada ao hotel.");
     } catch (err) {
       console.error(err);
       abrirModal("error", "Erro ao Salvar", "Não foi possível gravar a tarifa.");
@@ -1412,6 +1429,7 @@ export default function GestaoHoteis() {
   });
 
   const temPermissaoTarifario = Boolean(agencia?.permiteTarifario);
+  const hojeIso = obterDataHojeIso();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 font-sans relative">
@@ -2396,7 +2414,7 @@ export default function GestaoHoteis() {
               </div>
             )}
 
-            {/* ABA 5: TARIFÁRIO INTELIGENTE */}
+            {/* ABA 5: TARIFÁRIO INTELIGENTE com travas de datas mínimas (hoje) */}
             {abaAtiva === "tarifario" && temPermissaoTarifario && (
               <div className="space-y-6">
                 {!hotelEditandoId ? (
@@ -2443,6 +2461,7 @@ export default function GestaoHoteis() {
                           </label>
                           <input
                             type="date"
+                            min={hojeIso}
                             value={tarifaDataInicio}
                             onChange={(e) => setTarifaDataInicio(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
@@ -2455,6 +2474,7 @@ export default function GestaoHoteis() {
                           </label>
                           <input
                             type="date"
+                            min={tarifaDataInicio || hojeIso}
                             value={tarifaDataFim}
                             onChange={(e) => setTarifaDataFim(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
@@ -2818,7 +2838,7 @@ export default function GestaoHoteis() {
         )}
       </main>
 
-      {/* MODAL POP-UP DE EDIÇÃO INDIVIDUAL DA TARIFA */}
+      {/* MODAL POP-UP DE EDIÇÃO INDIVIDUAL DA TARIFA com travas de datas mínimas (hoje) */}
       {modalEditarTarifaAberto && tarifaEmEdicaoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
@@ -2859,6 +2879,7 @@ export default function GestaoHoteis() {
                 <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Início</label>
                 <input
                   type="date"
+                  min={hojeIso}
                   value={tarifaEmEdicaoModal.dataInicio}
                   onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, dataInicio: e.target.value }))}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
@@ -2869,6 +2890,7 @@ export default function GestaoHoteis() {
                 <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Fim</label>
                 <input
                   type="date"
+                  min={tarifaEmEdicaoModal.dataInicio || hojeIso}
                   value={tarifaEmEdicaoModal.dataFim}
                   onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, dataFim: e.target.value }))}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
