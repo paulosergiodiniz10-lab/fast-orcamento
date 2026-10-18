@@ -308,7 +308,6 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
       });
 
       if (tarifasCompativeis.length > 0) {
-        // Ordenação inteligente: sobrepõe regras mais específicas sobre regras gerais e mais recentes
         tarifasCompativeis.sort((a, b) => {
           const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
           const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
@@ -317,7 +316,6 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
           const especificidadeDiasA = 7 - (a.diasSemana?.length || 7);
           const especificidadeDiasB = 7 - (b.diasSemana?.length || 7);
           
-          // Data de criação/atualização (tarifa mais recente tem preferência na sobreposição)
           const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
           const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
 
@@ -1371,7 +1369,7 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Exclusão corrigida sem erro assíncrono
+  // Exclusão corrigida com passagem segura do ID do documento do Firestore
   const excluirTarifa = (tarifaId) => {
     if (!hotelEditandoId || !tarifaId) return;
 
