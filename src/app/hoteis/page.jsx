@@ -5,12 +5,12 @@ import {
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
   HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare,
-  FileText, Image as ImageIcon, CalendarDays
+  FileText, Image as ImageIcon, CalendarDays, Tag
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
 import { 
-  collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc, getDoc 
+  collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc, getDoc, writeBatch 
 } from "firebase/firestore";
 
 const CLOUD_NAME = "qi6dleli";
@@ -309,6 +309,10 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
 
       if (tarifasCompativeis.length > 0) {
         tarifasCompativeis.sort((a, b) => {
+          // Maior prioridade: tarifas de 1 único dia específico (exceções diárias)
+          const isSingleDayA = a.dataInicio === a.dataFim ? 10 : 0;
+          const isSingleDayB = b.dataInicio === b.dataFim ? 10 : 0;
+
           const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
           const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
           const pesoPacoteA = a.pacoteFechado ? 2 : 0;
@@ -319,8 +323,8 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
           const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
           const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
 
-          const scoreA = pesoAptoA + pesoPacoteA + especificidadeDiasA;
-          const scoreB = pesoAptoB + pesoPacoteB + especificidadeDiasB;
+          const scoreA = isSingleDayA + pesoAptoA + pesoPacoteA + especificidadeDiasA;
+          const scoreB = isSingleDayB + pesoAptoB + pesoPacoteB + especificidadeDiasB;
 
           if (scoreA !== scoreB) {
             return scoreB - scoreA;
@@ -341,6 +345,7 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
               dataIso,
               dataExibicao: `${diaStr}/${mesStr}/${anoSelecionado}`,
               diaSemana: DIAS_SEMANA[diaSemanaIdx],
+              diaSemanaIdx,
               tarifaNome: tarifaVencedora.nome,
               aptoVinculado: tarifaVencedora.aptoVinculado || "todos",
               regimeId: regId,
@@ -525,9 +530,9 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => onEditarTarifa(linha.tarifaOriginal)}
+                          onClick={() => onEditarTarifa(linha.tarifaOriginal, linha.dataIso, linha.diaSemanaIdx)}
                           className="p-1 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded transition"
-                          title="Editar esta tarifa individualmente"
+                          title="Editar valor específico deste dia"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -613,7 +618,7 @@ export default function GestaoHoteis() {
   const [observacoesHtml, setObservacoesHtml] = useState("");
 
   // =========================================================================
-  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5) - Datas iniciam com Hoje e Amanhã
+  // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5)
   // =========================================================================
   const [tarifasCadastradas, setTarifasCadastradas] = useState([]);
   const [carregandoTarifas, setCarregandoTarifas] = useState(false);
@@ -640,6 +645,12 @@ export default function GestaoHoteis() {
   // Modal Individual de Edição de Tarifa
   const [modalEditarTarifaAberto, setModalEditarTarifaAberto] = useState(false);
   const [tarifaEmEdicaoModal, setTarifaEmEdicaoModal] = useState(null);
+
+  // Modal para Renomear Tarifas em Massa (Catálogo)
+  const [modalRenomearAberto, setModalRenomearAberto] = useState(false);
+  const [nomeParaRenomearAntigo, setNomeParaRenomearAntigo] = useState("");
+  const [nomeParaRenomearNovo, setNomeParaRenomearNovo] = useState("");
+  const [renomeandoMassa, setRenomeandoMassa] = useState(false);
 
   const [regrasCriancas, setRegrasCriancas] = useState({
     idadeMaximaCortesia: "12",
@@ -1254,8 +1265,13 @@ export default function GestaoHoteis() {
     });
   };
 
-  // Abre Modal Individual para edição isolada
-  const abrirModalEditarTarifa = (t) => {
+  // Nomes únicos já cadastrados no hotel para alimentar o catálogo/dropdown
+  const nomesTarifasCatalogo = Array.from(
+    new Set(tarifasCadastradas.map((t) => (t.nome || "").trim()).filter(Boolean))
+  );
+
+  // Abre Modal Individual para edição isolada de 1 DIA ou período
+  const abrirModalEditarTarifa = (t, dataIsoClicada = null, diaSemanaIdx = null) => {
     const novosValores = {};
     REGIMES_LISTA.forEach((r) => {
       const dadosR = t.valores?.[r.id] || {};
@@ -1267,12 +1283,19 @@ export default function GestaoHoteis() {
       };
     });
 
+    // Se clicou através do calendário com data específica, ajusta para edição pontual daquele dia
+    const isEdicaoDiaEspecifico = Boolean(dataIsoClicada);
+    const dataInicioFinal = isEdicaoDiaEspecifico ? dataIsoClicada : (t.dataInicio || obterDataHojeIso());
+    const dataFimFinal = isEdicaoDiaEspecifico ? dataIsoClicada : (t.dataFim || obterDataAmanhaIso());
+    const diasSemanaFinal = isEdicaoDiaEspecifico && diaSemanaIdx !== null ? [diaSemanaIdx] : (t.diasSemana || [0, 1, 2, 3, 4, 5, 6]);
+
     setTarifaEmEdicaoModal({
-      id: t.id,
+      idOriginal: t.id,
+      isExcecaoDiaria: isEdicaoDiaEspecifico && (t.dataInicio !== t.dataFim),
       nome: t.nome || "",
-      dataInicio: t.dataInicio || obterDataHojeIso(),
-      dataFim: t.dataFim || obterDataAmanhaIso(),
-      diasSemana: t.diasSemana || [0, 1, 2, 3, 4, 5, 6],
+      dataInicio: dataInicioFinal,
+      dataFim: dataFimFinal,
+      diasSemana: diasSemanaFinal,
       minimoNoites: String(t.minimoNoites || 1),
       pacoteFechado: Boolean(t.pacoteFechado),
       aptoVinculado: t.aptoVinculado || "todos",
@@ -1306,19 +1329,68 @@ export default function GestaoHoteis() {
         minimoNoites: parseInt(tarifaEmEdicaoModal.minimoNoites, 10) || 1,
         pacoteFechado: Boolean(tarifaEmEdicaoModal.pacoteFechado),
         aptoVinculado: tarifaEmEdicaoModal.aptoVinculado || "todos",
+        ativo: true,
         valores: valoresNumericos,
         atualizadoEm: serverTimestamp(),
       };
 
-      await updateDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaEmEdicaoModal.id), dadosTarifa);
+      // Se for uma alteração pontual de um dia (ex: clicou no dia 23 de um período 23-24):
+      // Cria uma regra específica para aquele dia mantendo o nome e sem mutilar o período pai
+      if (tarifaEmEdicaoModal.isExcecaoDiaria) {
+        await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), {
+          ...dadosTarifa,
+          criadoEm: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaEmEdicaoModal.idOriginal), dadosTarifa);
+      }
 
       setModalEditarTarifaAberto(false);
       setTarifaEmEdicaoModal(null);
       await carregarTarifasERegras(hotelEditandoId);
-      abrirModal("success", "Tarifa Atualizada!", "A tarifa foi atualizada com sucesso.");
+      abrirModal("success", "Tarifa Atualizada!", "O valor da tarifa foi salvo com sucesso.");
     } catch (err) {
       console.error(err);
       abrirModal("error", "Erro ao Atualizar", "Não foi possível salvar as alterações da tarifa.");
+    }
+  };
+
+  // Renomear em massa todas as tarifas que têm determinado nome
+  const executarRenomeacaoMassa = async () => {
+    const antigo = (nomeParaRenomearAntigo || "").trim();
+    const novo = (nomeParaRenomearNovo || "").trim();
+
+    if (!antigo || !novo || antigo === novo) {
+      abrirModal("error", "Atenção", "Informe o nome novo para renomear.");
+      return;
+    }
+
+    try {
+      setRenomeandoMassa(true);
+      const batch = writeBatch(db);
+      const tarifasParaAlterar = tarifasCadastradas.filter(
+        (t) => (t.nome || "").trim().toLowerCase() === antigo.toLowerCase()
+      );
+
+      tarifasParaAlterar.forEach((tarifa) => {
+        const ref = doc(db, "hoteis", hotelEditandoId, "tarifas", tarifa.id);
+        batch.update(ref, {
+          nome: novo,
+          atualizadoEm: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+      setModalRenomearAberto(false);
+      setNomeParaRenomearAntigo("");
+      setNomeParaRenomearNovo("");
+      await carregarTarifasERegras(hotelEditandoId);
+      abrirModal("success", "Catálogo Atualizado", `Todas as tarifas com nome "${antigo}" foram alteradas para "${novo}".`);
+    } catch (err) {
+      console.error("Erro ao renomear em lote:", err);
+      abrirModal("error", "Erro", "Não foi possível atualizar o nome das tarifas em massa.");
+    } finally {
+      setRenomeandoMassa(false);
     }
   };
 
@@ -1372,7 +1444,6 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Exclusão corrigida com passagem segura do ID do documento do Firestore
   const excluirTarifa = (tarifaId) => {
     if (!hotelEditandoId || !tarifaId) {
       abrirModal("error", "Erro", "Identificador do hotel ou da tarifa não encontrado.");
@@ -2444,6 +2515,22 @@ export default function GestaoHoteis() {
                             Adicione períodos e valores. Regras de menos dias (ex: Final de semana) sobrepõem dias comuns.
                           </p>
                         </div>
+
+                        {nomesTarifasCatalogo.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNomeParaRenomearAntigo(nomesTarifasCatalogo[0] || "");
+                              setNomeParaRenomearNovo(nomesTarifasCatalogo[0] || "");
+                              setModalRenomearAberto(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-xl font-bold transition shadow-xs"
+                            title="Renomear um nome existente em todas as tarifas cadastradas"
+                          >
+                            <Tag className="w-3.5 h-3.5" />
+                            <span>Gerenciar Nomes</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -2451,13 +2538,36 @@ export default function GestaoHoteis() {
                           <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
                             Nome da Tarifa / Temporada *
                           </label>
-                          <input
-                            type="text"
-                            placeholder="Ex: Baixa Semana, Final de Semana, Feriado Finados"
-                            value={tarifaNome}
-                            onChange={(e) => setTarifaNome(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              list="lista-nomes-tarifas"
+                              placeholder="Digite ou selecione (ex: Baixa, Final de Semana)"
+                              value={tarifaNome}
+                              onChange={(e) => setTarifaNome(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                            />
+                            <datalist id="lista-nomes-tarifas">
+                              {nomesTarifasCatalogo.map((nm) => (
+                                <option key={nm} value={nm} />
+                              ))}
+                            </datalist>
+                          </div>
+                          {nomesTarifasCatalogo.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5 items-center">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold mr-1">Sugestões:</span>
+                              {nomesTarifasCatalogo.map((nm) => (
+                                <button
+                                  key={nm}
+                                  type="button"
+                                  onClick={() => setTarifaNome(nm)}
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-amber-100 text-slate-700 border border-slate-200 transition"
+                                >
+                                  {nm}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="md:col-span-3">
@@ -2843,7 +2953,7 @@ export default function GestaoHoteis() {
         )}
       </main>
 
-      {/* MODAL POP-UP DE EDIÇÃO INDIVIDUAL DA TARIFA com travas de datas mínimas (hoje) */}
+      {/* MODAL POP-UP DE EDIÇÃO INDIVIDUAL DA TARIFA */}
       {modalEditarTarifaAberto && tarifaEmEdicaoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
@@ -2853,8 +2963,14 @@ export default function GestaoHoteis() {
                   <Pencil className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-900">Editar Tarifa Individual</h3>
-                  <p className="text-xs text-slate-500">Modifique apenas este período e seus valores</p>
+                  <h3 className="font-bold text-base text-slate-900">
+                    {tarifaEmEdicaoModal.isExcecaoDiaria ? "Editar Valor Específico do Dia" : "Editar Tarifa"}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {tarifaEmEdicaoModal.isExcecaoDiaria 
+                      ? "Alterará apenas o valor deste dia sem modificar os demais dias do período."
+                      : "Modifique os valores aplicados a este período."}
+                  </p>
                 </div>
               </div>
               <button
@@ -2874,10 +2990,16 @@ export default function GestaoHoteis() {
                 <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Nome da Tarifa</label>
                 <input
                   type="text"
+                  list="lista-nomes-tarifas-modal"
                   value={tarifaEmEdicaoModal.nome}
                   onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, nome: e.target.value }))}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
                 />
+                <datalist id="lista-nomes-tarifas-modal">
+                  {nomesTarifasCatalogo.map((nm) => (
+                    <option key={nm} value={nm} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="md:col-span-3">
@@ -2885,9 +3007,10 @@ export default function GestaoHoteis() {
                 <input
                   type="date"
                   min={hojeIso}
+                  disabled={tarifaEmEdicaoModal.isExcecaoDiaria}
                   value={tarifaEmEdicaoModal.dataInicio}
                   onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, dataInicio: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600 disabled:opacity-60"
                 />
               </div>
 
@@ -2896,38 +3019,41 @@ export default function GestaoHoteis() {
                 <input
                   type="date"
                   min={tarifaEmEdicaoModal.dataInicio || hojeIso}
+                  disabled={tarifaEmEdicaoModal.isExcecaoDiaria}
                   value={tarifaEmEdicaoModal.dataFim}
                   onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, dataFim: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600 disabled:opacity-60"
                 />
               </div>
 
               {/* Dias da semana */}
-              <div className="md:col-span-12 space-y-1.5 pt-1">
-                <label className="text-[11px] font-bold text-slate-600 uppercase block">Dias da Semana Ativos</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {DIAS_SEMANA_NOMES.map((d) => {
-                    const ativo = tarifaEmEdicaoModal.diasSemana?.includes(d.id);
-                    return (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => {
-                          const novos = ativo 
-                            ? tarifaEmEdicaoModal.diasSemana.filter((x) => x !== d.id) 
-                            : [...tarifaEmEdicaoModal.diasSemana, d.id];
-                          setTarifaEmEdicaoModal((prev) => ({ ...prev, diasSemana: novos }));
-                        }}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
-                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-slate-100 text-slate-600 border-slate-300"
-                        }`}
-                      >
-                        {d.label}
-                      </button>
-                    );
-                  })}
+              {!tarifaEmEdicaoModal.isExcecaoDiaria && (
+                <div className="md:col-span-12 space-y-1.5 pt-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase block">Dias da Semana Ativos</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DIAS_SEMANA_NOMES.map((d) => {
+                      const ativo = tarifaEmEdicaoModal.diasSemana?.includes(d.id);
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => {
+                            const novos = ativo 
+                              ? tarifaEmEdicaoModal.diasSemana.filter((x) => x !== d.id) 
+                              : [...tarifaEmEdicaoModal.diasSemana, d.id];
+                            setTarifaEmEdicaoModal((prev) => ({ ...prev, diasSemana: novos }));
+                          }}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
+                            ativo ? "bg-blue-600 text-white border-blue-600" : "bg-slate-100 text-slate-600 border-slate-300"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Matriz de Preços no Modal */}
               <div className="md:col-span-12 space-y-2 pt-2 border-t border-slate-200">
@@ -3007,6 +3133,89 @@ export default function GestaoHoteis() {
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition shadow"
               >
                 Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA GERENCIAR / RENOMEAR NOMES DE TARIFAS EM MASSA */}
+      {modalRenomearAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg">
+                  <Tag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Catálogo de Nomes</h3>
+                  <p className="text-xs text-slate-500">Renomear em todas as tarifas cadastradas</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalRenomearAberto(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                  Nome Atual Cadastrado
+                </label>
+                <select
+                  value={nomeParaRenomearAntigo}
+                  onChange={(e) => {
+                    setNomeParaRenomearAntigo(e.target.value);
+                    setNomeParaRenomearNovo(e.target.value);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                >
+                  {nomesTarifasCatalogo.map((nm) => (
+                    <option key={nm} value={nm}>
+                      {nm}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                  Novo Nome Desejado
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Baixa Temporada, Alta Temporada..."
+                  value={nomeParaRenomearNovo}
+                  onChange={(e) => setNomeParaRenomearNovo(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                />
+              </div>
+
+              <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                Ao alterar, todas as tarifas que utilizam o nome antigo serão atualizadas automaticamente para o novo nome.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalRenomearAberto(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={renomeandoMassa}
+                onClick={executarRenomeacaoMassa}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition shadow disabled:opacity-50"
+              >
+                {renomeandoMassa ? "Atualizando..." : "Aplicar Novo Nome"}
               </button>
             </div>
           </div>
