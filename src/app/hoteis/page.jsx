@@ -5,7 +5,7 @@ import {
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
   HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare,
-  FileText, Image as ImageIcon, CalendarDays, Percent, ShieldCheck, Zap
+  FileText, Image as ImageIcon, CalendarDays
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -33,6 +33,27 @@ const REGIMES_LISTA = [
   { id: "pensao_completa", label: "Pensão Completa" },
   { id: "sem_refeicao", label: "Sem refeição" },
 ];
+
+const PALETA_CORES_TARIFAS = [
+  { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+  { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+  { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+  { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+  { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200" },
+  { bg: "bg-teal-50", text: "text-teal-700", border: "border-teal-200" },
+  { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+];
+
+function obterEstiloTarifa(nomeTarifa) {
+  if (!nomeTarifa) return PALETA_CORES_TARIFAS[0];
+  let hash = 0;
+  for (let i = 0; i < nomeTarifa.length; i++) {
+    hash = nomeTarifa.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % PALETA_CORES_TARIFAS.length;
+  return PALETA_CORES_TARIFAS[index];
+}
 
 function ToggleSwitch({ ativo, onToggle, label }) {
   return (
@@ -221,7 +242,7 @@ function EditorToolbar({ editorRef }) {
 }
 
 // =========================================================================
-// COMPONENTE: GESTÃO DO CALENDÁRIO COM FILTRO DE APARTAMENTO E AÇÕES
+// COMPONENTE: GESTÃO DO CALENDÁRIO COM CORES DISTINTAS E SOBREPOSIÇÃO
 // =========================================================================
 function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, onExcluirTarifa }) {
   const [mesSelecionado, setMesSelecionado] = useState(new Date().getMonth());
@@ -270,7 +291,19 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
       });
 
       if (tarifasCompativeis.length > 0) {
-        tarifasCompativeis.sort((a, b) => (b.pacoteFechado ? 1 : 0) - (a.pacoteFechado ? 1 : 0));
+        // Ordenação inteligente: sobrepõe regras mais específicas sobre regras gerais
+        tarifasCompativeis.sort((a, b) => {
+          const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
+          const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
+          const pesoPacoteA = a.pacoteFechado ? 2 : 0;
+          const pesoPacoteB = b.pacoteFechado ? 2 : 0;
+          // Quem tem menos dias da semana marcados é mais específico (ex: Final de semana bate semana inteira)
+          const especificidadeDiasA = 7 - (a.diasSemana?.length || 7);
+          const especificidadeDiasB = 7 - (b.diasSemana?.length || 7);
+
+          return (pesoAptoB + pesoPacoteB + especificidadeDiasB) - (pesoAptoA + pesoPacoteA + especificidadeDiasA);
+        });
+
         const tarifaVencedora = tarifasCompativeis[0];
 
         Object.keys(tarifaVencedora.valores || {}).forEach((regId) => {
@@ -433,56 +466,60 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
                 </td>
               </tr>
             ) : (
-              linhasFiltradas.map((linha) => (
-                <tr key={linha.id} className="hover:bg-slate-50/80 transition">
-                  <td className="py-2.5 px-3 font-extrabold text-slate-900">
-                    {linha.dataExibicao}
-                  </td>
-                  <td className="py-2.5 px-3 text-slate-400 font-medium">
-                    {linha.diaSemana}
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <span className="bg-blue-50 text-blue-700 border border-blue-200 font-bold px-2 py-0.5 rounded text-[10px] uppercase">
-                      {linha.tarifaNome}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 font-bold text-amber-700">
-                    {linha.regimeNome}
-                  </td>
-                  <td className="py-2.5 px-3 text-slate-600 font-semibold">
-                    R$ {linha.single.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-2.5 px-3 font-extrabold text-slate-900">
-                    R$ {linha.duplo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-2.5 px-3 text-slate-600 font-semibold">
-                    R$ {linha.adExtra.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-bold text-slate-700">
-                    {linha.minNoites}
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onEditarTarifa(linha.tarifaOriginal)}
-                        className="p-1 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded transition"
-                        title="Editar esta tarifa"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onExcluirTarifa(linha.tarifaOriginal.id)}
-                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                        title="Excluir tarifa"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              linhasFiltradas.map((linha) => {
+                const estiloCor = obterEstiloTarifa(linha.tarifaNome);
+
+                return (
+                  <tr key={linha.id} className="hover:bg-slate-50/80 transition">
+                    <td className="py-2.5 px-3 font-extrabold text-slate-900">
+                      {linha.dataExibicao}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-400 font-medium">
+                      {linha.diaSemana}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={`${estiloCor.bg} ${estiloCor.text} border ${estiloCor.border} font-bold px-2 py-0.5 rounded text-[10px] uppercase inline-block`}>
+                        {linha.tarifaNome}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-bold text-amber-700">
+                      {linha.regimeNome}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 font-semibold">
+                      R$ {linha.single.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-2.5 px-3 font-extrabold text-slate-900">
+                      R$ {linha.duplo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 font-semibold">
+                      R$ {linha.adExtra.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-slate-700">
+                      {linha.minNoites}
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onEditarTarifa(linha.tarifaOriginal)}
+                          className="p-1 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded transition"
+                          title="Editar esta tarifa individualmente"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onExcluirTarifa(linha.tarifaOriginal.id)}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                          title="Excluir tarifa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -572,6 +609,10 @@ export default function GestaoHoteis() {
     pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
     sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
   });
+
+  // Modal Individual de Edição de Tarifa
+  const [modalEditarTarifaAberto, setModalEditarTarifaAberto] = useState(false);
+  const [tarifaEmEdicaoModal, setTarifaEmEdicaoModal] = useState(null);
 
   const [regrasCriancas, setRegrasCriancas] = useState({
     idadeMaximaCortesia: "12",
@@ -1147,9 +1188,7 @@ export default function GestaoHoteis() {
   // =========================================================================
   const selecionarPredefinicaoDias = (tipo) => {
     if (tipo === "todos") setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
-    // Entra Domingo e sai Quinta: 4 noites (Dom, Seg, Ter, Qua)
     if (tipo === "dom_qui") setTarifaDiasSemana([0, 1, 2, 3]);
-    // Entra Sexta e sai Domingo: 2 noites (Sex, Sáb)
     if (tipo === "sex_dom") setTarifaDiasSemana([5, 6]);
   };
 
@@ -1188,16 +1227,8 @@ export default function GestaoHoteis() {
     });
   };
 
-  const iniciarEdicaoTarifa = (t) => {
-    setTarifaEditandoId(t.id);
-    setTarifaNome(t.nome || "");
-    setTarifaDataInicio(t.dataInicio || "");
-    setTarifaDataFim(t.dataFim || "");
-    setTarifaDiasSemana(t.diasSemana || [0, 1, 2, 3, 4, 5, 6]);
-    setTarifaMinNoites(String(t.minimoNoites || 1));
-    setTarifaPacoteFechado(Boolean(t.pacoteFechado));
-    setTarifaAptoVinculado(t.aptoVinculado || "todos");
-
+  // Abre Modal Individual para edição isolada
+  const abrirModalEditarTarifa = (t) => {
     const novosValores = {};
     REGIMES_LISTA.forEach((r) => {
       const dadosR = t.valores?.[r.id] || {};
@@ -1208,8 +1239,60 @@ export default function GestaoHoteis() {
         adicCrianca: dadosR.adicCrianca ? formatarMoedaInput(String(Math.round(dadosR.adicCrianca * 100))) : "",
       };
     });
-    setTarifaValores(novosValores);
-    window.scrollTo({ top: 300, behavior: "smooth" });
+
+    setTarifaEmEdicaoModal({
+      id: t.id,
+      nome: t.nome || "",
+      dataInicio: t.dataInicio || "",
+      dataFim: t.dataFim || "",
+      diasSemana: t.diasSemana || [0, 1, 2, 3, 4, 5, 6],
+      minimoNoites: String(t.minimoNoites || 1),
+      pacoteFechado: Boolean(t.pacoteFechado),
+      aptoVinculado: t.aptoVinculado || "todos",
+      valores: novosValores,
+      regimeAtivo: "cafe",
+    });
+
+    setModalEditarTarifaAberto(true);
+  };
+
+  const salvarTarifaPeloModal = async () => {
+    if (!hotelEditandoId || !tarifaEmEdicaoModal) return;
+
+    try {
+      const valoresNumericos = {};
+      REGIMES_LISTA.forEach((r) => {
+        const item = tarifaEmEdicaoModal.valores[r.id] || {};
+        valoresNumericos[r.id] = {
+          single: converterMoedaParaFloat(item.single),
+          duplo: converterMoedaParaFloat(item.duplo),
+          adicAdulto: converterMoedaParaFloat(item.adicAdulto),
+          adicCrianca: converterMoedaParaFloat(item.adicCrianca),
+        };
+      });
+
+      const dadosTarifa = {
+        nome: tarifaEmEdicaoModal.nome.trim(),
+        dataInicio: tarifaEmEdicaoModal.dataInicio,
+        dataFim: tarifaEmEdicaoModal.dataFim,
+        diasSemana: tarifaEmEdicaoModal.diasSemana,
+        minimoNoites: parseInt(tarifaEmEdicaoModal.minimoNoites, 10) || 1,
+        pacoteFechado: Boolean(tarifaEmEdicaoModal.pacoteFechado),
+        aptoVinculado: tarifaEmEdicaoModal.aptoVinculado || "todos",
+        valores: valoresNumericos,
+        atualizadoEm: serverTimestamp(),
+      };
+
+      await updateDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaEmEdicaoModal.id), dadosTarifa);
+
+      setModalEditarTarifaAberto(false);
+      setTarifaEmEdicaoModal(null);
+      await carregarTarifasERegras(hotelEditandoId);
+      abrirModal("success", "Tarifa Atualizada!", "A tarifa foi atualizada com sucesso.");
+    } catch (err) {
+      console.error(err);
+      abrirModal("error", "Erro ao Atualizar", "Não foi possível salvar as alterações da tarifa.");
+    }
   };
 
   const salvarNovaTarifa = async () => {
@@ -1271,19 +1354,24 @@ export default function GestaoHoteis() {
     }
   };
 
+  // Exclusão corrigida sem erro assíncrono
   const excluirTarifa = (tarifaId) => {
+    if (!hotelEditandoId || !tarifaId) return;
+
     abrirModal(
       "confirm",
       "Excluir Tarifa",
       "Deseja realmente excluir este período tarifário? Esta ação não poderá ser desfeita.",
       async () => {
         try {
-          await deleteDoc(doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaId));
+          const docRef = doc(db, "hoteis", hotelEditandoId, "tarifas", tarifaId);
+          await deleteDoc(docRef);
           setTarifasCadastradas((prev) => prev.filter((t) => t.id !== tarifaId));
-          abrirModal("success", "Excluído", "Tarifa removida com sucesso.");
         } catch (err) {
-          console.error(err);
-          abrirModal("error", "Erro", "Não foi possível excluir a tarifa.");
+          console.error("Erro ao deletar documento no Firestore:", err);
+          setTimeout(() => {
+            abrirModal("error", "Erro", "Não foi possível excluir a tarifa.");
+          }, 200);
         }
       }
     );
@@ -2321,27 +2409,18 @@ export default function GestaoHoteis() {
                   </div>
                 ) : (
                   <>
-                    {/* FORMULÁRIO DE CADASTRO/EDIÇÃO DE TARIFAS */}
+                    {/* FORMULÁRIO DE CADASTRO GERAL */}
                     <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
                       <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                         <div>
                           <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
                             <CalendarDays className="w-5 h-5 text-amber-600" />
-                            {tarifaEditandoId ? "Editar Tarifa Selecionada" : "Cadastrar Nova Tarifa / Temporada"}
+                            Cadastrar Nova Tarifa / Temporada
                           </h3>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            Configure períodos, regras de dias da semana e valores por pensão sem conflito.
+                            Adicione períodos e valores. Regras de menos dias (ex: Final de semana) sobrepõem dias comuns.
                           </p>
                         </div>
-                        {tarifaEditandoId && (
-                          <button
-                            type="button"
-                            onClick={limparFormTarifa}
-                            className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
-                          >
-                            Cancelar Edição
-                          </button>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -2382,7 +2461,6 @@ export default function GestaoHoteis() {
                           />
                         </div>
 
-                        {/* SELEÇÃO DE DIAS DA SEMANA COM ATALHOS HOTELEIROS */}
                         <div className="md:col-span-12 space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -2437,7 +2515,6 @@ export default function GestaoHoteis() {
                           </div>
                         </div>
 
-                        {/* CATEGORIA DO QUARTO VINCULADO */}
                         <div className="md:col-span-12 bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
                           <label className="text-xs font-bold text-slate-800 uppercase block">
                             Válido para qual Acomodação?
@@ -2454,9 +2531,6 @@ export default function GestaoHoteis() {
                               </option>
                             ))}
                           </select>
-                          <span className="text-[10px] text-slate-500 block">
-                            Permite ter preços diferentes por tipo de apartamento (ex: Luxo vs Standard).
-                          </span>
                         </div>
 
                         <div className="md:col-span-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
@@ -2486,7 +2560,6 @@ export default function GestaoHoteis() {
                         </div>
                       </div>
 
-                      {/* MATRIZ DE PREÇOS POR REGIME */}
                       <div className="pt-3 border-t border-slate-100 space-y-3">
                         <label className="text-xs font-bold text-slate-800 uppercase block">
                           Valores das Diárias por Regime de Pensão:
@@ -2576,7 +2649,7 @@ export default function GestaoHoteis() {
                           className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow flex items-center gap-1.5 disabled:opacity-50"
                         >
                           {salvandoTarifa ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                          <span>{tarifaEditandoId ? "Atualizar Tarifa" : "Adicionar Tarifa à Tabela"}</span>
+                          <span>Adicionar Tarifa à Tabela</span>
                         </button>
                       </div>
                     </div>
@@ -2678,11 +2751,11 @@ export default function GestaoHoteis() {
                       </div>
                     </div>
 
-                    {/* 5.4 GESTÃO DO CALENDÁRIO COM FILTROS E AÇÕES DIRETAS */}
+                    {/* GESTÃO DO CALENDÁRIO COM CORES DISTINTAS */}
                     <TabelaGestaoCalendario 
                       tarifas={tarifasCadastradas} 
                       tiposApto={tiposApto}
-                      onEditarTarifa={iniciarEdicaoTarifa}
+                      onEditarTarifa={abrirModalEditarTarifa}
                       onExcluirTarifa={excluirTarifa}
                     />
                   </>
@@ -2745,6 +2818,174 @@ export default function GestaoHoteis() {
         )}
       </main>
 
+      {/* MODAL POP-UP DE EDIÇÃO INDIVIDUAL DA TARIFA */}
+      {modalEditarTarifaAberto && tarifaEmEdicaoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Editar Tarifa Individual</h3>
+                  <p className="text-xs text-slate-500">Modifique apenas este período e seus valores</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalEditarTarifaAberto(false);
+                  setTarifaEmEdicaoModal(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+              <div className="md:col-span-6">
+                <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Nome da Tarifa</label>
+                <input
+                  type="text"
+                  value={tarifaEmEdicaoModal.nome}
+                  onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, nome: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Início</label>
+                <input
+                  type="date"
+                  value={tarifaEmEdicaoModal.dataInicio}
+                  onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, dataInicio: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Fim</label>
+                <input
+                  type="date"
+                  value={tarifaEmEdicaoModal.dataFim}
+                  onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, dataFim: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                />
+              </div>
+
+              {/* Dias da semana */}
+              <div className="md:col-span-12 space-y-1.5 pt-1">
+                <label className="text-[11px] font-bold text-slate-600 uppercase block">Dias da Semana Ativos</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DIAS_SEMANA_NOMES.map((d) => {
+                    const ativo = tarifaEmEdicaoModal.diasSemana?.includes(d.id);
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => {
+                          const novos = ativo 
+                            ? tarifaEmEdicaoModal.diasSemana.filter((x) => x !== d.id) 
+                            : [...tarifaEmEdicaoModal.diasSemana, d.id];
+                          setTarifaEmEdicaoModal((prev) => ({ ...prev, diasSemana: novos }));
+                        }}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
+                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-slate-100 text-slate-600 border-slate-300"
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Matriz de Preços no Modal */}
+              <div className="md:col-span-12 space-y-2 pt-2 border-t border-slate-200">
+                <label className="text-[11px] font-bold text-slate-800 uppercase block">Valores por Regime:</label>
+                <div className="flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+                  {REGIMES_LISTA.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setTarifaEmEdicaoModal((prev) => ({ ...prev, regimeAtivo: r.id }))}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                        (tarifaEmEdicaoModal.regimeAtivo || "cafe") === r.id
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {["single", "duplo", "adicAdulto", "adicCrianca"].map((campo) => {
+                    const regimeAtual = tarifaEmEdicaoModal.regimeAtivo || "cafe";
+                    const labels = {
+                      single: "Single (1 Pax)",
+                      duplo: "Duplo (2 Pax)",
+                      adicAdulto: "Ad. Adulto",
+                      adicCrianca: "Ad. Criança",
+                    };
+                    return (
+                      <div key={campo}>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          {labels[campo]}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          value={tarifaEmEdicaoModal.valores[regimeAtual]?.[campo] || ""}
+                          onChange={(e) => {
+                            const formatado = formatarMoedaInput(e.target.value);
+                            setTarifaEmEdicaoModal((prev) => ({
+                              ...prev,
+                              valores: {
+                                ...prev.valores,
+                                [regimeAtual]: {
+                                  ...prev.valores[regimeAtual],
+                                  [campo]: formatado,
+                                },
+                              },
+                            }));
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-amber-600"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalEditarTarifaAberto(false);
+                  setTarifaEmEdicaoModal(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={salvarTarifaPeloModal}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition shadow"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE ALERTA E CONFIRMAÇÃO */}
       {modalConfig.aberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2785,9 +3026,10 @@ export default function GestaoHoteis() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    onClick={async () => {
+                      const acao = modalConfig.onConfirm;
                       fecharModal();
+                      if (acao) await acao();
                     }}
                     className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow"
                   >
