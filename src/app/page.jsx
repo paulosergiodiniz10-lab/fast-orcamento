@@ -683,10 +683,18 @@ function GeradorOrcamentoConteudo() {
 
     const numCr = parseInt(criancas, 10) || 0;
     const arrayIdades = [];
-    if (numCr > 0 && idadesCriancas.trim()) {
+
+    if (numCr > 0) {
       const matches = idadesCriancas.match(/\d+/g);
-      if (matches) {
+      if (matches && matches.length > 0) {
         matches.forEach((m) => arrayIdades.push(parseInt(m, 10)));
+      }
+
+      // Se informou menos idades que o total de crianças (ex: texto 'até 12 anos' com 3 crianças),
+      // completa as faltantes com a idade máxima da cortesia para garantir a conta exata
+      const idadePadrao = Number(regrasCriancasHotel?.idadeMaximaCortesia ?? 12);
+      while (arrayIdades.length < numCr) {
+        arrayIdades.push(idadePadrao);
       }
     }
 
@@ -694,6 +702,7 @@ function GeradorOrcamentoConteudo() {
       checkin,
       checkout,
       qtdAdultos: parseInt(adultos, 10) || 2,
+      qtdCriancas: numCr,
       idadesCriancas: arrayIdades,
       tarifasHotel: tarifasHotelAtivo,
       regrasCriancas: regrasCriancasHotel,
@@ -1728,7 +1737,7 @@ function GeradorOrcamentoConteudo() {
                               placeholder="Ex: 13 anos (ou '5 e 9 anos')"
                               value={apto.idadesCriancas || ""}
                               onChange={(e) => atualizarApartamentoGrupo(index, "idadesCriancas", e.target.value)}
-                              className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+                              className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
                             />
 
                             {opcoesCriancasHotel.length > 0 && (
