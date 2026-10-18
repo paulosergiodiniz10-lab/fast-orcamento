@@ -7,7 +7,7 @@ import {
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
   Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin,
-  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2, Pencil
+  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2, Pencil, Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -331,13 +331,12 @@ function GeradorOrcamentoConteudo() {
   const [regimesValores, setRegimesValores] = useState({});
 
   // =========================================================================
-  // ESTADOS DO MÓDULO TARIFÁRIO & DESCONTO
+  // ESTADOS DO MÓDULO TARIFÁRIO & DESCONTO EXCLUSIVO EM %
   // =========================================================================
   const [tarifasHotelAtivo, setTarifasHotelAtivo] = useState([]);
   const [regrasCriancasHotel, setRegrasCriancasHotel] = useState({});
   const [alertaTarifario, setAlertaTarifario] = useState("");
-  const [descontoTipo, setDescontoTipo] = useState("valor"); // 'porcentagem' ou 'valor'
-  const [descontoValor, setDescontoValor] = useState("");
+  const [descontoPercentual, setDescontoPercentual] = useState("");
 
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
@@ -593,7 +592,7 @@ function GeradorOrcamentoConteudo() {
         prev.map((u) => (u.id === userId ? { ...u, status: novoStatus } : u))
       );
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao atualizar status:", err);
       abrirAlerta("Erro", "Não foi possível atualizar o status do utilizador.");
     }
   };
@@ -703,7 +702,7 @@ function GeradorOrcamentoConteudo() {
       tarifasHotel: tarifasHotelAtivo,
       regrasCriancas: regrasCriancasHotel,
       acomodacaoEscolhida: aptoSelecionado || null,
-      desconto: { tipo: "valor", valor: 0 },
+      desconto: { tipo: "porcentagem", valor: 0 },
     });
 
     if (resultado.sucesso) {
@@ -794,7 +793,7 @@ function GeradorOrcamentoConteudo() {
   };
 
   /**
-   * Função que aplica o desconto em tempo real sobre qualquer valor digitado ou calculado
+   * Aplica o desconto percentual exclusivo (%) em tempo real sobre os valores
    */
   const calcularValorComDesconto = (valorOriginalStr) => {
     if (!valorOriginalStr || valorOriginalStr.trim() === "" || valorOriginalStr === "0,00") {
@@ -805,27 +804,23 @@ function GeradorOrcamentoConteudo() {
     const valorNum = parseFloat(valorLimpo);
     if (isNaN(valorNum) || valorNum <= 0) return "";
 
-    const descNum = Math.abs(parseFloat(String(descontoValor).replace(",", "."))) || 0;
-    if (descNum <= 0) {
+    const taxaPerc = Math.min(Math.max(parseInt(descontoPercentual, 10) || 0, 0), 100);
+    if (taxaPerc <= 0) {
       return valorNum.toLocaleString("pt-BR", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
     }
 
-    let valorFinal = valorNum;
-    if (descontoTipo === "porcentagem") {
-      const taxa = Math.min(Math.max(descNum, 0), 100);
-      valorFinal = valorNum * (1 - taxa / 100);
-    } else {
-      valorFinal = Math.max(valorNum - descNum, 0);
-    }
+    const valorFinal = valorNum * (1 - taxaPerc / 100);
 
     return valorFinal.toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
   };
+
+  const temDescontoAtivo = Boolean((parseInt(descontoPercentual, 10) || 0) > 0);
 
   const executarLimpeza = () => {
     setClienteNome("");
@@ -847,7 +842,7 @@ function GeradorOrcamentoConteudo() {
     setCriancas("0");
     setIdadesCriancas("");
     setRegimesValores({});
-    setDescontoValor("");
+    setDescontoPercentual("");
     setAlertaTarifario("");
     setApartamentosGrupo([
       {
@@ -1043,6 +1038,11 @@ function GeradorOrcamentoConteudo() {
       });
     }
 
+    // Linha de promoção especial exclusiva quando há desconto aplicado
+    if (temDescontoAtivo) {
+      texto += `🔥 *Promoção especial com desconto exclusivo!*\n\n`;
+    }
+
     if (formaPagamento && formaPagamento.trim()) {
       texto += `${iconeCartao}*Formas de Pagamento:*\n${formaPagamento.trim()}\n\n`;
     }
@@ -1103,7 +1103,7 @@ function GeradorOrcamentoConteudo() {
       valor: calcularValorComDesconto(regimesValores[r.id]),
     }));
 
-    const valorDescontoPositivo = Math.abs(parseFloat(String(descontoValor).replace(",", "."))) || 0;
+    const taxaPercNum = Math.min(Math.max(parseInt(descontoPercentual, 10) || 0, 0), 100);
 
     const dadosOrcamento = {
       agenciaId: agencia?.id || "avulso",
@@ -1154,7 +1154,7 @@ function GeradorOrcamentoConteudo() {
       apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
       formaPagamento,
       aptosRestantes,
-      descontoAplicado: valorDescontoPositivo > 0 ? { tipo: descontoTipo, valor: String(valorDescontoPositivo) } : null,
+      descontoAplicado: taxaPercNum > 0 ? { tipo: "porcentagem", valor: String(taxaPercNum) } : null,
       criadoEm: serverTimestamp(),
     };
 
@@ -1580,15 +1580,15 @@ function GeradorOrcamentoConteudo() {
                 )}
               </div>
 
-              {/* REGIMES E VALORES - SEÇÃO REESTRUTURADA EM DUAS LINHAS COM DESCONTO LARGO */}
+              {/* REGIMES E VALORES - SEÇÃO REESTRUTURADA EM DUAS LINHAS COM DESCONTO % DEDICADO */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                <div className="border-b border-slate-100 pb-3 space-y-2.5">
+                <div className="border-b border-slate-100 pb-3 space-y-2">
                   {/* LINHA 1: TÍTULO PRINCIPAL */}
                   <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
                     Regimes de Pensão e Valores (R$)
                   </label>
 
-                  {/* LINHA 2: CAMPO DE DESCONTO EM LINHA DEDICADA */}
+                  {/* LINHA 2: CAMPO DE DESCONTO COM BOTÃO % E BOTÃO LIMPAR */}
                   {agencia?.permiteTarifario && (
                     <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-emerald-50/90 border border-emerald-300 p-2.5 rounded-xl">
                       <div className="flex items-center gap-2">
@@ -1599,44 +1599,34 @@ function GeradorOrcamentoConteudo() {
                       </div>
                       
                       <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                        {/* Seletor % / R$ */}
-                        <div className="flex items-center border border-emerald-300 rounded-lg overflow-hidden bg-white shadow-xs">
-                          <button
-                            type="button"
-                            onClick={() => setDescontoTipo("porcentagem")}
-                            className={`px-3 py-1.5 text-xs font-black transition ${
-                              descontoTipo === "porcentagem"
-                                ? "bg-emerald-600 text-white"
-                                : "text-slate-600 hover:bg-emerald-50"
-                            }`}
-                          >
+                        <div className="inline-flex items-center bg-white border border-emerald-300 rounded-lg overflow-hidden shadow-xs">
+                          <span className="bg-emerald-600 text-white text-xs font-black px-3 py-2 flex items-center justify-center">
                             %
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDescontoTipo("valor")}
-                            className={`px-3 py-1.5 text-xs font-black transition ${
-                              descontoTipo === "valor"
-                                ? "bg-emerald-600 text-white"
-                                : "text-slate-600 hover:bg-emerald-50"
-                            }`}
-                          >
-                            R$
-                          </button>
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="0"
+                            value={descontoPercentual}
+                            onChange={(e) => {
+                              const valorNumerico = e.target.value.replace(/\D/g, "");
+                              setDescontoPercentual(valorNumerico);
+                            }}
+                            className="w-20 bg-white py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none"
+                          />
                         </div>
 
-                        {/* Campo de valor ampliado e confortável para celular */}
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="0,00"
-                          value={descontoValor}
-                          onChange={(e) => {
-                            const limpo = e.target.value.replace(/[^0-9,.]/g, "");
-                            setDescontoValor(limpo);
-                          }}
-                          className="w-28 sm:w-32 bg-white border border-emerald-300 rounded-lg py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-600 shadow-xs"
-                        />
+                        {/* Botão Limpar Desconto */}
+                        {descontoPercentual !== "" && (
+                          <button
+                            type="button"
+                            onClick={() => setDescontoPercentual("")}
+                            className="text-xs font-bold text-slate-500 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 px-2.5 py-1.5 rounded-lg transition"
+                            title="Limpar desconto"
+                          >
+                            Limpar
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
