@@ -7,13 +7,13 @@ import {
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
   Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin,
-  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2
+  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2, Pencil
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
 import { 
   collection, addDoc, getDocs, query, where, serverTimestamp, 
-  doc, getDoc, updateDoc 
+  doc, getDoc, updateDoc, deleteDoc 
 } from "firebase/firestore";
 import { calcularTarifasEstadia } from "../lib/calculadoraTarifas";
 
@@ -378,6 +378,7 @@ function GeradorOrcamentoConteudo() {
   const [mostrarSenhasEquipe, setMostrarSenhasEquipe] = useState({});
   const [salvandoUsuario, setSalvandoUsuario] = useState(false);
   const [erroUsuario, setErroUsuario] = useState("");
+  const [usuarioEditandoId, setUsuarioEditandoId] = useState(null);
   const [novoUsuario, setNovoUsuario] = useState({
     nome: "",
     login: "",
@@ -481,6 +482,43 @@ function GeradorOrcamentoConteudo() {
     setMostrarSenhasEquipe((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const iniciarEdicaoUsuario = (u) => {
+    setUsuarioEditandoId(u.id);
+    setNovoUsuario({
+      nome: u.nome || "",
+      login: u.login || "",
+      senha: u.senha || "",
+      permissao: u.permissao || "usuario",
+    });
+  };
+
+  const cancelarEdicaoUsuario = () => {
+    setUsuarioEditandoId(null);
+    setNovoUsuario({
+      nome: "",
+      login: "",
+      senha: "",
+      permissao: "usuario",
+    });
+  };
+
+  const excluirUsuarioEquipe = (userId, nomeUser) => {
+    abrirConfirmacao(
+      "Excluir Colaborador",
+      `Deseja realmente remover o colaborador "${nomeUser}"? Esta ação não poderá ser desfeita.`,
+      async () => {
+        try {
+          await deleteDoc(doc(db, "agencias", agencia.id, "usuarios", userId));
+          setUsuariosEquipe((prev) => prev.filter((u) => u.id !== userId));
+          abrirAlerta("Sucesso", "Colaborador excluído com sucesso.");
+        } catch (err) {
+          console.error(err);
+          abrirAlerta("Erro", "Não foi possível excluir o colaborador.");
+        }
+      }
+    );
+  };
+
   const handleCriarUsuario = async (e) => {
     e.preventDefault();
     setErroUsuario("");
@@ -497,7 +535,9 @@ function GeradorOrcamentoConteudo() {
       return;
     }
 
-    const jaExiste = usuariosEquipe.some((u) => u.login.toLowerCase() === loginNormalizado);
+    const jaExiste = usuariosEquipe.some(
+      (u) => u.login.toLowerCase() === loginNormalizado && u.id !== usuarioEditandoId
+    );
     if (jaExiste) {
       setErroUsuario("Já existe um utilizador com este login.");
       return;
@@ -505,15 +545,27 @@ function GeradorOrcamentoConteudo() {
 
     setSalvandoUsuario(true);
     try {
-      const colRef = collection(db, "agencias", agencia.id, "usuarios");
-      await addDoc(colRef, {
-        nome: novoUsuario.nome.trim(),
-        login: loginNormalizado,
-        senha: novoUsuario.senha.trim(),
-        permissao: novoUsuario.permissao || "usuario",
-        status: "ativo",
-        criadoEm: serverTimestamp(),
-      });
+      if (usuarioEditandoId) {
+        const docRef = doc(db, "agencias", agencia.id, "usuarios", usuarioEditandoId);
+        await updateDoc(docRef, {
+          nome: novoUsuario.nome.trim(),
+          login: loginNormalizado,
+          senha: novoUsuario.senha.trim(),
+          permissao: novoUsuario.permissao || "usuario",
+          atualizadoEm: serverTimestamp(),
+        });
+        setUsuarioEditandoId(null);
+      } else {
+        const colRef = collection(db, "agencias", agencia.id, "usuarios");
+        await addDoc(colRef, {
+          nome: novoUsuario.nome.trim(),
+          login: loginNormalizado,
+          senha: novoUsuario.senha.trim(),
+          permissao: novoUsuario.permissao || "usuario",
+          status: "ativo",
+          criadoEm: serverTimestamp(),
+        });
+      }
 
       setNovoUsuario({
         nome: "",
@@ -524,8 +576,8 @@ function GeradorOrcamentoConteudo() {
 
       await carregarEquipe();
     } catch (err) {
-      console.error("Erro ao salvar utilizador:", err);
-      setErroUsuario("Não foi possível salvar o utilizador.");
+      console.error(err);
+      setErroUsuario("Não foi possível salvar o colaborador.");
     } finally {
       setSalvandoUsuario(false);
     }
@@ -647,6 +699,7 @@ function GeradorOrcamentoConteudo() {
       idadesCriancas: arrayIdades,
       tarifasHotel: tarifasHotelAtivo,
       regrasCriancas: regrasCriancasHotel,
+      acomodacaoEscolhida: aptoSelecionado || null,
       desconto: {
         tipo: descontoTipo,
         valor: parseFloat(descontoValor) || 0,
@@ -672,6 +725,7 @@ function GeradorOrcamentoConteudo() {
     idadesCriancas,
     tarifasHotelAtivo,
     regrasCriancasHotel,
+    aptoSelecionado,
     descontoTipo,
     descontoValor,
     hotelSelecionado,
@@ -713,7 +767,6 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
-  // Logout com limpeza sincronizada do LocalStorage e do Cookie de Autenticação
   const handleLogout = () => {
     localStorage.removeItem("fast_agencia");
     document.cookie = "fast_agencia_auth=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
@@ -1884,18 +1937,32 @@ function GeradorOrcamentoConteudo() {
               </div>
               <button
                 type="button"
-                onClick={() => setModalEquipeAberto(false)}
+                onClick={() => {
+                  cancelarEdicaoUsuario();
+                  setModalEquipeAberto(false);
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* FORMULÁRIO PARA CADASTRAR NOVO UTILIZADOR */}
+            {/* FORMULÁRIO PARA CADASTRAR OU EDITAR UTILIZADOR */}
             <form onSubmit={handleCriarUsuario} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
-              <span className="text-xs font-bold uppercase text-brand-900 flex items-center gap-1.5">
-                <UserPlus className="w-4 h-4" /> Novo Colaborador
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-brand-900 flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4" /> {usuarioEditandoId ? "Editar Colaborador" : "Novo Colaborador"}
+                </span>
+                {usuarioEditandoId && (
+                  <button
+                    type="button"
+                    onClick={cancelarEdicaoUsuario}
+                    className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+                  >
+                    Cancelar Edição
+                  </button>
+                )}
+              </div>
 
               {erroUsuario && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-2.5 rounded-lg flex items-center gap-2">
@@ -1961,7 +2028,7 @@ function GeradorOrcamentoConteudo() {
                   className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
                 >
                   {salvandoUsuario ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  <span>{salvandoUsuario ? "A salvar..." : "Adicionar Colaborador"}</span>
+                  <span>{salvandoUsuario ? "A salvar..." : usuarioEditandoId ? "Atualizar Colaborador" : "Adicionar Colaborador"}</span>
                 </button>
               </div>
             </form>
@@ -2019,18 +2086,40 @@ function GeradorOrcamentoConteudo() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-center">
+                        <div className="flex items-center gap-1.5 self-end sm:self-center">
+                          {/* BOTÃO EDITAR */}
+                          <button
+                            type="button"
+                            onClick={() => iniciarEdicaoUsuario(u)}
+                            className="p-1.5 text-slate-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition"
+                            title="Editar colaborador"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* BOTÃO BLOQUEAR / ATIVAR */}
                           <button
                             type="button"
                             onClick={() => alternarStatusUsuario(u.id, u.status)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
                               isBloqueado
                                 ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                                : "bg-red-100 text-red-700 hover:bg-red-200"
+                                : "bg-red-50 text-red-700 hover:bg-red-100"
                             }`}
+                            title={isBloqueado ? "Ativar utilizador" : "Bloquear utilizador"}
                           >
                             {isBloqueado ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
                             <span>{isBloqueado ? "Ativar" : "Bloquear"}</span>
+                          </button>
+
+                          {/* BOTÃO EXCLUIR */}
+                          <button
+                            type="button"
+                            onClick={() => excluirUsuarioEquipe(u.id, u.nome)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Excluir colaborador"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
