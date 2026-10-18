@@ -368,9 +368,7 @@ function GeradorOrcamentoConteudo() {
     onConfirm: null,
   });
 
-  // =========================================================================
-  // ESTADOS DO GERENCIAMENTO DE EQUIPE (SUB-USUÁRIOS DA AGÊNCIA)
-  // =========================================================================
+  // Gerenciamento de Equipe
   const [modalEquipeAberto, setModalEquipeAberto] = useState(false);
   const [usuariosEquipe, setUsuariosEquipe] = useState([]);
   const [carregandoEquipe, setCarregandoEquipe] = useState(false);
@@ -455,7 +453,6 @@ function GeradorOrcamentoConteudo() {
 
   const agencyIdSafe = (id) => id || "";
 
-  // Carregar sub-usuários da agência
   const carregarEquipe = async () => {
     if (!agencia?.id) return;
     setCarregandoEquipe(true);
@@ -597,8 +594,9 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
+  // Carrega subcoleção de tarifas e regras do hotel
   const carregarDadosTarifarioHotel = async (hotelId) => {
-    if (!agencia?.permiteTarifario || !hotelId) {
+    if (!hotelId) {
       setTarifasHotelAtivo([]);
       setRegrasCriancasHotel({});
       return;
@@ -640,9 +638,7 @@ function GeradorOrcamentoConteudo() {
     setAptoSelecionado("");
     setRegimesValores({});
 
-    if (agencia?.permiteTarifario) {
-      carregarDadosTarifarioHotel(hotel.id);
-    }
+    carregarDadosTarifarioHotel(hotel.id);
 
     const partesPagamento = [];
     if (hotel.pagamentoCartao?.trim()) {
@@ -672,10 +668,10 @@ function GeradorOrcamentoConteudo() {
   };
 
   // =========================================================================
-  // MOTOR DE CÁLCULO E APLICAÇÃO DE TARIFAS
+  // MOTOR DE CÁLCULO E PREENCHIMENTO AUTOMÁTICO DAS TARIFAS
   // =========================================================================
   useEffect(() => {
-    if (!agencia?.permiteTarifario || !hotelSelecionado || abaAtiva !== "individual") {
+    if (!hotelSelecionado || abaAtiva !== "individual") {
       setAlertaTarifario("");
       return;
     }
@@ -708,10 +704,7 @@ function GeradorOrcamentoConteudo() {
     if (resultado.sucesso) {
       setAlertaTarifario("");
       if (resultado.valoresPorRegime && Object.keys(resultado.valoresPorRegime).length > 0) {
-        setRegimesValores((prev) => ({
-          ...prev,
-          ...resultado.valoresPorRegime,
-        }));
+        setRegimesValores(resultado.valoresPorRegime);
       }
     } else {
       setAlertaTarifario(resultado.mensagem || "");
@@ -727,7 +720,6 @@ function GeradorOrcamentoConteudo() {
     aptoSelecionado,
     hotelSelecionado,
     abaAtiva,
-    agencia,
   ]);
 
   const cidadesDisponiveis = Array.from(
@@ -792,9 +784,6 @@ function GeradorOrcamentoConteudo() {
     setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
   };
 
-  /**
-   * Aplica o desconto percentual exclusivo (%) em tempo real sobre os valores
-   */
   const calcularValorComDesconto = (valorOriginalStr) => {
     if (!valorOriginalStr || valorOriginalStr.trim() === "" || valorOriginalStr === "0,00") {
       return "";
@@ -1038,7 +1027,6 @@ function GeradorOrcamentoConteudo() {
       });
     }
 
-    // Linha de promoção especial exclusiva quando há desconto aplicado
     if (temDescontoAtivo) {
       texto += `🔥 *Promoção especial com desconto exclusivo!*\n\n`;
     }
@@ -1263,7 +1251,6 @@ function GeradorOrcamentoConteudo() {
             <span className="hidden sm:inline">Cotações</span>
           </Link>
 
-          {/* O menu de Meus Hotéis e Gestão de Equipa só é exibido para o Gestor */}
           {ehGestor && (
             <>
               <Link
@@ -1580,56 +1567,51 @@ function GeradorOrcamentoConteudo() {
                 )}
               </div>
 
-              {/* REGIMES E VALORES - SEÇÃO REESTRUTURADA EM DUAS LINHAS COM DESCONTO % DEDICADO */}
+              {/* REGIMES E VALORES */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
                 <div className="border-b border-slate-100 pb-3 space-y-2">
-                  {/* LINHA 1: TÍTULO PRINCIPAL */}
                   <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
                     Regimes de Pensão e Valores (R$)
                   </label>
 
-                  {/* LINHA 2: CAMPO DE DESCONTO COM BOTÃO % E BOTÃO LIMPAR */}
-                  {agencia?.permiteTarifario && (
-                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-emerald-50/90 border border-emerald-300 p-2.5 rounded-xl">
-                      <div className="flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
-                        <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
-                          Desconto:
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                        <div className="inline-flex items-center bg-white border border-emerald-300 rounded-lg overflow-hidden shadow-xs">
-                          <span className="bg-emerald-600 text-white text-xs font-black px-3 py-2 flex items-center justify-center">
-                            %
-                          </span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="0"
-                            value={descontoPercentual}
-                            onChange={(e) => {
-                              const valorNumerico = e.target.value.replace(/\D/g, "");
-                              setDescontoPercentual(valorNumerico);
-                            }}
-                            className="w-20 bg-white py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none"
-                          />
-                        </div>
-
-                        {/* Botão Limpar Desconto */}
-                        {descontoPercentual !== "" && (
-                          <button
-                            type="button"
-                            onClick={() => setDescontoPercentual("")}
-                            className="text-xs font-bold text-slate-500 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 px-2.5 py-1.5 rounded-lg transition"
-                            title="Limpar desconto"
-                          >
-                            Limpar
-                          </button>
-                        )}
-                      </div>
+                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-emerald-50/90 border border-emerald-300 p-2.5 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                        Desconto:
+                      </span>
                     </div>
-                  )}
+                    
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <div className="inline-flex items-center bg-white border border-emerald-300 rounded-lg overflow-hidden shadow-xs">
+                        <span className="bg-emerald-600 text-white text-xs font-black px-3 py-2 flex items-center justify-center">
+                          %
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={descontoPercentual}
+                          onChange={(e) => {
+                            const valorNumerico = e.target.value.replace(/\D/g, "");
+                            setDescontoPercentual(valorNumerico);
+                          }}
+                          className="w-20 bg-white py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none"
+                        />
+                      </div>
+
+                      {descontoPercentual !== "" && (
+                        <button
+                          type="button"
+                          onClick={() => setDescontoPercentual("")}
+                          className="text-xs font-bold text-slate-500 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 px-2.5 py-1.5 rounded-lg transition"
+                          title="Limpar desconto"
+                        >
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* LISTAGEM DOS REGIMES */}
@@ -1675,24 +1657,6 @@ function GeradorOrcamentoConteudo() {
                   scrollbarColor: "#94a3b8 #f1f5f9",
                 }}
               >
-                <style jsx>{`
-                  div::-webkit-scrollbar {
-                    width: 10px;
-                  }
-                  div::-webkit-scrollbar-track {
-                    background: #f1f5f9;
-                    border-radius: 8px;
-                  }
-                  div::-webkit-scrollbar-thumb {
-                    background: #94a3b8;
-                    border-radius: 8px;
-                    border: 2px solid #f1f5f9;
-                  }
-                  div::-webkit-scrollbar-thumb:hover {
-                    background: #64748b;
-                  }
-                `}</style>
-
                 {apartamentosGrupo.map((apto, index) => {
                   const numCrApto = parseInt(apto.criancas, 10) || 0;
 
@@ -1978,7 +1942,7 @@ function GeradorOrcamentoConteudo() {
         </div>
       </main>
 
-      {/* ================= MODAL: GESTÃO DA EQUIPA (APENAS GESTOR) ================= */}
+      {/* ================= MODAL: GESTÃO DA EQUIPA ================= */}
       {modalEquipeAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto space-y-5">
@@ -2004,7 +1968,6 @@ function GeradorOrcamentoConteudo() {
               </button>
             </div>
 
-            {/* FORMULÁRIO PARA CADASTRAR OU EDITAR UTILIZADOR */}
             <form onSubmit={handleCriarUsuario} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase text-brand-900 flex items-center gap-1.5">
@@ -2090,7 +2053,6 @@ function GeradorOrcamentoConteudo() {
               </div>
             </form>
 
-            {/* LISTAGEM DE UTILIZADORES */}
             <div className="space-y-2">
               <span className="text-xs font-bold uppercase text-slate-600 block">Colaboradores Registados</span>
 
@@ -2144,7 +2106,6 @@ function GeradorOrcamentoConteudo() {
                         </div>
 
                         <div className="flex items-center gap-1.5 self-end sm:self-center">
-                          {/* BOTÃO EDITAR */}
                           <button
                             type="button"
                             onClick={() => iniciarEdicaoUsuario(u)}
@@ -2154,7 +2115,6 @@ function GeradorOrcamentoConteudo() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* BOTÃO BLOQUEAR / ATIVAR */}
                           <button
                             type="button"
                             onClick={() => alternarStatusUsuario(u.id, u.status)}
@@ -2169,7 +2129,6 @@ function GeradorOrcamentoConteudo() {
                             <span>{isBloqueado ? "Ativar" : "Bloquear"}</span>
                           </button>
 
-                          {/* BOTÃO EXCLUIR */}
                           <button
                             type="button"
                             onClick={() => excluirUsuarioEquipe(u.id, u.nome)}
