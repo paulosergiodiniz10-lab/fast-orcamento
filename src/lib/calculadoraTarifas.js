@@ -1,7 +1,7 @@
 /**
  * Motor de Cálculo Tarifário - Fast Orçamento
  * Módulo inteligente: responsável pelo cálculo de diárias/noites, travas de pacote,
- * sobreposição de regras (dias específicos sobre dias gerais, priorizando tarifas mais recentes), regras de crianças e descontos.
+ * sobreposição de regras (priorizando tarifas mais recentes), regras de cortesias/adicionais de crianças e descontos.
  */
 
 export const REGIMES_SUPORTADOS = [
@@ -34,7 +34,7 @@ export function formatarParaDataIso(dateObj) {
 /**
  * Retorna uma lista de strings 'YYYY-MM-DD' representando cada NOITE da estadia.
  * REGRA HOTELEIRA: Não inclui o dia do checkout.
- * Exemplo: 23/10 a 25/10 retorna ['2026-10-23', '2026-10-24'] (2 noites).
+ * Exemplo: 18/10 a 19/10 retorna ['2026-10-18'] (1 noite).
  */
 export function obterNoitesEstadia(checkinStr, checkoutStr) {
   const dataIn = converterParaDataLocal(checkinStr);
@@ -69,23 +69,19 @@ export function validarRegrasDePacote(noitesEstadia, tarifas) {
     const { dataInicio, dataFim, minimoNoites, pacoteFechado, nome, diasSemana } = tarifa;
     if (!dataInicio || !dataFim) continue;
 
-    // As noites que compõem o período cadastrado da tarifa
     const noitesDoPeriodo = obterNoitesEstadia(dataInicio, dataFim);
 
-    // Noites ativas do pacote considerando os dias da semana permitidos
     const noitesObrigatoriasPacote = noitesDoPeriodo.filter((noiteStr) => {
       if (!diasSemana || diasSemana.length === 0) return true;
       const diaSem = converterParaDataLocal(noiteStr).getDay();
       return diasSemana.includes(diaSem);
     });
 
-    // Verifica se a estadia do cliente toca em qualquer noite válida desta tarifa
     const tocaPeriodo = noitesEstadia.some(
-      (noite) => noite >= dataInicio && noite < dataFim
+      (noite) => noite >= dataInicio && noite <= dataFim
     );
 
     if (tocaPeriodo) {
-      // 1. Regra de Mínimo de Noites geral
       if (minimoNoites && noitesEstadia.length < minimoNoites) {
         return {
           valido: false,
@@ -93,8 +89,6 @@ export function validarRegrasDePacote(noitesEstadia, tarifas) {
         };
       }
 
-      // 2. Regra de Pacote Fechado:
-      // Exige a contratação integral de todas as noites pertencentes ao pacote
       if (pacoteFechado && noitesObrigatoriasPacote.length > 0) {
         const cobriuTodasNoites = noitesObrigatoriasPacote.every((noitePacote) =>
           noitesEstadia.includes(noitePacote)
@@ -116,12 +110,13 @@ export function validarRegrasDePacote(noitesEstadia, tarifas) {
 }
 
 /**
- * Calcula o valor de ocupação para uma única noite com base na quantidade de hóspedes e regras
+ * Calcula o valor de ocupação para uma única noite com base na quantidade de hóspedes e regras de crianças
  */
 export function calcularValorNoitePorRegime({
   tarifaNoite,
   regimeId,
   qtdAdultos = 2,
+  qtdCriancas = 0,
   idadesCriancas = [],
   regrasCriancas = {},
 }) {
@@ -129,6 +124,7 @@ export function calcularValorNoitePorRegime({
   if (!precosRegime) return null;
 
   const { single = 0, duplo = 0, adicAdulto = 0, adicCrianca = 0 } = precosRegime;
+  const valorAdicionalBase = adicCrianca > 0 ? adicCrianca : (adicAdulto > 0 ? adicAdulto : 0);
 
   let valorTotalNoite = 0;
 
@@ -143,30 +139,49 @@ export function calcularValorNoitePorRegime({
     }
   }
 
-  // 2. Regra de Crianças
+  // 2. Normalização da lista de crianças
   const {
     idadeMaximaCortesia = 12,
     qtdMaximaCortesia = 2,
     faixaAdicional = null,
   } = regrasCriancas;
 
+  const totalCriancasInformadas = Math.max(Number(qtdCriancas) || 0, idadesCriancas.length);
+
+  // Monta a lista completa de idades (se houver mais crianças que idades digitadas, assume a idade de cortesia padrão)
+  const listaIdadesCompleta = [];
+  for (let i = 0; i < totalCriancasInformadas; i++) {
+    if (i < idadesCriancas.length && !isNaN(Number(idadesCriancas[i]))) {
+      listaIdadesCompleta.push(Number(idadesCriancas[i]));
+    } else {
+      listaIdadesCompleta.push(Number(idadeMaximaCortesia));
+    }
+  }
+
+  // Ordena da menor idade para a maior para priorizar cortesia às menores
+  listaIdadesCompleta.sort((a, b) => a - b);
+
   let cortesiasUtilizadas = 0;
 
-  idadesCriancas.forEach((idade) => {
-    const idadeNum = Number(idade);
-
-    if (idadeNum <= idadeMaximaCortesia && cortesiasUtilizadas < qtdMaximaCortesia) {
+  // 3. Regra de cobrança: máximo de 2 cortesias até a idade limite; da 3ª em diante cobra Ad. Extra
+  listaIdadesCompleta.forEach((idadeNum) => {
+    // Se ainda tem direito à cortesia e está dentro da idade limite (ex: até 12 anos)
+    if (cortesiasUtilizadas < qtdMaximaCortesia && idadeNum <= idadeMaximaCortesia) {
       cortesiasUtilizadas += 1;
-    } else if (
+      return; // Cortesia gratuita (R$ 0,00)
+    }
+
+    // Se possui regra escalonada configurada para essa faixa (ex: 13 a 17 anos com % próprio)
+    if (
       faixaAdicional &&
-      idadeNum >= faixaAdicional.idadeMin &&
-      idadeNum <= faixaAdicional.idadeMax
+      idadeNum >= (faixaAdicional.idadeMin ?? 13) &&
+      idadeNum <= (faixaAdicional.idadeMax ?? 17)
     ) {
-      const baseCobrada = adicCrianca > 0 ? adicCrianca : adicAdulto;
       const percentual = (faixaAdicional.percentual || 100) / 100;
-      valorTotalNoite += baseCobrada * percentual;
+      valorTotalNoite += valorAdicionalBase * percentual;
     } else {
-      valorTotalNoite += adicCrianca > 0 ? adicCrianca : adicAdulto;
+      // 3ª criança em diante paga o valor integral da diária adicional
+      valorTotalNoite += valorAdicionalBase;
     }
   });
 
@@ -180,6 +195,7 @@ export function calcularTarifasEstadia({
   checkin,
   checkout,
   qtdAdultos = 2,
+  qtdCriancas = 0,
   idadesCriancas = [],
   tarifasHotel = [],
   regrasCriancas = {},
@@ -212,12 +228,11 @@ export function calcularTarifasEstadia({
     acumuladoRegimes[r.id] = { total: 0, noitesCalculadas: 0, existeTarifa: false };
   });
 
-  // 2. Loop Noite a Noite com Sobreposição Inteligente e Prioridade por Recência
+  // 2. Loop Noite a Noite com Sobreposição Inteligente (Prioridade Máxima para a mais recente)
   for (const noiteStr of noites) {
     const dataObj = converterParaDataLocal(noiteStr);
     const diaDaSemana = dataObj.getDay();
 
-    // Filtra todas as tarifas ativas que cobrem esta noite específica
     const tarifasCompativeis = tarifasHotel.filter((t) => {
       if (!t.ativo) return false;
       const dentroDaData = noiteStr >= t.dataInicio && noiteStr <= t.dataFim;
@@ -233,31 +248,33 @@ export function calcularTarifasEstadia({
     });
 
     if (tarifasCompativeis.length > 0) {
-      // Regra de Sobreposição e Desempate:
-      // 1º Quarto específico tem prioridade sobre "todos"
-      // 2º Pacote fechado tem prioridade sobre tarifa comum
-      // 3º Regra com menos dias na semana (ex: Final de Semana) sobrepõe regra geral
-      // 4º Tarifa criada ou atualizada mais recentemente tem prioridade absoluta
       tarifasCompativeis.sort((a, b) => {
+        // 1º: A tarifa cadastrada ou editada mais recentemente tem prioridade absoluta
+        const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || (a.atualizadoEm instanceof Date ? a.atualizadoEm.getTime() / 1000 : 0);
+        const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || (b.atualizadoEm instanceof Date ? b.atualizadoEm.getTime() / 1000 : 0);
+
+        if (tempoA !== tempoB) {
+          return tempoB - tempoA;
+        }
+
+        // 2º: Exceção diária pontual
+        const isSingleDayA = a.dataInicio === a.dataFim ? 10 : 0;
+        const isSingleDayB = b.dataInicio === b.dataFim ? 10 : 0;
+        if (isSingleDayA !== isSingleDayB) {
+          return isSingleDayB - isSingleDayA;
+        }
+
+        // 3º: Vinculação de quarto específico
         const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
         const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
+        if (pesoAptoA !== pesoAptoB) {
+          return pesoAptoB - pesoAptoA;
+        }
 
+        // 4º: Pacote fechado
         const pesoPacoteA = a.pacoteFechado ? 2 : 0;
         const pesoPacoteB = b.pacoteFechado ? 2 : 0;
-
-        const especificidadeDiasA = 7 - (a.diasSemana?.length || 7);
-        const especificidadeDiasB = 7 - (b.diasSemana?.length || 7);
-
-        const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
-        const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
-
-        const scoreA = pesoAptoA + pesoPacoteA + especificidadeDiasA;
-        const scoreB = pesoAptoB + pesoPacoteB + especificidadeDiasB;
-
-        if (scoreA !== scoreB) {
-          return scoreB - scoreA;
-        }
-        return tempoB - tempoA;
+        return pesoPacoteB - pesoPacoteA;
       });
 
       const tarifaVencedora = tarifasCompativeis[0];
@@ -267,6 +284,7 @@ export function calcularTarifasEstadia({
           tarifaNoite: tarifaVencedora,
           regimeId: reg.id,
           qtdAdultos,
+          qtdCriancas,
           idadesCriancas,
           regrasCriancas,
         });
@@ -280,7 +298,7 @@ export function calcularTarifasEstadia({
     }
   }
 
-  // 3. Aplicação de Desconto e formatação final
+  // 3. Aplicação de Desconto e formatação final em moeda brasileira
   const totalNoitesEstadia = noites.length;
   const resultadoFormatado = {};
 
