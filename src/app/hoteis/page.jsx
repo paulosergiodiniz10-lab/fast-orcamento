@@ -1236,6 +1236,8 @@ export default function GestaoHoteis() {
   const selecionarPredefinicaoDias = (tipo) => {
     if (tipo === "todos") setTarifaDiasSemana([0, 1, 2, 3, 4, 5, 6]);
     if (tipo === "dom_qui") setTarifaDiasSemana([0, 1, 2, 3]);
+    if (tipo === "dom_sex") setTarifaDiasSemana([0, 1, 2, 3, 4]);
+    if (tipo === "qui_dom") setTarifaDiasSemana([4, 5, 6]);
     if (tipo === "sex_dom") setTarifaDiasSemana([5, 6]);
   };
 
@@ -1278,13 +1280,13 @@ export default function GestaoHoteis() {
   const nomesTarifasCatalogo = Array.from(
     new Set([
       ...nomesTarifasPersistidos,
-      ...tarifasCadastradas.map((t) => (t.nome || "").trim()).filter(Boolean),
+      ...tarifasCadastradas.map((t) => (t.nome || "").trim().toUpperCase()).filter(Boolean),
     ])
   );
 
-  // Adicionar um novo nome ao catálogo de tarifas
+  // Adicionar um novo nome ao catálogo de tarifas (força maiúsculas)
   const salvarNovoNomeCatalogo = async () => {
-    const nomeLimpo = novoNomeCatalogo.trim();
+    const nomeLimpo = novoNomeCatalogo.trim().toUpperCase();
     if (!nomeLimpo) {
       abrirModal("error", "Atenção", "Digite um nome para a tarifa.");
       return;
@@ -1335,7 +1337,7 @@ export default function GestaoHoteis() {
     setTarifaEmEdicaoModal({
       idOriginal: t.id,
       isExcecaoDiaria: isEdicaoDiaEspecifico && (t.dataInicio !== t.dataFim),
-      nome: t.nome || "",
+      nome: (t.nome || "").toUpperCase(),
       dataInicio: dataInicioFinal,
       dataFim: dataFimFinal,
       diasSemana: diasSemanaFinal,
@@ -1365,7 +1367,7 @@ export default function GestaoHoteis() {
       });
 
       const dadosTarifa = {
-        nome: tarifaEmEdicaoModal.nome.trim(),
+        nome: tarifaEmEdicaoModal.nome.trim().toUpperCase(),
         dataInicio: tarifaEmEdicaoModal.dataInicio,
         dataFim: tarifaEmEdicaoModal.dataFim,
         diasSemana: tarifaEmEdicaoModal.diasSemana,
@@ -1396,10 +1398,10 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Renomear em massa todas as tarifas que têm determinado nome
+  // Renomear em massa todas as tarifas que têm determinado nome (força maiúsculas)
   const executarRenomeacaoMassa = async () => {
-    const antigo = (nomeParaRenomearAntigo || "").trim();
-    const novo = (nomeParaRenomearNovo || "").trim();
+    const antigo = (nomeParaRenomearAntigo || "").trim().toUpperCase();
+    const novo = (nomeParaRenomearNovo || "").trim().toUpperCase();
 
     if (!antigo || !novo || antigo === novo) {
       abrirModal("error", "Atenção", "Informe o nome novo para renomear.");
@@ -1410,7 +1412,7 @@ export default function GestaoHoteis() {
       setRenomeandoMassa(true);
       const batch = writeBatch(db);
       const tarifasParaAlterar = tarifasCadastradas.filter(
-        (t) => (t.nome || "").trim().toLowerCase() === antigo.toLowerCase()
+        (t) => (t.nome || "").trim().toUpperCase() === antigo
       );
 
       tarifasParaAlterar.forEach((tarifa) => {
@@ -1422,7 +1424,7 @@ export default function GestaoHoteis() {
       });
 
       const docNomesRef = doc(db, "hoteis", hotelEditandoId, "configuracoes", "catalogo_nomes_tarifas");
-      const novosNomesPersistidos = nomesTarifasCatalogo.map((n) => (n.toLowerCase() === antigo.toLowerCase() ? novo : n));
+      const novosNomesPersistidos = nomesTarifasCatalogo.map((n) => (n.toUpperCase() === antigo ? novo : n));
       batch.set(docNomesRef, { nomes: Array.from(new Set(novosNomesPersistidos)), atualizadoEm: serverTimestamp() }, { merge: true });
 
       await batch.commit();
@@ -1463,7 +1465,7 @@ export default function GestaoHoteis() {
       });
 
       const dadosTarifa = {
-        nome: tarifaNome.trim(),
+        nome: tarifaNome.trim().toUpperCase(),
         dataInicio: tarifaDataInicio,
         dataFim: tarifaDataFim,
         diasSemana: tarifaDiasSemana,
@@ -2587,10 +2589,10 @@ export default function GestaoHoteis() {
                             <input
                               type="text"
                               list="lista-nomes-tarifas"
-                              placeholder="Digite ou selecione (ex: Baixa, Final de Semana)"
+                              placeholder="Digite ou selecione (ex: BAIXA, FINAL DE SEMANA)"
                               value={tarifaNome}
-                              onChange={(e) => setTarifaNome(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                              onChange={(e) => setTarifaNome(e.target.value.toUpperCase())}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600 uppercase"
                             />
                             <datalist id="lista-nomes-tarifas">
                               {nomesTarifasCatalogo.map((nm) => (
@@ -2605,8 +2607,8 @@ export default function GestaoHoteis() {
                                 <button
                                   key={nm}
                                   type="button"
-                                  onClick={() => setTarifaNome(nm)}
-                                  className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-amber-100 text-slate-700 border border-slate-200 transition"
+                                  onClick={() => setTarifaNome(nm.toUpperCase())}
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-amber-100 text-slate-700 border border-slate-200 transition uppercase"
                                 >
                                   {nm}
                                 </button>
@@ -2646,7 +2648,7 @@ export default function GestaoHoteis() {
                             <label className="text-xs font-bold text-slate-700 uppercase block">
                               Aplicar nestes dias da semana:
                             </label>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <span className="text-[10px] uppercase font-bold text-slate-400">Atalhos:</span>
                               <button
                                 type="button"
@@ -2662,6 +2664,22 @@ export default function GestaoHoteis() {
                                 title="Entrada Domingo e Saída Quinta (Dorme Dom, Seg, Ter, Qua = 4 noites)"
                               >
                                 Dom a Qui
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => selecionarPredefinicaoDias("dom_sex")}
+                                className="text-[11px] font-bold px-2.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition"
+                                title="Entrada Domingo e Saída Sexta (Dorme Dom, Seg, Ter, Qua, Qui = 5 noites)"
+                              >
+                                Dom a Sex
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => selecionarPredefinicaoDias("qui_dom")}
+                                className="text-[11px] font-bold px-2.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition"
+                                title="Entrada Quinta e Saída Domingo (Dorme Qui, Sex, Sáb = 3 noites)"
+                              >
+                                Qui a Dom
                               </button>
                               <button
                                 type="button"
@@ -3037,8 +3055,8 @@ export default function GestaoHoteis() {
                   type="text"
                   list="lista-nomes-tarifas-modal"
                   value={tarifaEmEdicaoModal.nome}
-                  onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, nome: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                  onChange={(e) => setTarifaEmEdicaoModal((prev) => ({ ...prev, nome: e.target.value.toUpperCase() }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600 uppercase"
                 />
                 <datalist id="lista-nomes-tarifas-modal">
                   {nomesTarifasCatalogo.map((nm) => (
@@ -3242,16 +3260,16 @@ export default function GestaoHoteis() {
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex: Alta Temporada, Super Baixa, Feriado..."
+                    placeholder="Ex: ALTA TEMPORADA, SUPER BAIXA..."
                     value={novoNomeCatalogo}
-                    onChange={(e) => setNovoNomeCatalogo(e.target.value)}
+                    onChange={(e) => setNovoNomeCatalogo(e.target.value.toUpperCase())}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         salvarNovoNomeCatalogo();
                       }
                     }}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600 uppercase"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500">
@@ -3295,7 +3313,7 @@ export default function GestaoHoteis() {
                           setNomeParaRenomearAntigo(e.target.value);
                           setNomeParaRenomearNovo(e.target.value);
                         }}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600 uppercase"
                       >
                         {nomesTarifasCatalogo.map((nm) => (
                           <option key={nm} value={nm}>
@@ -3311,10 +3329,10 @@ export default function GestaoHoteis() {
                       </label>
                       <input
                         type="text"
-                        placeholder="Ex: Baixa Temporada, Alta Temporada..."
+                        placeholder="Ex: BAIXA TEMPORADA, ALTA TEMPORADA..."
                         value={nomeParaRenomearNovo}
-                        onChange={(e) => setNomeParaRenomearNovo(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                        onChange={(e) => setNomeParaRenomearNovo(e.target.value.toUpperCase())}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600 uppercase"
                       />
                     </div>
 
