@@ -309,7 +309,6 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
 
       if (tarifasCompativeis.length > 0) {
         tarifasCompativeis.sort((a, b) => {
-          // Maior prioridade: tarifas de 1 único dia específico (exceções diárias)
           const isSingleDayA = a.dataInicio === a.dataFim ? 10 : 0;
           const isSingleDayB = b.dataInicio === b.dataFim ? 10 : 0;
 
@@ -621,6 +620,7 @@ export default function GestaoHoteis() {
   // ESTADOS DO MÓDULO TARIFÁRIO (Aba 5)
   // =========================================================================
   const [tarifasCadastradas, setTarifasCadastradas] = useState([]);
+  const [nomesTarifasPersistidos, setNomesTarifasPersistidos] = useState([]);
   const [carregandoTarifas, setCarregandoTarifas] = useState(false);
   const [salvandoTarifa, setSalvandoTarifa] = useState(false);
   const [tarifaEditandoId, setTarifaEditandoId] = useState(null);
@@ -646,8 +646,10 @@ export default function GestaoHoteis() {
   const [modalEditarTarifaAberto, setModalEditarTarifaAberto] = useState(false);
   const [tarifaEmEdicaoModal, setTarifaEmEdicaoModal] = useState(null);
 
-  // Modal para Renomear Tarifas em Massa (Catálogo)
+  // Modal para Gerenciar / Criar / Renomear Nomes de Tarifas (Catálogo)
   const [modalRenomearAberto, setModalRenomearAberto] = useState(false);
+  const [abaModalCatalogo, setAbaModalCatalogo] = useState("novo"); // "novo" ou "renomear"
+  const [novoNomeCatalogo, setNovoNomeCatalogo] = useState("");
   const [nomeParaRenomearAntigo, setNomeParaRenomearAntigo] = useState("");
   const [nomeParaRenomearNovo, setNomeParaRenomearNovo] = useState("");
   const [renomeandoMassa, setRenomeandoMassa] = useState(false);
@@ -773,6 +775,12 @@ export default function GestaoHoteis() {
           faixa2Max: String(dados.faixaAdicional?.idadeMax ?? 17),
           faixa2Percentual: String(dados.faixaAdicional?.percentual ?? 50),
         });
+      }
+
+      const docNomesRef = doc(db, "hoteis", hotelId, "configuracoes", "catalogo_nomes_tarifas");
+      const snapNomes = await getDoc(docNomesRef);
+      if (snapNomes.exists()) {
+        setNomesTarifasPersistidos(snapNomes.data().nomes || []);
       }
     } catch (err) {
       console.error("Erro ao carregar tarifário:", err);
@@ -1044,6 +1052,7 @@ export default function GestaoHoteis() {
     setDescricaoHtml("");
     setObservacoesHtml("");
     setTarifasCadastradas([]);
+    setNomesTarifasPersistidos([]);
     limparFormTarifa();
 
     setTimeout(() => {
@@ -1265,10 +1274,45 @@ export default function GestaoHoteis() {
     });
   };
 
-  // Nomes únicos já cadastrados no hotel para alimentar o catálogo/dropdown
+  // Nomes únicos cadastrados nas tarifas + nomes adicionados no catálogo
   const nomesTarifasCatalogo = Array.from(
-    new Set(tarifasCadastradas.map((t) => (t.nome || "").trim()).filter(Boolean))
+    new Set([
+      ...nomesTarifasPersistidos,
+      ...tarifasCadastradas.map((t) => (t.nome || "").trim()).filter(Boolean),
+    ])
   );
+
+  // Adicionar um novo nome ao catálogo de tarifas
+  const salvarNovoNomeCatalogo = async () => {
+    const nomeLimpo = novoNomeCatalogo.trim();
+    if (!nomeLimpo) {
+      abrirModal("error", "Atenção", "Digite um nome para a tarifa.");
+      return;
+    }
+
+    if (!hotelEditandoId) {
+      abrirModal("error", "Atenção", "Salve o hotel primeiro antes de cadastrar nomes de tarifas.");
+      return;
+    }
+
+    try {
+      setRenomeandoMassa(true);
+      const nomesAtualizados = Array.from(new Set([...nomesTarifasCatalogo, nomeLimpo]));
+      const docNomesRef = doc(db, "hoteis", hotelEditandoId, "configuracoes", "catalogo_nomes_tarifas");
+      await setDoc(docNomesRef, { nomes: nomesAtualizados, atualizadoEm: serverTimestamp() }, { merge: true });
+
+      setNomesTarifasPersistidos(nomesAtualizados);
+      setTarifaNome(nomeLimpo);
+      setNovoNomeCatalogo("");
+      setModalRenomearAberto(false);
+      abrirModal("success", "Nome Adicionado", `O nome "${nomeLimpo}" foi adicionado com sucesso ao seu catálogo!`);
+    } catch (err) {
+      console.error("Erro ao salvar nome no catálogo:", err);
+      abrirModal("error", "Erro", "Não foi possível salvar o nome no catálogo.");
+    } finally {
+      setRenomeandoMassa(false);
+    }
+  };
 
   // Abre Modal Individual para edição isolada de 1 DIA ou período
   const abrirModalEditarTarifa = (t, dataIsoClicada = null, diaSemanaIdx = null) => {
@@ -1283,7 +1327,6 @@ export default function GestaoHoteis() {
       };
     });
 
-    // Se clicou através do calendário com data específica, ajusta para edição pontual daquele dia
     const isEdicaoDiaEspecifico = Boolean(dataIsoClicada);
     const dataInicioFinal = isEdicaoDiaEspecifico ? dataIsoClicada : (t.dataInicio || obterDataHojeIso());
     const dataFimFinal = isEdicaoDiaEspecifico ? dataIsoClicada : (t.dataFim || obterDataAmanhaIso());
@@ -1334,8 +1377,6 @@ export default function GestaoHoteis() {
         atualizadoEm: serverTimestamp(),
       };
 
-      // Se for uma alteração pontual de um dia (ex: clicou no dia 23 de um período 23-24):
-      // Cria uma regra específica para aquele dia mantendo o nome e sem mutilar o período pai
       if (tarifaEmEdicaoModal.isExcecaoDiaria) {
         await addDoc(collection(db, "hoteis", hotelEditandoId, "tarifas"), {
           ...dadosTarifa,
@@ -1379,6 +1420,10 @@ export default function GestaoHoteis() {
           atualizadoEm: serverTimestamp(),
         });
       });
+
+      const docNomesRef = doc(db, "hoteis", hotelEditandoId, "configuracoes", "catalogo_nomes_tarifas");
+      const novosNomesPersistidos = nomesTarifasCatalogo.map((n) => (n.toLowerCase() === antigo.toLowerCase() ? novo : n));
+      batch.set(docNomesRef, { nomes: Array.from(new Set(novosNomesPersistidos)), atualizadoEm: serverTimestamp() }, { merge: true });
 
       await batch.commit();
       setModalRenomearAberto(false);
@@ -2516,21 +2561,21 @@ export default function GestaoHoteis() {
                           </p>
                         </div>
 
-                        {nomesTarifasCatalogo.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNomeParaRenomearAntigo(nomesTarifasCatalogo[0] || "");
-                              setNomeParaRenomearNovo(nomesTarifasCatalogo[0] || "");
-                              setModalRenomearAberto(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-xl font-bold transition shadow-xs"
-                            title="Renomear um nome existente em todas as tarifas cadastradas"
-                          >
-                            <Tag className="w-3.5 h-3.5" />
-                            <span>Gerenciar Nomes</span>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAbaModalCatalogo("novo");
+                            setNovoNomeCatalogo("");
+                            setNomeParaRenomearAntigo(nomesTarifasCatalogo[0] || "");
+                            setNomeParaRenomearNovo(nomesTarifasCatalogo[0] || "");
+                            setModalRenomearAberto(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-xl font-bold transition shadow-xs"
+                          title="Criar novo nome ou renomear nomes existentes do catálogo"
+                        >
+                          <Tag className="w-3.5 h-3.5" />
+                          <span>Gerenciar Nomes</span>
+                        </button>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -3139,7 +3184,7 @@ export default function GestaoHoteis() {
         </div>
       )}
 
-      {/* MODAL PARA GERENCIAR / RENOMEAR NOMES DE TARIFAS EM MASSA */}
+      {/* MODAL PARA GERENCIAR (CRIAR E RENOMEAR) NOMES DE TARIFAS */}
       {modalRenomearAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4">
@@ -3150,7 +3195,7 @@ export default function GestaoHoteis() {
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-slate-900">Catálogo de Nomes</h3>
-                  <p className="text-xs text-slate-500">Renomear em todas as tarifas cadastradas</p>
+                  <p className="text-xs text-slate-500">Cadastre ou renomeie nomes de tarifas</p>
                 </div>
               </div>
               <button
@@ -3162,62 +3207,142 @@ export default function GestaoHoteis() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Nome Atual Cadastrado
-                </label>
-                <select
-                  value={nomeParaRenomearAntigo}
-                  onChange={(e) => {
-                    setNomeParaRenomearAntigo(e.target.value);
-                    setNomeParaRenomearNovo(e.target.value);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
-                >
-                  {nomesTarifasCatalogo.map((nm) => (
-                    <option key={nm} value={nm}>
-                      {nm}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
-                  Novo Nome Desejado
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Baixa Temporada, Alta Temporada..."
-                  value={nomeParaRenomearNovo}
-                  onChange={(e) => setNomeParaRenomearNovo(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
-                />
-              </div>
-
-              <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-                Ao alterar, todas as tarifas que utilizam o nome antigo serão atualizadas automaticamente para o novo nome.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            {/* SELETOR DE ABAS DO CATÁLOGO: NOVO NOME OU RENOMEAR */}
+            <div className="flex border-b border-slate-200 gap-2">
               <button
                 type="button"
-                onClick={() => setModalRenomearAberto(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                onClick={() => setAbaModalCatalogo("novo")}
+                className={`py-2 px-3 text-xs font-bold border-b-2 transition ${
+                  abaModalCatalogo === "novo"
+                    ? "border-amber-600 text-amber-800"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
               >
-                Cancelar
+                + Criar Novo Nome
               </button>
               <button
                 type="button"
-                disabled={renomeandoMassa}
-                onClick={executarRenomeacaoMassa}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition shadow disabled:opacity-50"
+                onClick={() => setAbaModalCatalogo("renomear")}
+                className={`py-2 px-3 text-xs font-bold border-b-2 transition ${
+                  abaModalCatalogo === "renomear"
+                    ? "border-amber-600 text-amber-800"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
               >
-                {renomeandoMassa ? "Atualizando..." : "Aplicar Novo Nome"}
+                Renomear Existente
               </button>
             </div>
+
+            {/* ABA 1: CRIAR NOVO NOME */}
+            {abaModalCatalogo === "novo" && (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                    Novo Nome de Tarifa / Temporada *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Alta Temporada, Super Baixa, Feriado..."
+                    value={novoNomeCatalogo}
+                    onChange={(e) => setNovoNomeCatalogo(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        salvarNovoNomeCatalogo();
+                      }
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Esse nome ficará salvo no catálogo deste hotel e aparecerá nas sugestões e no dropdown de cadastro.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setModalRenomearAberto(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={renomeandoMassa}
+                    onClick={salvarNovoNomeCatalogo}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition shadow disabled:opacity-50"
+                  >
+                    {renomeandoMassa ? "Salvando..." : "Salvar no Catálogo"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ABA 2: RENOMEAR EXISTENTE */}
+            {abaModalCatalogo === "renomear" && (
+              <div className="space-y-3 pt-1">
+                {nomesTarifasCatalogo.length === 0 ? (
+                  <p className="text-xs text-slate-500 py-3 text-center">Nenhum nome cadastrado ainda.</p>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Nome Atual Cadastrado
+                      </label>
+                      <select
+                        value={nomeParaRenomearAntigo}
+                        onChange={(e) => {
+                          setNomeParaRenomearAntigo(e.target.value);
+                          setNomeParaRenomearNovo(e.target.value);
+                        }}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                      >
+                        {nomesTarifasCatalogo.map((nm) => (
+                          <option key={nm} value={nm}>
+                            {nm}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase block mb-1">
+                        Novo Nome Desejado
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Baixa Temporada, Alta Temporada..."
+                        value={nomeParaRenomearNovo}
+                        onChange={(e) => setNomeParaRenomearNovo(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                      Ao alterar, todas as tarifas que utilizam o nome antigo serão atualizadas automaticamente para o novo nome.
+                    </p>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setModalRenomearAberto(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={renomeandoMassa}
+                        onClick={executarRenomeacaoMassa}
+                        className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition shadow disabled:opacity-50"
+                      >
+                        {renomeandoMassa ? "Atualizando..." : "Aplicar Novo Nome"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
