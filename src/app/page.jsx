@@ -323,9 +323,9 @@ function GeradorOrcamentoConteudo() {
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
 
-  // Inicializados limpos para evitar dados residuais
+  // Inicializados vazios para evitar valores fixos desnecessários
   const [adultos, setAdultos] = useState(searchParams.get("adultos") || "");
-  const [criancas, setCriancas] = useState(searchParams.get("criancas") || "0");
+  const [criancas, setCriancas] = useState(searchParams.get("criancas") || "");
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
@@ -338,7 +338,7 @@ function GeradorOrcamentoConteudo() {
     {
       id: 1,
       adultos: "",
-      criancas: "0",
+      criancas: "",
       idadesCriancas: "",
       acomodacao: "",
       valores: {},
@@ -831,7 +831,7 @@ function GeradorOrcamentoConteudo() {
     setCheckin(hojeStr);
     setCheckout(somarDias(hojeStr, 1));
     setAdultos("");
-    setCriancas("0");
+    setCriancas("");
     setIdadesCriancas("");
     setRegimesValores({});
     setDescontoPercentual("");
@@ -840,7 +840,7 @@ function GeradorOrcamentoConteudo() {
       {
         id: Date.now(),
         adultos: "",
-        criancas: "0",
+        criancas: "",
         idadesCriancas: "",
         acomodacao: "",
         valores: {},
@@ -866,7 +866,7 @@ function GeradorOrcamentoConteudo() {
       {
         id: Date.now(),
         adultos: "",
-        criancas: "0",
+        criancas: "",
         idadesCriancas: "",
         acomodacao: "",
         valores: {},
@@ -913,7 +913,7 @@ function GeradorOrcamentoConteudo() {
       novos[indexAtual] = { 
         ...novos[indexAtual], 
         adultos: aptoAnterior.adultos || "",
-        criancas: aptoAnterior.criancas || "0",
+        criancas: aptoAnterior.criancas || "",
         idadesCriancas: aptoAnterior.idadesCriancas || "",
         acomodacao: aptoAnterior.acomodacao || "",
         valores: { ...(aptoAnterior.valores || {}) } 
@@ -1166,7 +1166,7 @@ function GeradorOrcamentoConteudo() {
       checkout,
       periodoFormatado: formatarDatas(),
       adultos: adultos || "1",
-      criancas,
+      criancas: criancas || "0",
       idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
       hospedes: abaAtiva === "individual" ? hospedesFormatado : `Grupo com ${apartamentosGrupo.length} apartamento(s)`,
       parques: parquesMarcados,
@@ -1582,6 +1582,7 @@ function GeradorOrcamentoConteudo() {
                             <input
                               type="number"
                               min="0"
+                              placeholder="Ex: 0"
                               value={criancas}
                               onChange={(e) => setCriancas(e.target.value)}
                               className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
@@ -1810,7 +1811,8 @@ function GeradorOrcamentoConteudo() {
                                   <input
                                     type="number"
                                     min="0"
-                                    value={apto.criancas || "0"}
+                                    placeholder="Ex: 0"
+                                    value={apto.criancas}
                                     onChange={(e) => atualizarApartamentoGrupo(index, "criancas", e.target.value)}
                                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
                                   />
