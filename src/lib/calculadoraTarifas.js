@@ -82,10 +82,14 @@ export function validarRegrasDePacote(noitesEstadia, tarifas) {
     );
 
     if (tocaPeriodo) {
+      const inicioBr = dataInicio.split("-").reverse().join("/");
+      const fimBr = dataFim.split("-").reverse().join("/");
+      const nomeTarifa = nome ? `("${nome}")` : "";
+
       if (minimoNoites && noitesEstadia.length < minimoNoites) {
         return {
           valido: false,
-          mensagem: `O período de "${nome || "Tarifa"}" exige no mínimo ${minimoNoites} noites. Seu período possui ${noitesEstadia.length} noite(s).`,
+          mensagem: `O período de ${inicioBr} a ${fimBr} ${nomeTarifa} exige no mínimo ${minimoNoites} noites. Seu período possui ${noitesEstadia.length} noite(s).`,
         };
       }
 
@@ -95,11 +99,9 @@ export function validarRegrasDePacote(noitesEstadia, tarifas) {
         );
 
         if (!cobriuTodasNoites) {
-          const inicioBr = dataInicio.split("-").reverse().join("/");
-          const fimBr = dataFim.split("-").reverse().join("/");
           return {
             valido: false,
-            mensagem: `O período de ${inicioBr} a ${fimBr} (${nome || "Pacote Fechado"}) exige a reserva completa de todas as noites do pacote.`,
+            mensagem: `O período de ${inicioBr} a ${fimBr} ${nome ? `(${nome})` : "(Pacote Fechado)"} exige a reserva completa de todas as noites do pacote.`,
           };
         }
       }
@@ -148,7 +150,6 @@ export function calcularValorNoitePorRegime({
 
   const totalCriancasInformadas = Math.max(Number(qtdCriancas) || 0, idadesCriancas.length);
 
-  // Monta a lista completa de idades (se houver mais crianças que idades digitadas, assume a idade de cortesia padrão)
   const listaIdadesCompleta = [];
   for (let i = 0; i < totalCriancasInformadas; i++) {
     if (i < idadesCriancas.length && !isNaN(Number(idadesCriancas[i]))) {
@@ -158,20 +159,17 @@ export function calcularValorNoitePorRegime({
     }
   }
 
-  // Ordena da menor idade para a maior para priorizar cortesia às menores
   listaIdadesCompleta.sort((a, b) => a - b);
 
   let cortesiasUtilizadas = 0;
 
-  // 3. Regra de cobrança: máximo de 2 cortesias até a idade limite; da 3ª em diante cobra Ad. Extra
+  // 3. Regra de cortesias e adicionais
   listaIdadesCompleta.forEach((idadeNum) => {
-    // Se ainda tem direito à cortesia e está dentro da idade limite (ex: até 12 anos)
     if (cortesiasUtilizadas < qtdMaximaCortesia && idadeNum <= idadeMaximaCortesia) {
       cortesiasUtilizadas += 1;
-      return; // Cortesia gratuita (R$ 0,00)
+      return;
     }
 
-    // Se possui regra escalonada configurada para essa faixa (ex: 13 a 17 anos com % próprio)
     if (
       faixaAdicional &&
       idadeNum >= (faixaAdicional.idadeMin ?? 13) &&
@@ -180,7 +178,6 @@ export function calcularValorNoitePorRegime({
       const percentual = (faixaAdicional.percentual || 100) / 100;
       valorTotalNoite += valorAdicionalBase * percentual;
     } else {
-      // 3ª criança em diante paga o valor integral da diária adicional
       valorTotalNoite += valorAdicionalBase;
     }
   });
@@ -249,7 +246,6 @@ export function calcularTarifasEstadia({
 
     if (tarifasCompativeis.length > 0) {
       tarifasCompativeis.sort((a, b) => {
-        // 1º: A tarifa cadastrada ou editada mais recentemente tem prioridade absoluta
         const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || (a.atualizadoEm instanceof Date ? a.atualizadoEm.getTime() / 1000 : 0);
         const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || (b.atualizadoEm instanceof Date ? b.atualizadoEm.getTime() / 1000 : 0);
 
@@ -257,21 +253,18 @@ export function calcularTarifasEstadia({
           return tempoB - tempoA;
         }
 
-        // 2º: Exceção diária pontual
         const isSingleDayA = a.dataInicio === a.dataFim ? 10 : 0;
         const isSingleDayB = b.dataInicio === b.dataFim ? 10 : 0;
         if (isSingleDayA !== isSingleDayB) {
           return isSingleDayB - isSingleDayA;
         }
 
-        // 3º: Vinculação de quarto específico
         const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
         const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
         if (pesoAptoA !== pesoAptoB) {
           return pesoAptoB - pesoAptoA;
         }
 
-        // 4º: Pacote fechado
         const pesoPacoteA = a.pacoteFechado ? 2 : 0;
         const pesoPacoteB = b.pacoteFechado ? 2 : 0;
         return pesoPacoteB - pesoPacoteA;
@@ -298,7 +291,7 @@ export function calcularTarifasEstadia({
     }
   }
 
-  // 3. Aplicação de Desconto e formatação final em moeda brasileira
+  // 3. Aplicação de Desconto e formatação final
   const totalNoitesEstadia = noites.length;
   const resultadoFormatado = {};
 
