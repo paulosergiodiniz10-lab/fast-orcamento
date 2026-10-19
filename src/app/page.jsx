@@ -667,11 +667,15 @@ function GeradorOrcamentoConteudo() {
     }
   };
 
+  // Se o hotel tem apartamentos cadastrados, exige que um esteja selecionado
+  const hotelTemAptos = Boolean(hotelSelecionado?.tiposApto && hotelSelecionado.tiposApto.length > 0);
+  const aptoLiberado = !hotelTemAptos || Boolean(aptoSelecionado);
+
   // =========================================================================
   // MOTOR DE CÁLCULO E PREENCHIMENTO AUTOMÁTICO DAS TARIFAS
   // =========================================================================
   useEffect(() => {
-    if (!hotelSelecionado || abaAtiva !== "individual") {
+    if (!hotelSelecionado || abaAtiva !== "individual" || !aptoLiberado) {
       setAlertaTarifario("");
       return;
     }
@@ -690,8 +694,6 @@ function GeradorOrcamentoConteudo() {
         matches.forEach((m) => arrayIdades.push(parseInt(m, 10)));
       }
 
-      // Se informou menos idades que o total de crianças (ex: texto 'até 12 anos' com 3 crianças),
-      // completa as faltantes com a idade máxima da cortesia para garantir a conta exata
       const idadePadrao = Number(regrasCriancasHotel?.idadeMaximaCortesia ?? 12);
       while (arrayIdades.length < numCr) {
         arrayIdades.push(idadePadrao);
@@ -729,6 +731,7 @@ function GeradorOrcamentoConteudo() {
     aptoSelecionado,
     hotelSelecionado,
     abaAtiva,
+    aptoLiberado,
   ]);
 
   const cidadesDisponiveis = Array.from(
@@ -956,6 +959,10 @@ function GeradorOrcamentoConteudo() {
       return "Selecione uma hospedagem para gerar a prévia do orçamento.";
     }
 
+    if (abaAtiva === "individual" && hotelTemAptos && !aptoSelecionado) {
+      return "Selecione o tipo de apartamento cotado para gerar a prévia do orçamento.";
+    }
+
     const iconeParque = modo === "copiar" ? "👉" : "•";
     const iconeCartao = modo === "copiar" ? "💳 " : "";
     const iconeAviso = modo === "copiar" ? "⚠️ " : "*Atenção:* ";
@@ -1067,6 +1074,11 @@ function GeradorOrcamentoConteudo() {
   const processarGravacaoOrcamento = async () => {
     if (!hotelSelecionado) {
       abrirAlerta("Hospedagem Necessária", "Por favor, selecione uma hospedagem na lista antes de gerar.");
+      return null;
+    }
+
+    if (abaAtiva === "individual" && hotelTemAptos && !aptoSelecionado) {
+      abrirAlerta("Acomodação Obrigatória", "Por favor, selecione o Tipo de Apartamento Cotado antes de gerar.");
       return null;
     }
 
@@ -1221,7 +1233,8 @@ function GeradorOrcamentoConteudo() {
   const podeEnviarDireto = Boolean(
     clienteNome.trim().length > 0 &&
     clienteWhatsapp.replace(/\D/g, "").length >= 10 &&
-    hotelSelecionado
+    hotelSelecionado &&
+    aptoLiberado
   );
 
   const opcoesCriancasHotel = (hotelSelecionado?.opcoesCriancas || []).filter(
@@ -1284,7 +1297,7 @@ function GeradorOrcamentoConteudo() {
 
           <button
             onClick={salvarEGerarLink}
-            disabled={salvando || enviandoZap || !hotelSelecionado}
+            disabled={salvando || enviandoZap || !hotelSelecionado || !aptoLiberado}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
           >
             {salvando ? (
@@ -1453,33 +1466,31 @@ function GeradorOrcamentoConteudo() {
               )}
             </div>
 
-            {abaAtiva === "individual" && hotelSelecionado?.tiposApto?.length > 0 && (
+            {/* SELETOR DE APARTAMENTOS (SEM 'NENHUM (GERAL)', SOMENTE OS APARTAMENTOS REAIS) */}
+            {abaAtiva === "individual" && hotelTemAptos && (
               <div className="pt-2 border-t border-slate-100">
-                <label className="text-xs font-bold text-slate-600 uppercase block mb-1.5 flex items-center gap-1">
-                  <BedDouble className="w-3.5 h-3.5 text-brand-700" />
-                  Tipo de Apartamento Cotado
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1">
+                    <BedDouble className="w-3.5 h-3.5 text-brand-700" />
+                    Tipo de Apartamento Cotado *
+                  </label>
+                  {!aptoSelecionado && (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      Obrigatório selecionar
+                    </span>
+                  )}
+                </div>
+                
                 <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setAptoSelecionado("")}
-                    className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
-                      aptoSelecionado === ""
-                        ? "bg-brand-900 text-white border-brand-900 font-bold"
-                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    Nenhum (Geral)
-                  </button>
                   {hotelSelecionado.tiposApto.map((ap, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setAptoSelecionado(ap.nome)}
-                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                      className={`text-xs px-3 py-1.5 rounded-xl border font-bold transition shadow-xs ${
                         aptoSelecionado === ap.nome
-                          ? "bg-brand-900 text-white border-brand-900 font-bold"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                          ? "bg-brand-900 text-white border-brand-900 shadow-sm"
+                          : "bg-white text-slate-700 border-slate-300 hover:border-brand-900 hover:bg-slate-50"
                       }`}
                     >
                       {ap.nome}
@@ -1490,398 +1501,400 @@ function GeradorOrcamentoConteudo() {
             )}
           </div>
 
-          {/* ================= DATAS ================= */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-              <CalendarIcon className="w-4 h-4 text-brand-700" />
-              Período da Estadia
-            </label>
-            <DateRangePickerModerno
-              checkin={checkin}
-              checkout={checkout}
-              onSelectCheckin={setCheckin}
-              onSelectCheckout={setCheckout}
-              dataMinima={hojeStr}
-            />
-
-            {alertaTarifario && (
-              <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2 text-xs text-amber-800 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="font-medium">{alertaTarifario}</span>
-              </div>
-            )}
-          </div>
-
-          {/* ================= CONTEÚDO DA ABA INDIVIDUAL ================= */}
-          {abaAtiva === "individual" && (
+          {/* TRAVA: SE O HOTEL TIVER APARTAMENTOS E NENHUM FOI SELECIONADO, EXIBE ESTE AVISO E BLOQUEIA O RESTANTE */}
+          {abaAtiva === "individual" && hotelTemAptos && !aptoSelecionado ? (
+            <div className="bg-amber-50 border-2 border-dashed border-amber-300 p-6 rounded-2xl text-center space-y-2 animate-in fade-in">
+              <BedDouble className="w-8 h-8 text-amber-600 mx-auto" />
+              <h3 className="font-bold text-sm text-amber-900">Selecione o Tipo de Apartamento</h3>
+              <p className="text-xs text-amber-700 max-w-sm mx-auto">
+                Para liberar o período da estadia, hóspedes e cálculo de valores, clique em uma das categorias de apartamento acima.
+              </p>
+            </div>
+          ) : (
             <>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Adultos</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={adultos}
-                      onChange={(e) => setAdultos(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Crianças</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={criancas}
-                      onChange={(e) => setCriancas(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-                    />
-                  </div>
-                </div>
+              {/* ================= DATAS ================= */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                  <CalendarIcon className="w-4 h-4 text-brand-700" />
+                  Período da Estadia
+                </label>
+                <DateRangePickerModerno
+                  checkin={checkin}
+                  checkout={checkout}
+                  onSelectCheckin={setCheckin}
+                  onSelectCheckout={setCheckout}
+                  dataMinima={hojeStr}
+                />
 
-                {numCriancas > 0 && (
-                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5 mb-1">
-                      <Baby className="w-3.5 h-3.5 text-brand-700" />
-                      Idades / Detalhes das Crianças
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: até 12 anos (ou '5 e 9 anos')"
-                      value={idadesCriancas}
-                      onChange={(e) => setIdadesCriancas(e.target.value)}
-                      className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
-                    />
-
-                    {opcoesCriancasHotel.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400">Opções rápidas:</span>
-                        {opcoesCriancasHotel.map((opcaoTexto, opIdx) => (
-                          <button
-                            key={opIdx}
-                            type="button"
-                            onClick={() => setIdadesCriancas(opcaoTexto)}
-                            className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border transition ${
-                              idadesCriancas === opcaoTexto
-                                ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-                                : "bg-white text-slate-700 border-slate-300 hover:bg-amber-50 hover:border-amber-400"
-                            }`}
-                          >
-                            {opcaoTexto}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                {alertaTarifario && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2 text-xs text-amber-800 animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="font-medium">{alertaTarifario}</span>
                   </div>
                 )}
               </div>
 
-              {/* REGIMES E VALORES */}
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                <div className="border-b border-slate-100 pb-3 space-y-2">
-                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Regimes de Pensão e Valores (R$)
-                  </label>
-
-                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-emerald-50/90 border border-emerald-300 p-2.5 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
-                        Desconto:
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                      <div className="inline-flex items-center bg-white border border-emerald-300 rounded-lg overflow-hidden shadow-xs">
-                        <span className="bg-emerald-600 text-white text-xs font-black px-3 py-2 flex items-center justify-center">
-                          %
-                        </span>
+              {/* ================= CONTEÚDO DA ABA INDIVIDUAL ================= */}
+              {abaAtiva === "individual" && (
+                <>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Adultos</label>
                         <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={descontoPercentual}
-                          onChange={(e) => {
-                            const valorNumerico = e.target.value.replace(/\D/g, "");
-                            setDescontoPercentual(valorNumerico);
-                          }}
-                          className="w-20 bg-white py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none"
+                          type="number"
+                          min="1"
+                          value={adultos}
+                          onChange={(e) => setAdultos(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
                         />
                       </div>
-
-                      {descontoPercentual !== "" && (
-                        <button
-                          type="button"
-                          onClick={() => setDescontoPercentual("")}
-                          className="text-xs font-bold text-slate-500 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 px-2.5 py-1.5 rounded-lg transition"
-                          title="Limpar desconto"
-                        >
-                          Limpar
-                        </button>
-                      )}
+                      <div>
+                        <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Crianças</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={criancas}
+                          onChange={(e) => setCriancas(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* LISTAGEM DOS REGIMES */}
-                {REGIMES_OPCOES.map((reg) => (
-                  <div key={reg.id} className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="0,00"
-                      value={regimesValores[reg.id] || ""}
-                      onChange={(e) => handleValorChange(reg.id, e.target.value)}
-                      className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
-                    />
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+                    {numCriancas > 0 && (
+                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5 mb-1">
+                          <Baby className="w-3.5 h-3.5 text-brand-700" />
+                          Idades / Detalhes das Crianças
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ex: até 12 anos (ou '5 e 9 anos')"
+                          value={idadesCriancas}
+                          onChange={(e) => setIdadesCriancas(e.target.value)}
+                          className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium"
+                        />
 
-          {/* ================= CONTEÚDO DA ABA GRUPOS ================= */}
-          {abaAtiva === "grupos" && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <BedDouble className="w-4 h-4 text-brand-700" />
-                  Apartamentos do Grupo ({apartamentosGrupo.length})
-                </label>
-                <button
-                  type="button"
-                  onClick={adicionarApartamentoGrupo}
-                  className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition shadow-sm"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Adicionar Apartamento
-                </button>
-              </div>
-
-              <div 
-                className="max-h-[620px] overflow-y-auto pr-2 space-y-4 rounded-xl border border-slate-200 p-2 bg-slate-100/50 shadow-inner"
-                style={{
-                  scrollbarWidth: "auto",
-                  scrollbarColor: "#94a3b8 #f1f5f9",
-                }}
-              >
-                {apartamentosGrupo.map((apto, index) => {
-                  const numCrApto = parseInt(apto.criancas, 10) || 0;
-
-                  return (
-                    <div key={apto.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between border-b pb-2">
-                        <span className="font-extrabold text-xs text-brand-900 uppercase">
-                          Apartamento #{index + 1}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {index > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => duplicarValoresAptoAnterior(index)}
-                              className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
-                              title="Copiar configuração do apartamento anterior"
-                            >
-                              <CopyPlus className="w-3 h-3" />
-                              Repetir Apto #{index}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removerApartamentoGrupo(apto.id)}
-                            className="text-slate-400 hover:text-red-600 p-1 rounded"
-                            title="Remover apartamento"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
-                              Adultos
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={apto.adultos || "2"}
-                              onChange={(e) => atualizarApartamentoGrupo(index, "adultos", e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
-                              Crianças
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={apto.criancas || "0"}
-                              onChange={(e) => atualizarApartamentoGrupo(index, "criancas", e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
-                            />
-                          </div>
-                        </div>
-
-                        {numCrApto > 0 && (
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 mb-0.5">
-                              <Baby className="w-3.5 h-3.5 text-brand-700" />
-                              Idades / Detalhes das Crianças
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Ex: 13 anos (ou '5 e 9 anos')"
-                              value={apto.idadesCriancas || ""}
-                              onChange={(e) => atualizarApartamentoGrupo(index, "idadesCriancas", e.target.value)}
-                              className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900"
-                            />
-
-                            {opcoesCriancasHotel.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1 pt-1">
-                                {opcoesCriancasHotel.map((opTexto, opIdx) => (
-                                  <button
-                                    key={opIdx}
-                                    type="button"
-                                    onClick={() => atualizarApartamentoGrupo(index, "idadesCriancas", opTexto)}
-                                    className={`text-[10px] px-2 py-0.5 rounded font-semibold border transition ${
-                                      apto.idadesCriancas === opTexto
-                                        ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-                                        : "bg-white text-slate-700 border-slate-300 hover:bg-amber-50"
-                                    }`}
-                                  >
-                                    {opTexto}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {hotelSelecionado?.tiposApto?.length > 0 && (
-                        <div className="pt-2 border-t border-slate-100">
-                          <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
-                            <BedDouble className="w-3.5 h-3.5 text-brand-700" />
-                            Tipo de Apartamento deste Quarto:
-                          </label>
-                          <div className="flex flex-wrap gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => atualizarApartamentoGrupo(index, "acomodacao", "")}
-                              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
-                                !apto.acomodacao
-                                  ? "bg-brand-900 text-white border-brand-900 font-bold"
-                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                              }`}
-                            >
-                              Geral (Padrão)
-                            </button>
-                            {hotelSelecionado.tiposApto.map((ap, apIdx) => (
+                        {opcoesCriancasHotel.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[10px] uppercase font-bold text-slate-400">Opções rápidas:</span>
+                            {opcoesCriancasHotel.map((opcaoTexto, opIdx) => (
                               <button
-                                key={apIdx}
+                                key={opIdx}
                                 type="button"
-                                onClick={() => atualizarApartamentoGrupo(index, "acomodacao", ap.nome)}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
-                                  apto.acomodacao === ap.nome
-                                    ? "bg-brand-900 text-white border-brand-900 font-bold"
-                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                onClick={() => setIdadesCriancas(opcaoTexto)}
+                                className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border transition ${
+                                  idadesCriancas === opcaoTexto
+                                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                    : "bg-white text-slate-700 border-slate-300 hover:bg-amber-50 hover:border-amber-400"
                                 }`}
                               >
-                                {ap.nome}
+                                {opcaoTexto}
                               </button>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                      <div className="pt-2 border-t border-slate-100 space-y-2">
-                        <span className="text-[11px] font-bold uppercase text-slate-500 block">
-                          Valores para este Apto (R$):
-                        </span>
-                        {REGIMES_OPCOES.map((reg) => (
-                          <div key={reg.id} className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
+                  {/* REGIMES E VALORES */}
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                    <div className="border-b border-slate-100 pb-3 space-y-2">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                        Regimes de Pensão e Valores (R$)
+                      </label>
+
+                      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-emerald-50/90 border border-emerald-300 p-2.5 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
+                          <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                            Desconto:
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                          <div className="inline-flex items-center bg-white border border-emerald-300 rounded-lg overflow-hidden shadow-xs">
+                            <span className="bg-emerald-600 text-white text-xs font-black px-3 py-2 flex items-center justify-center">
+                              %
+                            </span>
                             <input
                               type="text"
                               inputMode="numeric"
-                              placeholder="0,00"
-                              value={apto.valores[reg.id] || ""}
-                              onChange={(e) => atualizarValorGrupo(index, reg.id, e.target.value)}
-                              className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs text-slate-900 font-semibold focus:ring-1 focus:ring-brand-900 outline-none"
+                              placeholder="0"
+                              value={descontoPercentual}
+                              onChange={(e) => {
+                                const valorNumerico = e.target.value.replace(/\D/g, "");
+                                setDescontoPercentual(valorNumerico);
+                              }}
+                              className="w-20 bg-white py-1.5 px-3 text-sm text-center font-bold text-emerald-950 outline-none"
                             />
                           </div>
-                        ))}
+
+                          {descontoPercentual !== "" && (
+                            <button
+                              type="button"
+                              onClick={() => setDescontoPercentual("")}
+                              className="text-xs font-bold text-slate-500 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 px-2.5 py-1.5 rounded-lg transition"
+                              title="Limpar desconto"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
-          {/* ================= PARQUES E BENEFÍCIOS ================= */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-2">
-              {hotelSelecionado?.tituloInclusoPacote
-                ? formatarTituloOrtografico(hotelSelecionado.tituloInclusoPacote)
-                : "Parques e Benefícios"}
-            </label>
-            {hotelSelecionado?.parquesDisponiveis?.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {hotelSelecionado.parquesDisponiveis.map((parque) => {
-                  const ativo = parquesMarcados.includes(parque);
-                  return (
-                    <button
-                      key={parque}
-                      type="button"
-                      onClick={() => toggleParque(parque)}
-                      className={`text-xs text-left p-2.5 rounded-lg border flex items-center gap-2 font-medium transition ${
-                        ativo
-                          ? "bg-brand-50 border-brand-700 text-brand-900 font-semibold"
-                          : "bg-slate-50 border-slate-200 text-slate-400"
-                      }`}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${ativo ? "bg-brand-900 border-brand-900 text-white" : "border-slate-300"}`}>
-                        {ativo && <Check className="w-2.5 h-2.5" />}
+                    {/* LISTAGEM DOS REGIMES */}
+                    {REGIMES_OPCOES.map((reg) => (
+                      <div key={reg.id} className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          value={regimesValores[reg.id] || ""}
+                          onChange={(e) => handleValorChange(reg.id, e.target.value)}
+                          className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+                        />
                       </div>
-                      <span className="truncate">{parque}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic">
-                {hotelSelecionado ? "Nenhum benefício cadastrado para esta hospedagem." : "Selecione uma hospedagem acima para carregar as opções de inclusões."}
-              </p>
-            )}
-          </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
-          {/* ================= APTOS RESTANTES E FORMA DE PAGAMENTO ================= */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-            <div>
-              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Aptos Disponíveis</label>
-              <input
-                type="text"
-                value={aptosRestantes}
-                onChange={(e) => setAptosRestantes(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Forma de Pagamento (Linhas no WhatsApp)</label>
-              <textarea
-                rows={3}
-                value={formaPagamento}
-                onChange={(e) => setFormaPagamento(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium resize-y leading-relaxed"
-                placeholder={"• Em até 10x sem juros\n• Com desconto especial no PIX"}
-              />
-            </div>
-          </div>
+              {/* ================= CONTEÚDO DA ABA GRUPOS ================= */}
+              {abaAtiva === "grupos" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <BedDouble className="w-4 h-4 text-brand-700" />
+                      Apartamentos do Grupo ({apartamentosGrupo.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={adicionarApartamentoGrupo}
+                      className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar Apartamento
+                    </button>
+                  </div>
+
+                  <div 
+                    className="max-h-[620px] overflow-y-auto pr-2 space-y-4 rounded-xl border border-slate-200 p-2 bg-slate-100/50 shadow-inner"
+                    style={{
+                      scrollbarWidth: "auto",
+                      scrollbarColor: "#94a3b8 #f1f5f9",
+                    }}
+                  >
+                    {apartamentosGrupo.map((apto, index) => {
+                      const numCrApto = parseInt(apto.criancas, 10) || 0;
+
+                      return (
+                        <div key={apto.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <span className="font-extrabold text-xs text-brand-900 uppercase">
+                              Apartamento #{index + 1}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {index > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => duplicarValoresAptoAnterior(index)}
+                                  className="text-[11px] font-semibold text-brand-700 hover:text-brand-900 flex items-center gap-1 bg-brand-50 px-2 py-0.5 rounded"
+                                  title="Copiar configuração do apartamento anterior"
+                                >
+                                  <CopyPlus className="w-3 h-3" />
+                                  Repetir Apto #{index}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removerApartamentoGrupo(apto.id)}
+                                className="text-slate-400 hover:text-red-600 p-1 rounded"
+                                title="Remover apartamento"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
+                                  Adultos
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={apto.adultos || "2"}
+                                  onChange={(e) => atualizarApartamentoGrupo(index, "adultos", e.target.value)}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-slate-600 block mb-0.5">
+                                  Crianças
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={apto.criancas || "0"}
+                                  onChange={(e) => atualizarApartamentoGrupo(index, "criancas", e.target.value)}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
+                                />
+                              </div>
+                            </div>
+
+                            {numCrApto > 0 && (
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 mb-0.5">
+                                  <Baby className="w-3.5 h-3.5 text-brand-700" />
+                                  Idades / Detalhes das Crianças
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="Ex: 13 anos (ou '5 e 9 anos')"
+                                  value={apto.idadesCriancas || ""}
+                                  onChange={(e) => atualizarApartamentoGrupo(index, "idadesCriancas", e.target.value)}
+                                  className="w-full bg-amber-50/60 border border-amber-300 rounded-lg p-2 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-brand-900"
+                                />
+
+                                {opcoesCriancasHotel.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1 pt-1">
+                                    {opcoesCriancasHotel.map((opTexto, opIdx) => (
+                                      <button
+                                        key={opIdx}
+                                        type="button"
+                                        onClick={() => atualizarApartamentoGrupo(index, "idadesCriancas", opTexto)}
+                                        className={`text-[10px] px-2 py-0.5 rounded font-semibold border transition ${
+                                          apto.idadesCriancas === opTexto
+                                            ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                            : "bg-white text-slate-700 border-slate-300 hover:bg-amber-50"
+                                        }`}
+                                      >
+                                        {opTexto}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {hotelSelecionado?.tiposApto?.length > 0 && (
+                            <div className="pt-2 border-t border-slate-100">
+                              <label className="text-[11px] font-semibold text-slate-600 block mb-1.5 flex items-center gap-1">
+                                <BedDouble className="w-3.5 h-3.5 text-brand-700" />
+                                Tipo de Apartamento deste Quarto:
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {hotelSelecionado.tiposApto.map((ap, apIdx) => (
+                                  <button
+                                    key={apIdx}
+                                    type="button"
+                                    onClick={() => atualizarApartamentoGrupo(index, "acomodacao", ap.nome)}
+                                    className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${
+                                      apto.acomodacao === ap.nome
+                                        ? "bg-brand-900 text-white border-brand-900 font-bold"
+                                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                    }`}
+                                  >
+                                    {ap.nome}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="pt-2 border-t border-slate-100 space-y-2">
+                            <span className="text-[11px] font-bold uppercase text-slate-500 block">
+                              Valores para este Apto (R$):
+                            </span>
+                            {REGIMES_OPCOES.map((reg) => (
+                              <div key={reg.id} className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-slate-700 w-36 truncate">{reg.label}</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0,00"
+                                  value={apto.valores[reg.id] || ""}
+                                  onChange={(e) => atualizarValorGrupo(index, reg.id, e.target.value)}
+                                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs text-slate-900 font-semibold focus:ring-1 focus:ring-brand-900 outline-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ================= PARQUES E BENEFÍCIOS ================= */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-2">
+                  {hotelSelecionado?.tituloInclusoPacote
+                    ? formatarTituloOrtografico(hotelSelecionado.tituloInclusoPacote)
+                    : "Parques e Benefícios"}
+                </label>
+                {hotelSelecionado?.parquesDisponiveis?.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {hotelSelecionado.parquesDisponiveis.map((parque) => {
+                      const ativo = parquesMarcados.includes(parque);
+                      return (
+                        <button
+                          key={parque}
+                          type="button"
+                          onClick={() => toggleParque(parque)}
+                          className={`text-xs text-left p-2.5 rounded-lg border flex items-center gap-2 font-medium transition ${
+                            ativo
+                              ? "bg-brand-50 border-brand-700 text-brand-900 font-semibold"
+                              : "bg-slate-50 border-slate-200 text-slate-400"
+                          }`}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${ativo ? "bg-brand-900 border-brand-900 text-white" : "border-slate-300"}`}>
+                            {ativo && <Check className="w-2.5 h-2.5" />}
+                          </div>
+                          <span className="truncate">{parque}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">
+                    {hotelSelecionado ? "Nenhum benefício cadastrado para esta hospedagem." : "Selecione uma hospedagem acima para carregar as opções de inclusões."}
+                  </p>
+                )}
+              </div>
+
+              {/* ================= APTOS RESTANTES E FORMA DE PAGAMENTO ================= */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Aptos Disponíveis</label>
+                  <input
+                    type="text"
+                    value={aptosRestantes}
+                    onChange={(e) => setAptosRestantes(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Forma de Pagamento (Linhas no WhatsApp)</label>
+                  <textarea
+                    rows={3}
+                    value={formaPagamento}
+                    onChange={(e) => setFormaPagamento(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium resize-y leading-relaxed"
+                    placeholder={"• Em até 10x sem juros\n• Com desconto especial no PIX"}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ================= PRÉVIA DO WHATSAPP ================= */}
@@ -1912,7 +1925,7 @@ function GeradorOrcamentoConteudo() {
 
                 <button
                   onClick={salvarEGerarLink}
-                  disabled={salvando || enviandoZap || !hotelSelecionado}
+                  disabled={salvando || enviandoZap || !hotelSelecionado || !aptoLiberado}
                   className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
                 >
                   {salvando ? (
