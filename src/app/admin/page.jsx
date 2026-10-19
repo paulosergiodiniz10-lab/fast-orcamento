@@ -262,7 +262,15 @@ export default function AdminMaster() {
   if (!autenticado) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <form onSubmit={fazerLoginMaster} className="bg-white max-w-sm w-full rounded-2xl shadow-xl p-6">
+        <form 
+          onSubmit={fazerLoginMaster} 
+          autoComplete="off" 
+          className="bg-white max-w-sm w-full rounded-2xl shadow-xl p-6"
+        >
+          {/* Honeypot: Campos invisíveis para desviar o autocompletar do Chrome */}
+          <input type="text" name="fake_user_to_block_chrome" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="fake_password_to_block_chrome" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
+
           <div className="text-center mb-5">
             <div className="w-12 h-12 bg-emerald-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow">
               <ShieldCheck className="w-6 h-6" />
@@ -282,7 +290,10 @@ export default function AdminMaster() {
             <div className="relative flex items-center">
               <input
                 type={verSenhaMaster ? "text" : "password"}
+                name="admin_master_pin_code"
+                id="admin_master_pin_code"
                 required
+                autoComplete="new-password"
                 placeholder="Digite sua senha..."
                 value={senhaInput}
                 onChange={(e) => setSenhaInput(e.target.value)}
@@ -332,6 +343,7 @@ export default function AdminMaster() {
           onClick={() => {
             setAutenticado(false);
             setSenhaMasterSalva("");
+            setSenhaInput("");
           }}
           className="text-xs bg-emerald-900 hover:bg-emerald-800 px-3 py-1.5 rounded-lg font-semibold transition"
         >
@@ -368,7 +380,7 @@ export default function AdminMaster() {
             )}
           </div>
 
-          <form onSubmit={salvarAgencia} className="space-y-3">
+          <form onSubmit={salvarAgencia} autoComplete="off" className="space-y-3">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nome da Agência</label>
               <input
@@ -398,6 +410,8 @@ export default function AdminMaster() {
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Login / Usuário</label>
                 <input
                   type="text"
+                  name="agencia_usuario_field"
+                  autoComplete="off"
                   required
                   placeholder="rioquente"
                   value={usuario}
@@ -410,6 +424,8 @@ export default function AdminMaster() {
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Senha</label>
                 <input
                   type="text"
+                  name="agencia_senha_field"
+                  autoComplete="new-password"
                   required
                   placeholder="123456"
                   value={senhaAgencia}
