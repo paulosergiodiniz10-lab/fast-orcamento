@@ -323,7 +323,8 @@ function GeradorOrcamentoConteudo() {
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
 
-  const [adultos, setAdultos] = useState(searchParams.get("adultos") || "2");
+  // Inicializados limpos para evitar dados residuais
+  const [adultos, setAdultos] = useState(searchParams.get("adultos") || "");
   const [criancas, setCriancas] = useState(searchParams.get("criancas") || "0");
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
@@ -336,7 +337,7 @@ function GeradorOrcamentoConteudo() {
   const [apartamentosGrupo, setApartamentosGrupo] = useState([
     {
       id: 1,
-      adultos: "2",
+      adultos: "",
       criancas: "0",
       idadesCriancas: "",
       acomodacao: "",
@@ -345,8 +346,8 @@ function GeradorOrcamentoConteudo() {
   ]);
 
   const [parquesMarcados, setParquesMarcados] = useState([]);
-  const [formaPagamento, setFormaPagamento] = useState("• Cartão de Crédito: em até 10 X sem juros\n• PIX: com desconto especial");
-  const [aptosRestantes, setAptosRestantes] = useState("2");
+  const [formaPagamento, setFormaPagamento] = useState("");
+  const [aptosRestantes, setAptosRestantes] = useState("");
 
   const [copiado, setCopiado] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -655,7 +656,7 @@ function GeradorOrcamentoConteudo() {
 
       setFormaPagamento(linhasConvertidas);
     } else {
-      setFormaPagamento("• Em até 10x sem juros\n• Com desconto especial no PIX");
+      setFormaPagamento("");
     }
   };
 
@@ -829,7 +830,7 @@ function GeradorOrcamentoConteudo() {
     setAptoSelecionado("");
     setCheckin(hojeStr);
     setCheckout(somarDias(hojeStr, 1));
-    setAdultos("2");
+    setAdultos("");
     setCriancas("0");
     setIdadesCriancas("");
     setRegimesValores({});
@@ -838,13 +839,15 @@ function GeradorOrcamentoConteudo() {
     setApartamentosGrupo([
       {
         id: Date.now(),
-        adultos: "2",
+        adultos: "",
         criancas: "0",
         idadesCriancas: "",
         acomodacao: "",
         valores: {},
       },
     ]);
+    setFormaPagamento("");
+    setAptosRestantes("");
     setLinkGerado("");
     setIdOrcamentoAtual("");
   };
@@ -862,7 +865,7 @@ function GeradorOrcamentoConteudo() {
       ...prev,
       {
         id: Date.now(),
-        adultos: "2",
+        adultos: "",
         criancas: "0",
         idadesCriancas: "",
         acomodacao: "",
@@ -909,7 +912,7 @@ function GeradorOrcamentoConteudo() {
       const aptoAnterior = novos[indexAtual - 1];
       novos[indexAtual] = { 
         ...novos[indexAtual], 
-        adultos: aptoAnterior.adultos || "2",
+        adultos: aptoAnterior.adultos || "",
         criancas: aptoAnterior.criancas || "0",
         idadesCriancas: aptoAnterior.idadesCriancas || "",
         acomodacao: aptoAnterior.acomodacao || "",
@@ -992,7 +995,7 @@ function GeradorOrcamentoConteudo() {
     }
 
     if (abaAtiva === "individual") {
-      let textoHospedes = `${adultos} adulto(s)`;
+      let textoHospedes = `${adultos || 0} adulto(s)`;
       if (numCriancas > 0) {
         textoHospedes += ` e ${numCriancas} criança(s)`;
         if (idadesCriancas.trim()) {
@@ -1090,7 +1093,7 @@ function GeradorOrcamentoConteudo() {
       return null;
     }
 
-    let hospedesFormatado = `${adultos} Adulto(s)`;
+    let hospedesFormatado = `${adultos || 1} Adulto(s)`;
     if (numCriancas > 0) {
       hospedesFormatado += ` e ${numCriancas} Criança(s)`;
       if (idadesCriancas.trim()) {
@@ -1162,7 +1165,7 @@ function GeradorOrcamentoConteudo() {
       checkin,
       checkout,
       periodoFormatado: formatarDatas(),
-      adultos,
+      adultos: adultos || "1",
       criancas,
       idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
       hospedes: abaAtiva === "individual" ? hospedesFormatado : `Grupo com ${apartamentosGrupo.length} apartamento(s)`,
@@ -1568,6 +1571,7 @@ function GeradorOrcamentoConteudo() {
                             <input
                               type="number"
                               min="1"
+                              placeholder="Ex: 2"
                               value={adultos}
                               onChange={(e) => setAdultos(e.target.value)}
                               className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
@@ -1793,7 +1797,8 @@ function GeradorOrcamentoConteudo() {
                                   <input
                                     type="number"
                                     min="1"
-                                    value={apto.adultos || "2"}
+                                    placeholder="Ex: 2"
+                                    value={apto.adultos}
                                     onChange={(e) => atualizarApartamentoGrupo(index, "adultos", e.target.value)}
                                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-brand-900"
                                   />
@@ -1917,6 +1922,7 @@ function GeradorOrcamentoConteudo() {
                   <label className="text-xs font-bold text-slate-600 uppercase block mb-1">Aptos Disponíveis</label>
                   <input
                     type="text"
+                    placeholder="Ex: 2"
                     value={aptosRestantes}
                     onChange={(e) => setAptosRestantes(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm"
