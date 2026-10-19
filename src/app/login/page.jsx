@@ -139,7 +139,11 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} autoComplete="on" className="space-y-4">
+          {/* Honeypot: Campo oculto para estabilizar preenchimento automático do Chrome */}
+          <input type="text" name="prevent_autofill_user" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="prevent_autofill_pwd" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
+
           <div>
             <label className="text-xs font-bold text-slate-600 uppercase block mb-1">
               Utilizador / E-mail
@@ -148,6 +152,9 @@ export default function LoginPage() {
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
+                name="username"
+                id="login_usuario"
+                autoComplete="username"
                 required
                 placeholder="seu usuario ou e-mail"
                 value={usuario}
@@ -165,6 +172,9 @@ export default function LoginPage() {
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type={mostrarSenha ? "text" : "password"}
+                name="password"
+                id="login_senha"
+                autoComplete="current-password"
                 required
                 placeholder="••••••••"
                 value={senha}
