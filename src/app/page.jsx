@@ -1057,10 +1057,10 @@ function GeradorOrcamentoConteudo() {
     }
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
-    if (finalUrl) {
-      const urlSemProtocolo = finalUrl.replace(/^https?:\/\//, "");
-      texto += `${iconeLink}*Fotos e detalhes completos:*\n${urlSemProtocolo}\n\n`;
-    }
+  if (finalUrl) {
+  const urlSemProtocolo = finalUrl.replace(/^https?:\/\//, "");
+  texto += `${iconeLink}*Clique e veja Fotos e Vídeos:* 👇\n${urlSemProtocolo}\n\n`;
+}
     texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._\n`;
 
     const idFinal = idDoc || idOrcamentoAtual;
