@@ -5,7 +5,7 @@ import {
   Building2, Plus, Pencil, Trash2, ArrowLeft, Loader2, 
   MapPin, Video, UploadCloud, X, BedDouble, CheckCircle2, Bold, Eraser,
   HelpCircle, AlertCircle, Waves, Filter, Star, CreditCard, Baby, MessageSquare,
-  FileText, Image as ImageIcon, CalendarDays, Tag
+  FileText, Image as ImageIcon, CalendarDays, Tag, Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../../lib/firebase";
@@ -31,6 +31,7 @@ const REGIMES_LISTA = [
   { id: "cafe_almoco", label: "Café + Almoço" },
   { id: "cafe_jantar", label: "Café + Jantar" },
   { id: "pensao_completa", label: "Pensão Completa" },
+  { id: "all_inclusive", label: "All Inclusive" },
   { id: "sem_refeicao", label: "Sem refeição" },
 ];
 
@@ -280,6 +281,7 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
     cafe_almoco: "Café + Almoço",
     cafe_jantar: "Café + Jantar",
     pensao_completa: "Pensão Completa",
+    all_inclusive: "All Inclusive",
     sem_refeicao: "Sem refeição",
   };
 
@@ -309,30 +311,25 @@ function TabelaGestaoCalendario({ tarifas = [], tiposApto = [], onEditarTarifa, 
 
       if (tarifasCompativeis.length > 0) {
         tarifasCompativeis.sort((a, b) => {
-          // Extrai o tempo em segundos/milissegundos com precisão
           const tempoA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || (a.atualizadoEm instanceof Date ? a.atualizadoEm.getTime() / 1000 : 0);
           const tempoB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || (b.atualizadoEm instanceof Date ? b.atualizadoEm.getTime() / 1000 : 0);
 
-          // 1º CRITÉRIO ABSOLUTO: O cadastro/atualização mais recente sempre prevalece
           if (tempoA !== tempoB) {
             return tempoB - tempoA;
           }
 
-          // 2º CRITÉRIO: Exceção diária específica (dataInicio === dataFim)
           const isSingleDayA = a.dataInicio === a.dataFim ? 10 : 0;
           const isSingleDayB = b.dataInicio === b.dataFim ? 10 : 0;
           if (isSingleDayA !== isSingleDayB) {
             return isSingleDayB - isSingleDayA;
           }
 
-          // 3º CRITÉRIO: Vinculação de apartamento específico
           const pesoAptoA = a.aptoVinculado && a.aptoVinculado !== "todos" ? 4 : 0;
           const pesoAptoB = b.aptoVinculado && b.aptoVinculado !== "todos" ? 4 : 0;
           if (pesoAptoA !== pesoAptoB) {
             return pesoAptoB - pesoAptoA;
           }
 
-          // 4º CRITÉRIO: Pacote fechado
           const pesoPacoteA = a.pacoteFechado ? 2 : 0;
           const pesoPacoteB = b.pacoteFechado ? 2 : 0;
           return pesoPacoteB - pesoPacoteA;
@@ -598,6 +595,7 @@ export default function GestaoHoteis() {
 
   const [tituloInclusoPacote, setTituloInclusoPacote] = useState("Parques que inclui no pacote");
   const [inclusoPacote, setInclusoPacote] = useState("");
+  const [allInclusiveDescricao, setAllInclusiveDescricao] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [fotosGerais, setFotosGerais] = useState([]);
   const [tiposApto, setTiposApto] = useState([]);
@@ -646,6 +644,7 @@ export default function GestaoHoteis() {
     cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
     cafe_jantar: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
     pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+    all_inclusive: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
     sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
   });
 
@@ -1038,6 +1037,7 @@ export default function GestaoHoteis() {
     setPagamentoBoleto("");
     setTituloInclusoPacote("Parques que inclui no pacote");
     setInclusoPacote("");
+    setAllInclusiveDescricao("");
     setVideoUrl("");
     setFotosGerais([]);
     setTiposApto([]);
@@ -1086,6 +1086,7 @@ export default function GestaoHoteis() {
     setPagamentoBoleto(hotel.pagamentoBoleto || "");
     setTituloInclusoPacote(hotel.tituloInclusoPacote || "Parques que inclui no pacote");
     setInclusoPacote((hotel.parquesDisponiveis || []).join(", "));
+    setAllInclusiveDescricao(hotel.allInclusiveDescricao || "");
     setVideoUrl(hotel.videoUrl || "");
     setFotosGerais(hotel.fotos || []);
     setTiposApto(
@@ -1165,6 +1166,7 @@ export default function GestaoHoteis() {
         descricao: descFinal || "",
         tituloInclusoPacote: formatarTituloOrtografico(tituloInclusoPacote),
         parquesDisponiveis: listaIncluso,
+        allInclusiveDescricao: allInclusiveDescricao.trim(),
         observacoes: obsFinal || "",
         videoUrl: videoUrl.trim(),
         fotos: fotosGerais,
@@ -1279,11 +1281,11 @@ export default function GestaoHoteis() {
       cafe_almoco: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
       cafe_jantar: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
       pensao_completa: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
+      all_inclusive: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
       sem_refeicao: { single: "", duplo: "", adicAdulto: "", adicCrianca: "" },
     });
   };
 
-  // Nomes únicos cadastrados nas tarifas + nomes adicionados no catálogo
   const nomesTarifasCatalogo = Array.from(
     new Set([
       ...nomesTarifasPersistidos,
@@ -1291,7 +1293,6 @@ export default function GestaoHoteis() {
     ])
   );
 
-  // Adicionar um novo nome ao catálogo de tarifas (força maiúsculas)
   const salvarNovoNomeCatalogo = async () => {
     const nomeLimpo = novoNomeCatalogo.trim().toUpperCase();
     if (!nomeLimpo) {
@@ -1323,7 +1324,6 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Abre Modal Individual para edição isolada de 1 DIA ou período
   const abrirModalEditarTarifa = (t, dataIsoClicada = null, diaSemanaIdx = null) => {
     const novosValores = {};
     REGIMES_LISTA.forEach((r) => {
@@ -1405,7 +1405,6 @@ export default function GestaoHoteis() {
     }
   };
 
-  // Renomear em massa todas as tarifas que têm determinado nome (força maiúsculas)
   const executarRenomeacaoMassa = async () => {
     const antigo = (nomeParaRenomearAntigo || "").trim().toUpperCase();
     const novo = (nomeParaRenomearNovo || "").trim().toUpperCase();
@@ -2091,6 +2090,29 @@ export default function GestaoHoteis() {
                     />
                   </div>
 
+                  {/* NOVO CAMPO: INFORMAÇÕES DO ALL INCLUSIVE */}
+                  <div className="p-4 bg-amber-50/60 border border-amber-300 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-amber-950 uppercase flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-700" />
+                        Informações do All Inclusive (Orçamento WhatsApp e Vitrine)
+                      </label>
+                      <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                        Opcional
+                      </span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      placeholder={"Descreva os detalhes do All Inclusive deste hotel.\nEx: • Chope, cervejas e destilados inclusos\n• Petiscos à beira da piscina e buffet completo à vontade"}
+                      value={allInclusiveDescricao}
+                      onChange={(e) => setAllInclusiveDescricao(e.target.value)}
+                      className="w-full bg-white border border-amber-300 rounded-xl p-3 text-xs md:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-600 font-medium leading-relaxed resize-y"
+                    />
+                    <p className="text-[11px] text-amber-800 italic">
+                      * Este texto só será inserido no orçamento e na vitrine caso a cotação tenha valor preenchido no regime <strong>All Inclusive</strong>.
+                    </p>
+                  </div>
+
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <label className="text-xs font-bold text-slate-700 uppercase block">
@@ -2612,8 +2634,8 @@ export default function GestaoHoteis() {
                               <span className="text-[10px] text-slate-400 uppercase font-bold mr-1">Sugestões:</span>
                               {nomesTarifasCatalogo.map((nm) => (
                                 <button
-                                  key={nm}
                                   type="button"
+                                  key={nm}
                                   onClick={() => setTarifaNome(nm.toUpperCase())}
                                   className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-amber-100 text-slate-700 border border-slate-200 transition uppercase"
                                 >
@@ -2826,7 +2848,7 @@ export default function GestaoHoteis() {
                               placeholder="0,00"
                               value={tarifaValores[regimeAbaAtiva]?.adicAdulto || ""}
                               onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "adicAdulto", e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
                             />
                           </div>
 
@@ -2840,7 +2862,7 @@ export default function GestaoHoteis() {
                               placeholder="0,00"
                               value={tarifaValores[regimeAbaAtiva]?.adicCrianca || ""}
                               onChange={(e) => handleValorTarifaChange(regimeAbaAtiva, "adicCrianca", e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-600"
+                              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs md:text-sm font-semibold outline-none focus:ring-1 focus:ring-amber-600"
                             />
                           </div>
                         </div>
