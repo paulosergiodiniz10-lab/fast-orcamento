@@ -23,6 +23,7 @@ const REGIMES_OPCOES = [
   { id: "cafe_almoco", label: "Café + Almoço" },
   { id: "cafe_jantar", label: "Café + Jantar" },
   { id: "pensao_completa", label: "Pensão Completa" },
+  { id: "all_inclusive", label: "All Inclusive" },
 ];
 
 const MESES = [
@@ -827,6 +828,7 @@ function GeradorOrcamentoConteudo() {
       setHotelSelecionado(null);
     }
 
+    setAbaAtiva("individual");
     setAptoSelecionado("");
     setCheckin(hojeStr);
     setCheckout(somarDias(hojeStr, 1));
@@ -994,6 +996,8 @@ function GeradorOrcamentoConteudo() {
       texto += `*${tituloValores}*\n\n`;
     }
 
+    let temAllInclusiveCotado = false;
+
     if (abaAtiva === "individual") {
       let textoHospedes = `${adultos || 0} adulto(s)`;
       if (numCriancas > 0) {
@@ -1015,6 +1019,9 @@ function GeradorOrcamentoConteudo() {
       });
 
       regimesComValor.forEach((reg) => {
+        if (reg.id === "all_inclusive") {
+          temAllInclusiveCotado = true;
+        }
         const valorComDesconto = calcularValorComDesconto(regimesValores[reg.id]);
         texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n\n`;
       });
@@ -1035,6 +1042,9 @@ function GeradorOrcamentoConteudo() {
 
         if (regimesComValor.length > 0) {
           regimesComValor.forEach((reg) => {
+            if (reg.id === "all_inclusive") {
+              temAllInclusiveCotado = true;
+            }
             const valorComDesconto = calcularValorComDesconto(ap.valores[reg.id]);
             texto += `${reg.label}\nR$ ${valorComDesconto}\n\n`;
           });
@@ -1042,6 +1052,10 @@ function GeradorOrcamentoConteudo() {
           texto += `_Valores sob consulta_\n\n`;
         }
       });
+    }
+
+    if (temAllInclusiveCotado && hotelSelecionado.allInclusiveDescricao && hotelSelecionado.allInclusiveDescricao.trim()) {
+      texto += `🍽️ *All Inclusive Incluso no Pacote:*\n${hotelSelecionado.allInclusiveDescricao.trim()}\n\n`;
     }
 
     if (temDescontoAtivo) {
@@ -1057,10 +1071,10 @@ function GeradorOrcamentoConteudo() {
     }
 
     const finalUrl = urlVitrine || linkGerado || (typeof window !== "undefined" ? window.location.origin : "");
-  if (finalUrl) {
-  const urlSemProtocolo = finalUrl.replace(/^https?:\/\//, "");
-  texto += `${iconeLink}*Clique e veja Fotos e Vídeos:* 👇\n${urlSemProtocolo}\n\n`;
-}
+    if (finalUrl) {
+      const urlSemProtocolo = finalUrl.replace(/^https?:\/\//, "");
+      texto += `${iconeLink}*Clique e veja Fotos e Vídeos:* 👇\n${urlSemProtocolo}\n\n`;
+    }
     texto += `_Oferta sujeita a alteração e disponibilidade sem prévio aviso._\n`;
 
     const idFinal = idDoc || idOrcamentoAtual;
@@ -1144,6 +1158,8 @@ function GeradorOrcamentoConteudo() {
         fotos: hotelSelecionado.fotos || [],
         tiposApto: hotelSelecionado.tiposApto || [],
         tituloInclusoPacote: formatarTituloOrtografico(hotelSelecionado.tituloInclusoPacote),
+        parquesDisponiveis: hotelSelecionado.parquesDisponiveis || [],
+        allInclusiveDescricao: hotelSelecionado.allInclusiveDescricao || "",
         tituloFotosParque: hotelSelecionado.tituloFotosParque || "Fotos dos Parques Aquáticos",
         fotosParque: hotelSelecionado.fotosParque || [],
         tituloVideoParque: hotelSelecionado.tituloVideoParque || "Vídeo dos Parques Aquáticos",
