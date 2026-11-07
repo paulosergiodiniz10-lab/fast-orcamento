@@ -1802,6 +1802,16 @@ function GeradorOrcamentoConteudo() {
                           </div>
                         </div>
 
+                        {/* CABEÇALHO ELEGANTE EXCLUSIVO DA ABA ESPECIAL */}
+                        {abaAtiva === "especial" && (
+                          <div className="hidden sm:grid sm:grid-cols-12 gap-2 text-[10px] font-black uppercase text-slate-400 pb-1 border-b border-slate-100">
+                            <span className="sm:col-span-3">Regime</span>
+                            <span className="sm:col-span-4 text-center">Custo Base (R$)</span>
+                            <span className="sm:col-span-3 text-center text-emerald-700">Lucro / Entrada (R$)</span>
+                            <span className="sm:col-span-2 text-center text-amber-700">Cartão (X)</span>
+                          </div>
+                        )}
+
                         {REGIMES_OPCOES.map((reg) => {
                           const valorAtual = regimesValores[reg.id] || "";
                           const valorComDesc = calcularValorComDesconto(valorAtual);
@@ -1812,48 +1822,59 @@ function GeradorOrcamentoConteudo() {
                           return (
                             <div key={reg.id} className="space-y-1.5 py-2 border-b border-slate-100 last:border-b-0">
                               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <span className="text-xs font-semibold text-slate-700 w-32 truncate">{reg.label}</span>
+                                <span className={`text-xs font-semibold text-slate-700 truncate ${abaAtiva === "especial" ? "sm:w-36" : "sm:w-32"}`}>
+                                  {reg.label}
+                                </span>
                                 
                                 {abaAtiva === "especial" ? (
                                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                                     {/* CAMPO 1: CUSTO */}
-                                    <div className="sm:col-span-5 relative">
+                                    <div className="sm:col-span-5">
+                                      <label className="text-[10px] font-bold text-slate-500 uppercase block sm:hidden mb-0.5">
+                                        Custo Base (R$)
+                                      </label>
                                       <input
                                         type="text"
                                         inputMode="numeric"
                                         placeholder="0,00"
                                         value={valorAtual}
                                         onChange={(e) => handleValorChange(reg.id, e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 pr-14 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+                                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
                                       />
-                                      <span className="absolute right-2 top-2.5 text-[10px] text-slate-400 font-bold uppercase">Custo</span>
                                     </div>
 
-                                    {/* CAMPO 2: LUCRO (ENTRADA) */}
-                                    <div className="sm:col-span-4 relative">
+                                    {/* CAMPO 2: LUCRO / ENTRADA */}
+                                    <div className="sm:col-span-4">
+                                      <label className="text-[10px] font-bold text-emerald-700 uppercase block sm:hidden mb-0.5">
+                                        Lucro / Entrada (R$)
+                                      </label>
                                       <input
                                         type="text"
                                         inputMode="numeric"
                                         placeholder="0,00"
                                         value={lucroRegimeAtual}
                                         onChange={(e) => handleLucroRegimeChange(reg.id, e.target.value)}
-                                        className="w-full bg-emerald-50/70 border border-emerald-300 rounded-lg p-2 pr-14 text-sm text-emerald-950 font-bold focus:ring-2 focus:ring-emerald-700 outline-none"
+                                        className="w-full bg-emerald-50/70 border border-emerald-300 rounded-lg p-2 text-sm text-emerald-950 font-bold focus:ring-2 focus:ring-emerald-700 outline-none"
                                       />
-                                      <span className="absolute right-2 top-2.5 text-[10px] text-emerald-600 font-bold uppercase">+Lucro</span>
                                     </div>
 
-                                    {/* CAMPO 3: PARCELAS */}
-                                    <div className="sm:col-span-3 flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5">
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        max="24"
-                                        placeholder="10"
-                                        value={parcelasRegimeAtual}
-                                        onChange={(e) => handleParcelasRegimeChange(reg.id, e.target.value)}
-                                        className="w-10 bg-white border border-slate-200 rounded p-1 text-center text-xs font-bold text-slate-900 outline-none focus:ring-1 focus:ring-amber-600"
-                                      />
-                                      <span className="text-[11px] font-bold text-slate-600">X Cartão</span>
+                                    {/* CAMPO 3: PARCELAS NO CARTÃO */}
+                                    <div className="sm:col-span-3">
+                                      <label className="text-[10px] font-bold text-amber-800 uppercase block sm:hidden mb-0.5">
+                                        Parcelas Cartão
+                                      </label>
+                                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="24"
+                                          placeholder="10"
+                                          value={parcelasRegimeAtual}
+                                          onChange={(e) => handleParcelasRegimeChange(reg.id, e.target.value)}
+                                          className="w-12 bg-white border border-slate-200 rounded p-1 text-center text-xs font-bold text-slate-900 outline-none focus:ring-1 focus:ring-amber-600"
+                                        />
+                                        <span className="text-[11px] font-bold text-slate-600">X</span>
+                                      </div>
                                     </div>
                                   </div>
                                 ) : (
@@ -1872,7 +1893,7 @@ function GeradorOrcamentoConteudo() {
 
                               {/* RESUMO DO CÁLCULO NO MODO ESPECIAL */}
                               {detEsp && (
-                                <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-950 flex flex-wrap items-center justify-between gap-1 sm:ml-32">
+                                <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-950 flex flex-wrap items-center justify-between gap-1 sm:ml-36">
                                   <div>
                                     <span className="text-slate-500 font-medium">Total do Pacote: </span>
                                     <strong className="text-slate-900 font-black">R$ {detEsp.valorTotalFormatado}</strong>
