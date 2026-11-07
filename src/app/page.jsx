@@ -333,8 +333,10 @@ function GeradorOrcamentoConteudo() {
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
 
-  // Configuração Especial (Entrada + Parcelas)
+  // Configuração Especial (Entrada + Lucro/Acréscimo + Parcelas)
   const [especialEntrada, setEspecialEntrada] = useState("");
+  const [especialLucroPadrao, setEspecialLucroPadrao] = useState("");
+  const [especialLucrosPorRegime, setEspecialLucrosPorRegime] = useState({});
   const [especialParcelas, setEspecialParcelas] = useState("10");
 
   const [tarifasHotelAtivo, setTarifasHotelAtivo] = useState([]);
@@ -795,6 +797,11 @@ function GeradorOrcamentoConteudo() {
     setRegimesValores((prev) => ({ ...prev, [regimeId]: formatado }));
   };
 
+  const handleLucroRegimeChange = (regimeId, valor) => {
+    const formatado = formatarMoeda(valor);
+    setEspecialLucrosPorRegime((prev) => ({ ...prev, [regimeId]: formatado }));
+  };
+
   const calcularValorComDesconto = (valorOriginalStr) => {
     if (!valorOriginalStr || valorOriginalStr.trim() === "" || valorOriginalStr === "0,00") {
       return "";
@@ -820,17 +827,32 @@ function GeradorOrcamentoConteudo() {
     });
   };
 
-  // Cálculo de parcelas para a aba Especial
-  const calcularDetalhesParcelaEspecial = (valorFormatadoComDesconto) => {
-    if (!valorFormatadoComDesconto) return null;
-    const totalNum = parseFloat(String(valorFormatadoComDesconto).replace(/\./g, "").replace(",", ".")) || 0;
+  // Cálculo de valor final com lucro e parcelamento para a aba Especial
+  const calcularDetalhesParcelaEspecial = (valorBaseStr, regimeId) => {
+    if (!valorBaseStr || valorBaseStr.trim() === "" || valorBaseStr === "0,00") return null;
+
+    const baseNum = parseFloat(String(valorBaseStr).replace(/\./g, "").replace(",", ".")) || 0;
+    if (baseNum <= 0) return null;
+
+    // Lucro específico do regime ou lucro padrão do topo
+    const lucroStr = especialLucrosPorRegime[regimeId] !== undefined ? especialLucrosPorRegime[regimeId] : especialLucroPadrao;
+    const lucroNum = parseFloat(String(lucroStr || "0").replace(/\./g, "").replace(",", ".")) || 0;
+
+    // Total = Valor Real/Base + Lucro
+    const totalComLucro = baseNum + lucroNum;
+
+    // Entrada e parcelas
     const entradaNum = parseFloat(String(especialEntrada || "0").replace(/\./g, "").replace(",", ".")) || 0;
     const qtdParcelasNum = Math.max(parseInt(especialParcelas, 10) || 1, 1);
 
-    const saldo = Math.max(totalNum - entradaNum, 0);
+    const saldo = Math.max(totalComLucro - entradaNum, 0);
     const valorParcela = saldo / qtdParcelasNum;
 
     return {
+      valorBase: baseNum,
+      lucro: lucroNum,
+      valorTotal: totalComLucro,
+      valorTotalFormatado: totalComLucro.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       entradaFormatada: entradaNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       parcelas: qtdParcelasNum,
       valorParcelaFormatado: valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -862,6 +884,8 @@ function GeradorOrcamentoConteudo() {
     setIdadesCriancas("");
     setRegimesValores({});
     setEspecialEntrada("");
+    setEspecialLucroPadrao("");
+    setEspecialLucrosPorRegime({});
     setEspecialParcelas("10");
     setDescontoPercentual("");
     setAlertaTarifario("");
@@ -1049,17 +1073,20 @@ function GeradorOrcamentoConteudo() {
         if (reg.id === "all_inclusive") {
           temAllInclusiveCotado = true;
         }
-        const valorComDesconto = calcularValorComDesconto(regimesValores[reg.id]);
 
         if (abaAtiva === "especial") {
-          const det = calcularDetalhesParcelaEspecial(valorComDesconto);
-          texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n`;
-          if (det && det.saldoRestante > 0) {
-            texto += `entrada de ${det.entradaFormatada} + ${det.parcelas} X ${det.valorParcelaFormatado} no cartão sem juros\n\n`;
-          } else {
-            texto += `\n`;
+          const valorComDesconto = calcularValorComDesconto(regimesValores[reg.id]);
+          const det = calcularDetalhesParcelaEspecial(valorComDesconto, reg.id);
+          if (det) {
+            texto += `*${reg.label}:*\nR$ ${det.valorTotalFormatado}\n`;
+            if (det.saldoRestante > 0) {
+              texto += `entrada de ${det.entradaFormatada} + ${det.parcelas} X ${det.valorParcelaFormatado} no cartão sem juros\n\n`;
+            } else {
+              texto += `\n`;
+            }
           }
         } else {
+          const valorComDesconto = calcularValorComDesconto(regimesValores[reg.id]);
           texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n\n`;
         }
       });
@@ -1170,16 +1197,19 @@ function GeradorOrcamentoConteudo() {
       const val = regimesValores[r.id];
       return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
     }).map((r) => {
-      const valorCalc = calcularValorComDesconto(regimesValores[r.id]);
+      const valorBaseCalc = calcularValorComDesconto(regimesValores[r.id]);
       const objReg = {
         id: r.id,
         nome: r.label,
-        valor: valorCalc,
+        valor: valorBaseCalc,
       };
 
       if (abaAtiva === "especial") {
-        const det = calcularDetalhesParcelaEspecial(valorCalc);
+        const det = calcularDetalhesParcelaEspecial(valorBaseCalc, r.id);
         if (det) {
+          objReg.valor = det.valorTotalFormatado;
+          objReg.valorBaseOriginal = valorBaseCalc;
+          objReg.lucroAdicionado = det.lucro.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
           objReg.condicaoEspecial = {
             entrada: det.entradaFormatada,
             parcelas: det.parcelas,
@@ -1244,6 +1274,7 @@ function GeradorOrcamentoConteudo() {
       apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
       condicaoEspecialGlobal: abaAtiva === "especial" ? {
         entrada: especialEntrada || "0,00",
+        lucroPadrao: especialLucroPadrao || "0,00",
         parcelas: especialParcelas || "10",
       } : null,
       formaPagamento,
@@ -1714,17 +1745,17 @@ function GeradorOrcamentoConteudo() {
                         )}
                       </div>
 
-                      {/* QUADRO DE ENTRADA E PARCELAMENTO (EXCLUSIVO DA ABA ESPECIAL) */}
+                      {/* QUADRO DE CONFIGURAÇÃO FACILITADA: ENTRADA, LUCRO E PARCELAS */}
                       {abaAtiva === "especial" && (
                         <div className="bg-amber-50/80 p-4 rounded-xl shadow-sm border border-amber-300 space-y-3">
                           <div className="flex items-center gap-2 border-b border-amber-200/80 pb-2">
                             <Sparkles className="w-4 h-4 text-amber-700" />
                             <h3 className="text-xs font-extrabold text-amber-950 uppercase tracking-wide">
-                              Condição Facilitada (Entrada + Parcelas no Cartão)
+                              Condição Facilitada (Entrada + Lucro + Parcelamento)
                             </h3>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label className="text-[11px] font-bold text-amber-950 uppercase block mb-1">
                                 Entrada (R$)
@@ -1732,7 +1763,7 @@ function GeradorOrcamentoConteudo() {
                               <input
                                 type="text"
                                 inputMode="numeric"
-                                placeholder="Ex: 300,00"
+                                placeholder="Ex: 200,00"
                                 value={especialEntrada}
                                 onChange={(e) => setEspecialEntrada(formatarMoeda(e.target.value))}
                                 className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm text-slate-900 font-bold outline-none focus:ring-2 focus:ring-amber-600"
@@ -1741,10 +1772,24 @@ function GeradorOrcamentoConteudo() {
 
                             <div>
                               <label className="text-[11px] font-bold text-amber-950 uppercase block mb-1">
-                                Quantidade de Parcelas no Cartão
+                                + Lucro Padrão (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Ex: 300,00"
+                                value={especialLucroPadrao}
+                                onChange={(e) => setEspecialLucroPadrao(formatarMoeda(e.target.value))}
+                                className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm text-emerald-800 font-bold outline-none focus:ring-2 focus:ring-amber-600"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-bold text-amber-950 uppercase block mb-1">
+                                Cartão (X vezes)
                               </label>
                               <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-amber-900">Cartão:</span>
+                                <span className="text-xs font-bold text-amber-900">Em até</span>
                                 <input
                                   type="number"
                                   min="1"
@@ -1752,14 +1797,14 @@ function GeradorOrcamentoConteudo() {
                                   placeholder="10"
                                   value={especialParcelas}
                                   onChange={(e) => setEspecialParcelas(e.target.value)}
-                                  className="w-20 bg-white border border-amber-300 rounded-lg p-2 text-center text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-600"
+                                  className="w-16 bg-white border border-amber-300 rounded-lg p-2 text-center text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-600"
                                 />
-                                <span className="text-xs font-semibold text-amber-900">X vezes</span>
+                                <span className="text-xs font-semibold text-amber-900">X sem juros</span>
                               </div>
                             </div>
                           </div>
                           <p className="text-[11px] text-amber-800 leading-tight">
-                            * O valor das parcelas é recalculado automaticamente para cada regime de pensão preenchido abaixo.
+                            * Cálculo: <strong>(Valor Real + Lucro) = Total do Pacote</strong>. Depois subtrai a <strong>Entrada</strong> e divide o saldo por <strong>{especialParcelas || 10}x</strong>.
                           </p>
                         </div>
                       )}
@@ -1813,25 +1858,59 @@ function GeradorOrcamentoConteudo() {
                         {REGIMES_OPCOES.map((reg) => {
                           const valorAtual = regimesValores[reg.id] || "";
                           const valorComDesc = calcularValorComDesconto(valorAtual);
-                          const detEsp = abaAtiva === "especial" && valorComDesc ? calcularDetalhesParcelaEspecial(valorComDesc) : null;
+                          const detEsp = abaAtiva === "especial" && valorComDesc ? calcularDetalhesParcelaEspecial(valorComDesc, reg.id) : null;
+                          const lucroRegimeAtual = especialLucrosPorRegime[reg.id] !== undefined ? especialLucrosPorRegime[reg.id] : especialLucroPadrao;
 
                           return (
-                            <div key={reg.id} className="space-y-1 py-1 border-b border-slate-100 last:border-b-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  placeholder="0,00"
-                                  value={valorAtual}
-                                  onChange={(e) => handleValorChange(reg.id, e.target.value)}
-                                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
-                                />
+                            <div key={reg.id} className="space-y-1.5 py-2 border-b border-slate-100 last:border-b-0">
+                              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                                <span className="text-xs font-semibold text-slate-700 w-32 truncate">{reg.label}</span>
+                                
+                                <div className="flex-1 flex items-center gap-2">
+                                  <div className="flex-1 relative">
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      placeholder="0,00"
+                                      value={valorAtual}
+                                      onChange={(e) => handleValorChange(reg.id, e.target.value)}
+                                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+                                    />
+                                    {abaAtiva === "especial" && (
+                                      <span className="absolute right-2 top-2 text-[10px] text-slate-400 font-bold uppercase">Custo</span>
+                                    )}
+                                  </div>
+
+                                  {abaAtiva === "especial" && (
+                                    <div className="w-28 relative">
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        placeholder="Lucro"
+                                        value={lucroRegimeAtual}
+                                        onChange={(e) => handleLucroRegimeChange(reg.id, e.target.value)}
+                                        className="w-full bg-emerald-50/70 border border-emerald-300 rounded-lg p-2 text-sm text-emerald-950 font-bold focus:ring-2 focus:ring-emerald-700 outline-none"
+                                      />
+                                      <span className="absolute right-2 top-2 text-[10px] text-emerald-600 font-bold uppercase">+Lucro</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
 
-                              {detEsp && detEsp.saldoRestante > 0 && (
-                                <div className="text-[11px] text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md ml-36 font-medium">
-                                  Entrada de R$ {detEsp.entradaFormatada} + {detEsp.parcelas}X de R$ {detEsp.valorParcelaFormatado}
+                              {detEsp && (
+                                <div className="p-2 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-950 flex flex-wrap items-center justify-between gap-1 sm:ml-32">
+                                  <div>
+                                    <span className="text-slate-500 font-medium">Total: </span>
+                                    <strong className="text-slate-900 font-black">R$ {detEsp.valorTotalFormatado}</strong>
+                                    {detEsp.lucro > 0 && (
+                                      <span className="text-emerald-700 font-semibold text-[11px] ml-1">
+                                        (Custo R$ {detEsp.valorBase.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} + R$ {detEsp.lucro.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} lucro)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] font-bold text-amber-900">
+                                    entrada de {detEsp.entradaFormatada} + {detEsp.parcelas} X {detEsp.valorParcelaFormatado} no cartão
+                                  </div>
                                 </div>
                               )}
                             </div>
