@@ -1757,7 +1757,7 @@ function GeradorOrcamentoConteudo() {
                             </label>
                             {abaAtiva === "especial" && (
                               <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                Modo Especial (Entrada = Lucro)
+                                Modo Especial (Entrada)
                               </span>
                             )}
                           </div>
@@ -1807,7 +1807,7 @@ function GeradorOrcamentoConteudo() {
                           <div className="hidden sm:grid sm:grid-cols-12 gap-2 text-[10px] font-black uppercase text-slate-400 pb-1 border-b border-slate-100">
                             <span className="sm:col-span-3">Regime</span>
                             <span className="sm:col-span-4 text-center">Custo Base (R$)</span>
-                            <span className="sm:col-span-3 text-center text-emerald-700">Lucro / Entrada (R$)</span>
+                            <span className="sm:col-span-3 text-center text-emerald-700">Entrada (R$)</span>
                             <span className="sm:col-span-2 text-center text-amber-700">Cartão (X)</span>
                           </div>
                         )}
@@ -1843,10 +1843,10 @@ function GeradorOrcamentoConteudo() {
                                       />
                                     </div>
 
-                                    {/* CAMPO 2: LUCRO / ENTRADA */}
+                                    {/* CAMPO 2: ENTRADA (LUCRO) */}
                                     <div className="sm:col-span-4">
                                       <label className="text-[10px] font-bold text-emerald-700 uppercase block sm:hidden mb-0.5">
-                                        Lucro / Entrada (R$)
+                                        Entrada (R$)
                                       </label>
                                       <input
                                         type="text"
@@ -1891,17 +1891,12 @@ function GeradorOrcamentoConteudo() {
                                 )}
                               </div>
 
-                              {/* RESUMO DO CÁLCULO NO MODO ESPECIAL */}
+                              {/* RESUMO LIMPO DO CÁLCULO NO MODO ESPECIAL */}
                               {detEsp && (
                                 <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-950 flex flex-wrap items-center justify-between gap-1 sm:ml-36">
                                   <div>
                                     <span className="text-slate-500 font-medium">Total do Pacote: </span>
                                     <strong className="text-slate-900 font-black">R$ {detEsp.valorTotalFormatado}</strong>
-                                    {detEsp.lucro > 0 && (
-                                      <span className="text-emerald-700 font-semibold text-[11px] ml-1">
-                                        (Custo R$ {detEsp.valorBase.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} + R$ {detEsp.lucro.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} lucro)
-                                      </span>
-                                    )}
                                   </div>
                                   <div className="text-[11px] font-bold text-amber-900">
                                     {detEsp.lucro > 0 ? (
