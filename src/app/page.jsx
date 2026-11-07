@@ -7,7 +7,7 @@ import {
   Loader2, Hotel, LogOut, BedDouble, Baby, User, Phone, FileText,
   Users, Plus, Trash2, CopyPlus, RotateCcw, AlertCircle, HelpCircle,
   Send, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, MapPin,
-  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2, Pencil, Sparkles
+  Tag, UserPlus, Eye, EyeOff, Ban, CheckCircle2, Pencil, Sparkles, CreditCard
 } from "lucide-react";
 import Link from "next/link";
 import { db } from "../lib/firebase";
@@ -305,7 +305,10 @@ function GeradorOrcamentoConteudo() {
   const searchParams = useSearchParams();
   const hojeStr = obterDataHojeLocal();
 
-  const [abaAtiva, setAbaAtiva] = useState(searchParams.get("tipoOrcamento") === "grupos" ? "grupos" : "individual");
+  const tipoParam = searchParams.get("tipoOrcamento");
+  const [abaAtiva, setAbaAtiva] = useState(
+    tipoParam === "grupos" ? "grupos" : tipoParam === "especial" ? "especial" : "individual"
+  );
 
   const [agencia, setAgencia] = useState(null);
   const [hoteis, setHoteis] = useState([]);
@@ -324,11 +327,15 @@ function GeradorOrcamentoConteudo() {
   const [checkin, setCheckin] = useState(hojeStr);
   const [checkout, setCheckout] = useState(somarDias(hojeStr, 1));
 
-  // Inicializados vazios para evitar valores fixos desnecessários
+  // Hóspedes
   const [adultos, setAdultos] = useState(searchParams.get("adultos") || "");
   const [criancas, setCriancas] = useState(searchParams.get("criancas") || "");
   const [idadesCriancas, setIdadesCriancas] = useState(searchParams.get("idadesCriancas") || "");
   const [regimesValores, setRegimesValores] = useState({});
+
+  // Configuração Especial (Entrada + Parcelas)
+  const [especialEntrada, setEspecialEntrada] = useState("");
+  const [especialParcelas, setEspecialParcelas] = useState("10");
 
   const [tarifasHotelAtivo, setTarifasHotelAtivo] = useState([]);
   const [regrasCriancasHotel, setRegrasCriancasHotel] = useState({});
@@ -705,7 +712,7 @@ function GeradorOrcamentoConteudo() {
 
     if (resultado.sucesso) {
       setAlertaTarifario("");
-      if (abaAtiva === "individual" && aptoLiberado && resultado.valoresPorRegime) {
+      if ((abaAtiva === "individual" || abaAtiva === "especial") && aptoLiberado && resultado.valoresPorRegime) {
         setRegimesValores(resultado.valoresPorRegime);
       }
     } else {
@@ -813,6 +820,24 @@ function GeradorOrcamentoConteudo() {
     });
   };
 
+  // Cálculo de parcelas para a aba Especial
+  const calcularDetalhesParcelaEspecial = (valorFormatadoComDesconto) => {
+    if (!valorFormatadoComDesconto) return null;
+    const totalNum = parseFloat(String(valorFormatadoComDesconto).replace(/\./g, "").replace(",", ".")) || 0;
+    const entradaNum = parseFloat(String(especialEntrada || "0").replace(/\./g, "").replace(",", ".")) || 0;
+    const qtdParcelasNum = Math.max(parseInt(especialParcelas, 10) || 1, 1);
+
+    const saldo = Math.max(totalNum - entradaNum, 0);
+    const valorParcela = saldo / qtdParcelasNum;
+
+    return {
+      entradaFormatada: entradaNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      parcelas: qtdParcelasNum,
+      valorParcelaFormatado: valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      saldoRestante: saldo,
+    };
+  };
+
   const temDescontoAtivo = Boolean((parseInt(descontoPercentual, 10) || 0) > 0);
 
   const executarLimpeza = () => {
@@ -836,6 +861,8 @@ function GeradorOrcamentoConteudo() {
     setCriancas("");
     setIdadesCriancas("");
     setRegimesValores({});
+    setEspecialEntrada("");
+    setEspecialParcelas("10");
     setDescontoPercentual("");
     setAlertaTarifario("");
     setApartamentosGrupo([
@@ -958,7 +985,7 @@ function GeradorOrcamentoConteudo() {
       return "Ajuste o período da estadia para atender às regras do pacote antes de gerar.";
     }
 
-    if (abaAtiva === "individual" && hotelTemAptos && !aptoSelecionado) {
+    if ((abaAtiva === "individual" || abaAtiva === "especial") && hotelTemAptos && !aptoSelecionado) {
       return "Selecione o tipo de apartamento cotado para gerar a prévia do orçamento.";
     }
 
@@ -998,7 +1025,7 @@ function GeradorOrcamentoConteudo() {
 
     let temAllInclusiveCotado = false;
 
-    if (abaAtiva === "individual") {
+    if (abaAtiva === "individual" || abaAtiva === "especial") {
       let textoHospedes = `${adultos || 0} adulto(s)`;
       if (numCriancas > 0) {
         textoHospedes += ` e ${numCriancas} criança(s)`;
@@ -1023,7 +1050,18 @@ function GeradorOrcamentoConteudo() {
           temAllInclusiveCotado = true;
         }
         const valorComDesconto = calcularValorComDesconto(regimesValores[reg.id]);
-        texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n\n`;
+
+        if (abaAtiva === "especial") {
+          const det = calcularDetalhesParcelaEspecial(valorComDesconto);
+          texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n`;
+          if (det && det.saldoRestante > 0) {
+            texto += `entrada de ${det.entradaFormatada} + ${det.parcelas} X ${det.valorParcelaFormatado} no cartão sem juros\n\n`;
+          } else {
+            texto += `\n`;
+          }
+        } else {
+          texto += `*${reg.label}:*\nR$ ${valorComDesconto}\n\n`;
+        }
       });
     } else {
       apartamentosGrupo.forEach((ap) => {
@@ -1097,7 +1135,7 @@ function GeradorOrcamentoConteudo() {
       return null;
     }
 
-    if (abaAtiva === "individual" && hotelTemAptos && !aptoSelecionado) {
+    if ((abaAtiva === "individual" || abaAtiva === "especial") && hotelTemAptos && !aptoSelecionado) {
       abrirAlerta("Acomodação Obrigatória", "Por favor, selecione o Tipo de Apartamento Cotado antes de gerar.");
       return null;
     }
@@ -1131,11 +1169,27 @@ function GeradorOrcamentoConteudo() {
     const regimesFiltradosGravar = REGIMES_OPCOES.filter((r) => {
       const val = regimesValores[r.id];
       return val && val.trim() !== "" && val.trim() !== "0,00" && val.trim() !== "0";
-    }).map((r) => ({
-      id: r.id,
-      nome: r.label,
-      valor: calcularValorComDesconto(regimesValores[r.id]),
-    }));
+    }).map((r) => {
+      const valorCalc = calcularValorComDesconto(regimesValores[r.id]);
+      const objReg = {
+        id: r.id,
+        nome: r.label,
+        valor: valorCalc,
+      };
+
+      if (abaAtiva === "especial") {
+        const det = calcularDetalhesParcelaEspecial(valorCalc);
+        if (det) {
+          objReg.condicaoEspecial = {
+            entrada: det.entradaFormatada,
+            parcelas: det.parcelas,
+            valorParcela: det.valorParcelaFormatado,
+          };
+        }
+      }
+
+      return objReg;
+    });
 
     const taxaPercNum = Math.min(Math.max(parseInt(descontoPercentual, 10) || 0, 0), 100);
 
@@ -1184,10 +1238,14 @@ function GeradorOrcamentoConteudo() {
       adultos: adultos || "1",
       criancas: criancas || "0",
       idadesCriancas: numCriancas > 0 ? idadesCriancas.trim() : "",
-      hospedes: abaAtiva === "individual" ? hospedesFormatado : `Grupo com ${apartamentosGrupo.length} apartamento(s)`,
+      hospedes: abaAtiva === "grupos" ? `Grupo com ${apartamentosGrupo.length} apartamento(s)` : hospedesFormatado,
       parques: parquesMarcados,
       regimes: regimesFiltradosGravar,
       apartamentosGrupo: abaAtiva === "grupos" ? apartamentosTratados : null,
+      condicaoEspecialGlobal: abaAtiva === "especial" ? {
+        entrada: especialEntrada || "0,00",
+        parcelas: especialParcelas || "10",
+      } : null,
       formaPagamento,
       aptosRestantes,
       descontoAplicado: taxaPercNum > 0 ? { tipo: "porcentagem", valor: String(taxaPercNum) } : null,
@@ -1262,7 +1320,7 @@ function GeradorOrcamentoConteudo() {
     clienteWhatsapp.replace(/\D/g, "").length >= 10 &&
     hotelSelecionado &&
     !alertaTarifario &&
-    (abaAtiva === "individual" ? aptoLiberado : gruposTodosAptosValidos)
+    ((abaAtiva === "individual" || abaAtiva === "especial") ? aptoLiberado : gruposTodosAptosValidos)
   );
 
   const opcoesCriancasHotel = (hotelSelecionado?.opcoesCriancas || []).filter(
@@ -1330,7 +1388,7 @@ function GeradorOrcamentoConteudo() {
               enviandoZap || 
               !hotelSelecionado || 
               Boolean(alertaTarifario) ||
-              (abaAtiva === "individual" ? !aptoLiberado : !gruposTodosAptosValidos)
+              ((abaAtiva === "individual" || abaAtiva === "especial") ? !aptoLiberado : !gruposTodosAptosValidos)
             }
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow transition disabled:opacity-50"
           >
@@ -1363,27 +1421,40 @@ function GeradorOrcamentoConteudo() {
             <button
               type="button"
               onClick={() => setAbaAtiva("individual")}
-              className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                 abaAtiva === "individual"
                   ? "bg-white text-brand-900 shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <User className="w-4 h-4" />
-              <span>Individual (1 Apto)</span>
+              <User className="w-3.5 h-3.5" />
+              <span>Individual</span>
             </button>
 
             <button
               type="button"
               onClick={() => setAbaAtiva("grupos")}
-              className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                 abaAtiva === "grupos"
                   ? "bg-brand-900 text-white shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <Users className="w-4 h-4" />
-              <span>Grupos (Múltiplos Aptos)</span>
+              <Users className="w-3.5 h-3.5" />
+              <span>Grupos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAbaAtiva("especial")}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                abaAtiva === "especial"
+                  ? "bg-amber-600 text-white shadow-sm"
+                  : "text-amber-800 hover:text-amber-950"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Especial (Facilitado)</span>
             </button>
           </div>
 
@@ -1500,7 +1571,7 @@ function GeradorOrcamentoConteudo() {
               )}
             </div>
 
-            {abaAtiva === "individual" && hotelTemAptos && (
+            {(abaAtiva === "individual" || abaAtiva === "especial") && hotelTemAptos && (
               <div className="pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1">
@@ -1567,8 +1638,8 @@ function GeradorOrcamentoConteudo() {
             </div>
           ) : (
             <>
-              {/* ================= CORPO DA ABA INDIVIDUAL ================= */}
-              {abaAtiva === "individual" && (
+              {/* ================= CORPO DA ABA INDIVIDUAL E ESPECIAL ================= */}
+              {(abaAtiva === "individual" || abaAtiva === "especial") && (
                 <>
                   {hotelTemAptos && !aptoSelecionado ? (
                     <div className="bg-amber-50 border-2 border-dashed border-amber-300 p-6 rounded-2xl text-center space-y-2 animate-in fade-in">
@@ -1643,6 +1714,56 @@ function GeradorOrcamentoConteudo() {
                         )}
                       </div>
 
+                      {/* QUADRO DE ENTRADA E PARCELAMENTO (EXCLUSIVO DA ABA ESPECIAL) */}
+                      {abaAtiva === "especial" && (
+                        <div className="bg-amber-50/80 p-4 rounded-xl shadow-sm border border-amber-300 space-y-3">
+                          <div className="flex items-center gap-2 border-b border-amber-200/80 pb-2">
+                            <Sparkles className="w-4 h-4 text-amber-700" />
+                            <h3 className="text-xs font-extrabold text-amber-950 uppercase tracking-wide">
+                              Condição Facilitada (Entrada + Parcelas no Cartão)
+                            </h3>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[11px] font-bold text-amber-950 uppercase block mb-1">
+                                Entrada (R$)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Ex: 300,00"
+                                value={especialEntrada}
+                                onChange={(e) => setEspecialEntrada(formatarMoeda(e.target.value))}
+                                className="w-full bg-white border border-amber-300 rounded-lg p-2 text-sm text-slate-900 font-bold outline-none focus:ring-2 focus:ring-amber-600"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-bold text-amber-950 uppercase block mb-1">
+                                Quantidade de Parcelas no Cartão
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-amber-900">Cartão:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="24"
+                                  placeholder="10"
+                                  value={especialParcelas}
+                                  onChange={(e) => setEspecialParcelas(e.target.value)}
+                                  className="w-20 bg-white border border-amber-300 rounded-lg p-2 text-center text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-amber-600"
+                                />
+                                <span className="text-xs font-semibold text-amber-900">X vezes</span>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-amber-800 leading-tight">
+                            * O valor das parcelas é recalculado automaticamente para cada regime de pensão preenchido abaixo.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
                         <div className="border-b border-slate-100 pb-3 space-y-2">
                           <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
@@ -1689,19 +1810,33 @@ function GeradorOrcamentoConteudo() {
                           </div>
                         </div>
 
-                        {REGIMES_OPCOES.map((reg) => (
-                          <div key={reg.id} className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              placeholder="0,00"
-                              value={regimesValores[reg.id] || ""}
-                              onChange={(e) => handleValorChange(reg.id, e.target.value)}
-                              className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
-                            />
-                          </div>
-                        ))}
+                        {REGIMES_OPCOES.map((reg) => {
+                          const valorAtual = regimesValores[reg.id] || "";
+                          const valorComDesc = calcularValorComDesconto(valorAtual);
+                          const detEsp = abaAtiva === "especial" && valorComDesc ? calcularDetalhesParcelaEspecial(valorComDesc) : null;
+
+                          return (
+                            <div key={reg.id} className="space-y-1 py-1 border-b border-slate-100 last:border-b-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-slate-700 w-36 truncate">{reg.label}</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0,00"
+                                  value={valorAtual}
+                                  onChange={(e) => handleValorChange(reg.id, e.target.value)}
+                                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-900 font-semibold focus:ring-2 focus:ring-brand-900 outline-none"
+                                />
+                              </div>
+
+                              {detEsp && detEsp.saldoRestante > 0 && (
+                                <div className="text-[11px] text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md ml-36 font-medium">
+                                  Entrada de R$ {detEsp.entradaFormatada} + {detEsp.parcelas}X de R$ {detEsp.valorParcelaFormatado}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -1968,6 +2103,7 @@ function GeradorOrcamentoConteudo() {
               <span className="text-xs font-bold uppercase text-brand-900 flex items-center gap-1.5">
                 <MessageSquare className="w-4 h-4 text-brand-700" />
                 Prévia do WhatsApp {abaAtiva === "grupos" && <span className="text-emerald-700 text-[10px] lowercase font-normal">(modo grupos)</span>}
+                {abaAtiva === "especial" && <span className="text-amber-700 text-[10px] lowercase font-normal">(modo facilitado)</span>}
               </span>
 
               <div className="flex items-center gap-2">
@@ -1994,7 +2130,7 @@ function GeradorOrcamentoConteudo() {
                     enviandoZap || 
                     !hotelSelecionado || 
                     Boolean(alertaTarifario) ||
-                    (abaAtiva === "individual" ? !aptoLiberado : !gruposTodosAptosValidos)
+                    ((abaAtiva === "individual" || abaAtiva === "especial") ? !aptoLiberado : !gruposTodosAptosValidos)
                   }
                   className="bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition shadow disabled:opacity-50"
                 >
