@@ -6,14 +6,21 @@ import {
   Loader2, Calendar, Users, Trash2, RefreshCw, X, PlusCircle, 
   Clock, ChevronLeft, ChevronRight, HelpCircle, AlertCircle,
   Copy, Check, Phone, UserCheck, DollarSign, CheckCircle2,
-  TrendingUp, Undo2
+  TrendingUp, Undo2, Settings, Send, Instagram
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
 
 const ITENS_POR_PAGINA = 50;
+
+// Modelos padrão de fábrica
+const MODELOS_FOLLOWUP_PADRAO = {
+  f1: "Olá, {cliente}! Tudo bem? Passando para saber se conseguiu dar uma olhada na proposta que te enviei do *{hotel}* para o período de *{datas}*.\n\nLembrando que os parques já estão inclusos e as vagas com essa tarifa estão acabando! Ficou com alguma dúvida?",
+  f2: "Oi, {cliente}! Tudo bem por aí? Passando rapidinho: você ainda tem planos de vir curtir Caldas Novas nas próximas semanas?\n\nSurgiram algumas condições especiais e novas tarifas promocionais por aqui. Se quiser, me avisa que vejo as melhores opções para você!",
+  f3: "{cliente}, muito obrigado pela atenção e pelo contato!\n\nCaso não dê certo viajar agora, sem problemas: estamos sempre à disposição por aqui quando decidir vir.\n\nAcompanhe nosso perfil no Instagram para ficar por dentro dos parques e promoções exclusivas: {instagram}\n\nUm abraço e até a próxima!",
+};
 
 export default function GestaoOrcamentos() {
   const router = useRouter();
@@ -25,14 +32,24 @@ export default function GestaoOrcamentos() {
   // Controle de cópia rápida do telefone
   const [copiadoId, setCopiadoId] = useState(null);
 
+  // Modelos de follow-up e Instagram da agência
+  const [configFollowUp, setConfigFollowUp] = useState({
+    instagram: "@caldasnovasviagem",
+    f1: MODELOS_FOLLOWUP_PADRAO.f1,
+    f2: MODELOS_FOLLOWUP_PADRAO.f2,
+    f3: MODELOS_FOLLOWUP_PADRAO.f3,
+  });
+  const [modalConfigFollowUpAberto, setModalConfigFollowUpAberto] = useState(false);
+  const [salvandoConfigFollowUp, setSalvandoConfigFollowUp] = useState(false);
+
   // Filtros
   const [buscaGeral, setBuscaGeral] = useState("");
   const [filtroCheckin, setFiltroCheckin] = useState("");
-  const [filtroPeriodo, setFiltroPeriodo] = useState("todos"); // 'todos', 'hoje', 'ontem', '7dias', 'personalizado'
+  const [filtroPeriodo, setFiltroPeriodo] = useState("todos");
   const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState("");
   const [dataFimPersonalizada, setDataFimPersonalizada] = useState("");
   const [filtroColaborador, setFiltroColaborador] = useState("todos");
-  const [filtroStatusVenda, setFiltroStatusVenda] = useState("todos"); // 'todos', 'fechado', 'aberto'
+  const [filtroStatusVenda, setFiltroStatusVenda] = useState("todos");
 
   // Paginação
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -87,13 +104,61 @@ export default function GestaoOrcamentos() {
     const ag = JSON.parse(dadosSalvos);
     setAgencia(ag);
     carregarDados(ag.id);
+    carregarConfigAgencia(ag.id);
   }, []);
+
+  const carregarConfigAgencia = async (agenciaId) => {
+    if (!agenciaId) return;
+    try {
+      const docRef = doc(db, "agencias", agenciaId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const d = snap.data();
+        setConfigFollowUp({
+          instagram: d.instagram || "@caldasnovasviagem",
+          f1: d.followUpModelos?.f1 || MODELOS_FOLLOWUP_PADRAO.f1,
+          f2: d.followUpModelos?.f2 || MODELOS_FOLLOWUP_PADRAO.f2,
+          f3: d.followUpModelos?.f3 || MODELOS_FOLLOWUP_PADRAO.f3,
+        });
+      }
+    } catch (err) {
+      console.warn("Configurações da agência não puderam ser carregadas:", err);
+    }
+  };
+
+  const salvarConfiguracoesAgencia = async (e) => {
+    e.preventDefault();
+    if (!agencia?.id) return;
+    setSalvandoConfigFollowUp(true);
+    try {
+      const docRef = doc(db, "agencias", agencia.id);
+      await setDoc(
+        docRef,
+        {
+          instagram: configFollowUp.instagram.trim(),
+          followUpModelos: {
+            f1: configFollowUp.f1,
+            f2: configFollowUp.f2,
+            f3: configFollowUp.f3,
+          },
+          atualizadoEm: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      setModalConfigFollowUpAberto(false);
+      abrirAlerta("Configurações Salvas", "Os modelos de follow-up e Instagram foram atualizados com sucesso!");
+    } catch (err) {
+      console.error(err);
+      abrirAlerta("Erro", "Não foi possível gravar as configurações.");
+    } finally {
+      setSalvandoConfigFollowUp(false);
+    }
+  };
 
   const carregarDados = async (agenciaId) => {
     try {
       setCarregando(true);
 
-      // 1. Carrega orçamentos da agência
       const qOrc = query(
         collection(db, "orcamentos"),
         where("agenciaId", "==", agenciaId)
@@ -111,7 +176,6 @@ export default function GestaoOrcamentos() {
       });
       setOrcamentos(listaOrc);
 
-      // 2. Carrega lista de colaboradores
       try {
         const colabRef = collection(db, "agencias", agenciaId, "usuarios");
         const snapColab = await getDocs(colabRef);
@@ -127,7 +191,6 @@ export default function GestaoOrcamentos() {
           }
         });
 
-        // Adiciona à lista de opções também criadores encontrados nas cotações que não estejam na subcoleção
         listaOrc.forEach((item) => {
           const autor = item.criadoPor?.nome;
           if (autor && !listaColab.some((c) => c.nome.toLowerCase() === autor.toLowerCase())) {
@@ -178,6 +241,62 @@ export default function GestaoOrcamentos() {
       "Deseja realmente excluir este orçamento salvo? Esta ação não poderá ser desfeita.",
       () => executarExclusao(id)
     );
+  };
+
+  // Disparo e Registro do Follow-up 1, 2 ou 3
+  const dispararFollowUp = async (orc, numero) => {
+    const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
+    if (!zapTratado || zapTratado.length < 10) {
+      abrirAlerta("WhatsApp Não Informado", "Esta cotação não possui número de WhatsApp válido gravado.");
+      return;
+    }
+
+    const template = configFollowUp[`f${numero}`] || MODELOS_FOLLOWUP_PADRAO[`f${numero}`];
+    const primeiroNome = orc.clienteNome ? orc.clienteNome.trim().split(" ")[0] : "Cliente";
+    const hotelNome = orc.hotel?.nome || "Caldas Novas";
+    const periodo = orc.periodoFormatado || `${orc.checkin || ""} a ${orc.checkout || ""}`;
+    const insta = configFollowUp.instagram || "@caldasnovasviagem";
+    const linkVitrine = `${typeof window !== "undefined" ? window.location.origin : ""}/o/${orc.id}`;
+
+    // Substituição das tags dinâmicas
+    const mensagemFinal = template
+      .replace(/\{cliente\}|\{NOME\}/gi, primeiroNome)
+      .replace(/\{hotel\}/gi, hotelNome)
+      .replace(/\{datas\}|\{CHECKIN\}\s*a\s*\{CHECKOUT\}/gi, periodo)
+      .replace(/\{instagram\}/gi, insta)
+      .replace(/\{link\}/gi, linkVitrine);
+
+    // Abre WhatsApp Web / App
+    const numeroFormatado = zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`;
+    const urlZap = `https://wa.me/${numeroFormatado}?text=${encodeURIComponent(mensagemFinal)}`;
+    window.open(urlZap, "_blank");
+
+    // Grava no Firestore e atualiza o estado local
+    try {
+      const docRef = doc(db, "orcamentos", orc.id);
+      const updates = {
+        ultimoFollowUp: numero,
+        [`followUp${numero}Enviado`]: true,
+        [`followUp${numero}Em`]: serverTimestamp(),
+      };
+      await updateDoc(docRef, updates);
+
+      const agoraSimulado = { seconds: Math.floor(Date.now() / 1000) };
+      setOrcamentos((prev) =>
+        prev.map((o) =>
+          o.id === orc.id
+            ? {
+                ...o,
+                ultimoFollowUp: numero,
+                [`followUp${numero}Enviado`]: true,
+                [`followUp${numero}Em`]: agoraSimulado,
+              }
+            : o
+        )
+      );
+    } catch (err) {
+      console.warn("Erro ao registrar status do follow-up:", err);
+    }
   };
 
   // Gestão de Venda Fechada
@@ -438,18 +557,31 @@ export default function GestaoOrcamentos() {
           </div>
         </div>
 
-        <button
-          onClick={() => agencia && carregarDados(agencia.id)}
-          className="p-2 bg-brand-800 hover:bg-brand-700 rounded-lg text-white transition flex items-center gap-1.5 text-xs font-semibold"
-          title="Atualizar lista"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span className="hidden sm:inline">Atualizar</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {ehGestor && (
+            <button
+              onClick={() => setModalConfigFollowUpAberto(true)}
+              className="p-2 bg-brand-800 hover:bg-brand-700 rounded-lg text-white transition flex items-center gap-1.5 text-xs font-semibold"
+              title="Configurar Modelos de Follow-up e Redes Sociais"
+            >
+              <Settings className="w-4 h-4 text-amber-300" />
+              <span className="hidden sm:inline">Follow-ups</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => agencia && carregarDados(agencia.id)}
+            className="p-2 bg-brand-800 hover:bg-brand-700 rounded-lg text-white transition flex items-center gap-1.5 text-xs font-semibold"
+            title="Atualizar lista"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto p-4 md:p-6 mt-2 space-y-4">
-        {/* DASHBOARD EXECUTIVO: FATURAMENTO DE VENDAS FECHADAS */}
+        {/* DASHBOARD EXECUTIVO */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3.5">
             <div className="p-3 bg-emerald-100 text-emerald-800 rounded-xl">
@@ -497,7 +629,6 @@ export default function GestaoOrcamentos() {
         {/* BARRA DE PESQUISA, FILTROS AMPLOS E DATAS */}
         <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-            {/* Campo Pesquisar */}
             <div className="sm:col-span-3">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Pesquisar
@@ -517,7 +648,6 @@ export default function GestaoOrcamentos() {
               </div>
             </div>
 
-            {/* Vendedor / Usuário */}
             <div className="sm:col-span-3">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Vendedor / Usuário
@@ -542,7 +672,6 @@ export default function GestaoOrcamentos() {
               </div>
             </div>
 
-            {/* Check-in */}
             <div className="sm:col-span-2">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Check-in
@@ -559,7 +688,6 @@ export default function GestaoOrcamentos() {
               />
             </div>
 
-            {/* Status da Venda */}
             <div className="sm:col-span-2">
               <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
                 Status
@@ -578,7 +706,6 @@ export default function GestaoOrcamentos() {
               </select>
             </div>
 
-            {/* Botão Limpar com Alto Contraste */}
             <div className="sm:col-span-2">
               <button
                 type="button"
@@ -592,7 +719,7 @@ export default function GestaoOrcamentos() {
             </div>
           </div>
 
-          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO E INTERVALO PERSONALIZADO */}
+          {/* FILTROS RÁPIDOS DE DATA DE CRIAÇÃO */}
           <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold uppercase text-slate-500 mr-1 flex items-center gap-1">
@@ -623,7 +750,6 @@ export default function GestaoOrcamentos() {
                 </button>
               ))}
 
-              {/* Intervalo de datas: De e Até */}
               {filtroPeriodo === "personalizado" && (
                 <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-300 ml-1 animate-in fade-in">
                   <span className="text-[11px] font-bold text-slate-600 px-1">De:</span>
@@ -650,7 +776,6 @@ export default function GestaoOrcamentos() {
               )}
             </div>
 
-            {/* CONTADORES */}
             <div className="text-xs text-slate-500 font-medium">
               Mostrando <strong className="text-slate-800">{orcamentosFiltrados.length}</strong> cotação(ões) • Total Geral: <strong className="text-slate-800">{orcamentos.length}</strong>
             </div>
@@ -685,21 +810,17 @@ export default function GestaoOrcamentos() {
                 const zapTratado = (orc.clienteWhatsapp || "").replace(/\D/g, "");
                 const isGrupo = orc.tipoOrcamento === "grupos" || (orc.apartamentosGrupo && orc.apartamentosGrupo.length > 0);
                 const isFechado = Boolean(orc.vendaFechada);
-                
+
                 const linkZapDiretoSemMensagem = zapTratado
                   ? `https://wa.me/${zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`}`
                   : null;
 
-                const saudacao = orc.clienteNome ? `Olá, ${orc.clienteNome}!` : "Olá!";
-                const textoRemarketing = encodeURIComponent(
-                  `${saudacao} Vi que fez um *orçamento* conosco recentemente. *Ficou alguma dúvida?*\n\nTemos ofertas especiais e *pagamento facilitado*.\n\nQuer que eu prepare uma nova proposta para você?`
-                );
-
-                const linkZapCliente = zapTratado
-                  ? `https://wa.me/${zapTratado.startsWith("55") ? zapTratado : `55${zapTratado}`}?text=${textoRemarketing}`
-                  : null;
-
                 const urlVitrine = `/o/${orc.id}`;
+
+                // Status dos follow-ups
+                const f1Feito = Boolean(orc.followUp1Enviado);
+                const f2Feito = Boolean(orc.followUp2Enviado);
+                const f3Feito = Boolean(orc.followUp3Enviado);
 
                 return (
                   <div
@@ -719,7 +840,6 @@ export default function GestaoOrcamentos() {
                           {orc.hotel?.nome}
                         </h3>
 
-                        {/* Tag de Venda Fechada */}
                         {isFechado && (
                           <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
                             <CheckCircle2 className="w-3 h-3" /> Venda Fechada
@@ -736,7 +856,6 @@ export default function GestaoOrcamentos() {
                           </span>
                         )}
 
-                        {/* Indicação do colaborador responsável */}
                         {orc.criadoPor?.nome && (
                           <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
                             <UserCheck className="w-3 h-3 text-purple-600" />
@@ -830,7 +949,7 @@ export default function GestaoOrcamentos() {
                       )}
                     </div>
 
-                    {/* Ações Rápidas & Gestão de Fechamento */}
+                    {/* AÇÕES RÁPIDAS & FOLLOW-UP INTELIGENTE */}
                     <div className="flex flex-wrap items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 shrink-0 justify-end">
                       {/* BOTÃO FECHAR VENDA / STATUS */}
                       {isFechado ? (
@@ -865,17 +984,58 @@ export default function GestaoOrcamentos() {
                         <span>Novo</span>
                       </button>
 
-                      {linkZapCliente && (
-                        <a
-                          href={linkZapCliente}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow active:scale-95"
-                          title="Enviar mensagem de remarketing"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          <span>WhatsApp</span>
-                        </a>
+                      {/* ESTEIRA DE 3 BOTÕES COMPACTOS DE FOLLOW-UP */}
+                      {zapTratado && (
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 px-1 flex items-center gap-0.5">
+                            <MessageCircle className="w-3 h-3 text-emerald-600" /> Zap:
+                          </span>
+
+                          {/* Follow-up 1 */}
+                          <button
+                            type="button"
+                            onClick={() => dispararFollowUp(orc, 1)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs active:scale-95 ${
+                              f1Feito
+                                ? "bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300"
+                                : "bg-emerald-600 text-white hover:bg-emerald-700"
+                            }`}
+                            title={f1Feito ? `F1 já enviado em ${formatarDataHoraCriacao(orc.followUp1Em)} (clique para reenviar)` : "Enviar Follow-up 1: Proposta & Dúvidas"}
+                          >
+                            <span>1</span>
+                            {f1Feito && <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />}
+                          </button>
+
+                          {/* Follow-up 2 */}
+                          <button
+                            type="button"
+                            onClick={() => dispararFollowUp(orc, 2)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs active:scale-95 ${
+                              f2Feito
+                                ? "bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300"
+                                : "bg-emerald-600 text-white hover:bg-emerald-700"
+                            }`}
+                            title={f2Feito ? `F2 já enviado em ${formatarDataHoraCriacao(orc.followUp2Em)} (clique para reenviar)` : "Enviar Follow-up 2: Oportunidades & Novas Ofertas"}
+                          >
+                            <span>2</span>
+                            {f2Feito && <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />}
+                          </button>
+
+                          {/* Follow-up 3 */}
+                          <button
+                            type="button"
+                            onClick={() => dispararFollowUp(orc, 3)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs active:scale-95 ${
+                              f3Feito
+                                ? "bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300"
+                                : "bg-emerald-600 text-white hover:bg-emerald-700"
+                            }`}
+                            title={f3Feito ? `F3 já enviado em ${formatarDataHoraCriacao(orc.followUp3Em)} (clique para reenviar)` : "Enviar Follow-up 3: Encerramento com Instagram"}
+                          >
+                            <span>3</span>
+                            {f3Feito && <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />}
+                          </button>
+                        </div>
                       )}
 
                       <Link
@@ -937,6 +1097,152 @@ export default function GestaoOrcamentos() {
           </div>
         )}
       </main>
+
+      {/* MODAL PARA CONFIGURAR TEXTOS DOS FOLLOW-UPS E INSTAGRAM */}
+      {modalConfigFollowUpAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Configurar Modelos de Follow-up (WhatsApp)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Personalize as 3 mensagens automáticas enviadas para clientes pendentes
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalConfigFollowUpAberto(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={salvarConfiguracoesAgencia} className="space-y-4">
+              {/* Instagram */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5 mb-1">
+                  <Instagram className="w-3.5 h-3.5 text-pink-600" />
+                  Instagram da Agência
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: @caldasnovasviagem"
+                  value={configFollowUp.instagram}
+                  onChange={(e) => setConfigFollowUp((prev) => ({ ...prev, instagram: e.target.value }))}
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-brand-900"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  Usado automaticamente na tag <code>{"{instagram}"}</code> do Follow-up 3.
+                </span>
+              </div>
+
+              {/* Tags de Apoio */}
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 space-y-1">
+                <strong>Tags dinâmicas disponíveis:</strong>
+                <div className="flex flex-wrap gap-1.5 pt-0.5 font-mono text-[10px]">
+                  <span className="bg-white px-1.5 py-0.5 rounded border border-blue-300">{"{cliente}"}</span>
+                  <span className="bg-white px-1.5 py-0.5 rounded border border-blue-300">{"{hotel}"}</span>
+                  <span className="bg-white px-1.5 py-0.5 rounded border border-blue-300">{"{datas}"}</span>
+                  <span className="bg-white px-1.5 py-0.5 rounded border border-blue-300">{"{instagram}"}</span>
+                  <span className="bg-white px-1.5 py-0.5 rounded border border-blue-300">{"{link}"}</span>
+                </div>
+              </div>
+
+              {/* Follow-up 1 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 uppercase">
+                    1️⃣ Follow-up 1: Proposta & Dúvidas
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setConfigFollowUp((p) => ({ ...p, f1: MODELOS_FOLLOWUP_PADRAO.f1 }))}
+                    className="text-[10px] text-brand-700 hover:underline font-bold"
+                  >
+                    Restaurar Padrão
+                  </button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={configFollowUp.f1}
+                  onChange={(e) => setConfigFollowUp((p) => ({ ...p, f1: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium resize-y leading-relaxed"
+                />
+              </div>
+
+              {/* Follow-up 2 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 uppercase">
+                    2️⃣ Follow-up 2: Oportunidades & Novas Ofertas
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setConfigFollowUp((p) => ({ ...p, f2: MODELOS_FOLLOWUP_PADRAO.f2 }))}
+                    className="text-[10px] text-brand-700 hover:underline font-bold"
+                  >
+                    Restaurar Padrão
+                  </button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={configFollowUp.f2}
+                  onChange={(e) => setConfigFollowUp((p) => ({ ...p, f2: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium resize-y leading-relaxed"
+                />
+              </div>
+
+              {/* Follow-up 3 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 uppercase">
+                    3️⃣ Follow-up 3: Encerramento com Instagram
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setConfigFollowUp((p) => ({ ...p, f3: MODELOS_FOLLOWUP_PADRAO.f3 }))}
+                    className="text-[10px] text-brand-700 hover:underline font-bold"
+                  >
+                    Restaurar Padrão
+                  </button>
+                </div>
+                <textarea
+                  rows={4}
+                  value={configFollowUp.f3}
+                  onChange={(e) => setConfigFollowUp((p) => ({ ...p, f3: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-brand-900 font-medium resize-y leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalConfigFollowUpAberto(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoConfigFollowUp}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-900 hover:bg-brand-950 transition shadow disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {salvandoConfigFollowUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>Salvar Modelos</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL PARA MARCAR VENDA FECHADA COM REGIME E VALOR */}
       {modalVendaConfig.aberto && (
@@ -1086,7 +1392,7 @@ export default function GestaoOrcamentos() {
                   onClick={fecharModal}
                   className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-900 hover:bg-brand-950 transition shadow"
                 >
-                  OK
+                  Entendido
                 </button>
               )}
             </div>
